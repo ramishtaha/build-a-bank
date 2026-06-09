@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -91,6 +91,11 @@ play-18: ## Step 18: secure coding — injection-safety + edge hardening (header
 	$(MVNW) -pl services/cif,services/demand-account -am test -Dtest='SqlInjectionSafetyTest,SecurityHardeningTest'
 	@echo "Then read security/threat-model.md + security/risk-register.md; drive steps/step-18/requests.http (curl -i for headers, OPTIONS for CORS)"
 	# Windows: .\mvnw.cmd -pl services/cif,services/demand-account -am test -Dtest='SqlInjectionSafetyTest,SecurityHardeningTest'
+
+play-19: ## Step 19: distributed-systems theory labs — CAP/PACELC, quorums, clocks, delivery (pure JVM, no Docker)
+	$(MVNW) -pl playground/distributed-lab test
+	@echo "Tweak the knobs: see steps/step-19/lesson.md '🎮 Play With It' (LWW timestamps, W/R sizes, delivery counts)"
+	# Windows: .\mvnw.cmd -pl playground/distributed-lab test
 
 clean: ## Remove all build output
 	$(MVNW) -B clean

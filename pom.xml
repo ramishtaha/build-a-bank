@@ -48,6 +48,7 @@
         <module>playground/java-basics</module>
         <module>playground/spring-lab</module>
         <module>playground/concurrency-lab</module>
+        <module>playground/distributed-lab</module>
     </modules>
 
     <dependencyManagement>
