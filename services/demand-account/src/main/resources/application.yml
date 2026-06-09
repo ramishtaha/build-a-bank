@@ -24,6 +24,13 @@ spring:
           # Lazy fetch on first token, so this service starts even if auth is down. Tests override the JwtDecoder.
           jwk-set-uri: ${AUTH_JWKS_URI:http://localhost:8083/oauth2/jwks}
 
+# Step 18 (secure-by-default): deny-by-default CORS. Empty ⇒ no browser origin allowed.
+# Allow a specific front-end by listing its origin, e.g. APP_CORS_ALLOWED_ORIGINS=http://localhost:5173 (the React app, Step 29).
+app:
+  security:
+    cors:
+      allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
+
 server:
   port: 8082                 # demand-account's port (hello=8080, cif=8081).
   shutdown: graceful

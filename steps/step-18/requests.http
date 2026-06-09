@@ -1,0 +1,47 @@
+### Build-a-Bank · Step 18 · Secure coding & threat modeling — probe the hardening yourself
+### These requests let you SEE the Step-18 defenses on the running money service.
+### 1) Auth:           ./mvnw -pl services/auth spring-boot:run                                   # 8083
+### 2) Postgres:       docker compose -f services/demand-account/compose.yaml up -d               # 5433
+### 3) demand-account: SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account \
+###                    AUTH_JWKS_URI=http://localhost:8083/oauth2/jwks \
+###                    ./mvnw -pl services/demand-account spring-boot:run                         # 8082
+
+@auth = http://localhost:8083
+@da   = http://localhost:8082
+
+### A) See the SECURITY HEADERS on any response (use -i / "show response headers").
+### Even this 401 carries them: X-Content-Type-Options, X-Frame-Options, Referrer-Policy.
+### curl -i http://localhost:8082/api/accounts/ACC-A
+GET {{da}}/api/accounts/ACC-A
+
+### B) DENY-BY-DEFAULT CORS — a browser preflight from an un-listed origin is rejected (403, no ACAO header).
+### curl -i -X OPTIONS http://localhost:8082/api/v1/transfers -H "Origin: https://evil.example" -H "Access-Control-Request-Method: POST"
+OPTIONS {{da}}/api/v1/transfers
+Origin: https://evil.example
+Access-Control-Request-Method: POST
+
+### Log in for a token (admin/admin123 for ADMIN). Paste the JWT below.
+POST {{auth}}/api/auth/login
+Content-Type: application/json
+
+{"username":"alice","password":"password"}
+
+@token = PASTE_JWT_HERE
+
+### C) AUTHENTICATION is still the real gate — no token → 401 (CORS/headers are defense-in-depth, not authZ).
+POST {{da}}/api/v1/transfers
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":1.00}
+
+### D) ⚠️ BOLA DEMO (R-001, OPEN): with ANY valid token you can read/move money on ANY account —
+### there is no ownership check yet. This is the threat model's #1 finding, tracked to the authorization step.
+### (Open ACC-A/ACC-B first via POST /api/accounts with the token, then:)
+GET {{da}}/api/accounts/ACC-A
+Authorization: Bearer {{token}}
+
+### E) INJECTION is handled as data, not SQL. Try a payload in the customer lookup on cif (behind the gateway
+### in real deployments). It returns 404 (no such customer) — the string is never executed.
+### Run cif:  ./mvnw -pl services/cif spring-boot:run    # 8081
+### GET http://localhost:8081/api/customers/by-number/' OR '1'='1
+###   → 404 Not Found (parameterized; matches nothing). The proof-in-code is SqlInjectionSafetyTest.

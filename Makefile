@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -86,6 +86,11 @@ play-16: ## Step 16: Spring Security — login for a JWT, then 401/403/200. See 
 play-17: ## Step 17: resource servers + RS256/JWKS. Get a token from auth, use it at the secured money service.
 	$(MVNW) -pl services/auth,services/demand-account -am verify
 	@echo "Live: run auth (8083) + demand-account (8082, AUTH_JWKS_URI=http://localhost:8083/oauth2/jwks) — see steps/step-17/requests.http"
+
+play-18: ## Step 18: secure coding — injection-safety + edge hardening (headers/CORS) tests + threat model (needs Docker)
+	$(MVNW) -pl services/cif,services/demand-account -am test -Dtest='SqlInjectionSafetyTest,SecurityHardeningTest'
+	@echo "Then read security/threat-model.md + security/risk-register.md; drive steps/step-18/requests.http (curl -i for headers, OPTIONS for CORS)"
+	# Windows: .\mvnw.cmd -pl services/cif,services/demand-account -am test -Dtest='SqlInjectionSafetyTest,SecurityHardeningTest'
 
 clean: ## Remove all build output
 	$(MVNW) -B clean
