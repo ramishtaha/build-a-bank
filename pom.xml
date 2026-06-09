@@ -37,10 +37,10 @@
         <archunit.version>1.4.2</archunit.version>
     </properties>
 
-    <!-- Modules are added step-by-step. The hello-service is added during Step 1 (it is the
-         deliverable at step-01-end). At step-01-start this list is empty and the aggregator
-         still builds clean ("nothing to compile"). -->
+    <!-- Modules are added step-by-step. The hello-service is the Step 1 deliverable
+         (added at step-01-end). Real banking microservices begin at Step 8 (CIF). -->
     <modules>
+        <module>services/hello</module>
     </modules>
 
     <dependencyManagement>

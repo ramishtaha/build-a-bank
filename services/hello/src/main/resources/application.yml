@@ -1,0 +1,31 @@
+# services/hello/src/main/resources/application.yml
+# Configuration for the Step 1 hello-service. YAML keys map to Spring properties;
+# we explain @ConfigurationProperties and how this is bound in Step 6.
+
+spring:
+  application:
+    name: hello-service
+  threads:
+    virtual:
+      enabled: true        # Java 25 virtual threads for request handling (Domain 2 / Step 11).
+
+server:
+  port: 8080
+  shutdown: graceful       # finish in-flight requests on SIGTERM (k8s-friendly; deep dive Step 34).
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info   # expose only what we need; never expose everything in prod.
+  endpoint:
+    health:
+      show-details: always     # fine for a local learning app; locked down later.
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: Build-a-Bank Hello Service
+    step: 1
