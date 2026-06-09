@@ -73,6 +73,14 @@
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
 
+        <!-- Kafka (Step 20): the Outbox relay publishes transfer.completed events. Boot 4 modularized
+             autoconfig — the STARTER brings spring-kafka AND spring-boot-kafka (KafkaAutoConfiguration →
+             KafkaTemplate). Bare spring-kafka alone gives no KafkaTemplate bean (same lesson as Flyway, Step 8). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+        </dependency>
+
         <!-- ── Test ── -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -107,6 +115,18 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Kafka testing (Step 20): a real broker via Testcontainers Redpanda (+ @ServiceConnection), and
+             KafkaTestUtils for consumer props. The Boot test starter brings spring-kafka-test + test autoconfig. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-redpanda</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -96,6 +96,15 @@ play-19: ## Step 19: distributed-systems theory labs — CAP/PACELC, quorums, cl
 	$(MVNW) -pl playground/distributed-lab test
 	@echo "Tweak the knobs: see steps/step-19/lesson.md '🎮 Play With It' (LWW timestamps, W/R sizes, delivery counts)"
 	# Windows: .\mvnw.cmd -pl playground/distributed-lab test
+
+run-notification: ## Run the Notification service on http://localhost:8084 (needs a Kafka broker; set KAFKA_BOOTSTRAP_SERVERS)
+	KAFKA_BOOTSTRAP_SERVERS=$${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092} $(MVNW) -pl services/notification spring-boot:run
+	# Broker: docker run -d --name bank-redpanda -p 9092:9092 redpandadata/redpanda:v24.2.7 redpanda start --mode dev-container --advertise-kafka-addr PLAINTEXT://localhost:9092
+	# Windows: $$env:KAFKA_BOOTSTRAP_SERVERS='localhost:9092'; .\mvnw.cmd -pl services/notification spring-boot:run
+
+play-20: ## Step 20: events + Outbox + Kafka + SSE notifications (needs Docker for Testcontainers Postgres + Redpanda)
+	$(MVNW) -pl services/demand-account,services/notification test -Dtest='OutboxWriteTest,OutboxRelayKafkaTest,TransferEventConsumerKafkaTest,NotificationControllerTest'
+	@echo "Live: start a broker + auth + demand-account + notification, open the SSE stream, then transfer — see steps/step-20/requests.http"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean

@@ -1,0 +1,67 @@
+### Build-a-Bank · Step 20 · Spring events + Kafka (Outbox) + real-time notifications (SSE)
+### Watch a transfer flow end-to-end: demand-account → Outbox → Kafka → notification → live SSE push.
+###
+### Start the pieces (4 terminals):
+### 0) Broker (Redpanda, Kafka-API):
+###    docker run -d --name bank-redpanda -p 9092:9092 redpandadata/redpanda:v24.2.7 \
+###        redpanda start --mode dev-container --kafka-addr PLAINTEXT://0.0.0.0:9092 \
+###        --advertise-kafka-addr PLAINTEXT://localhost:9092
+### 1) Auth:           ./mvnw -pl services/auth spring-boot:run                                   # 8083
+### 2) Postgres:       docker compose -f services/demand-account/compose.yaml up -d               # 5433
+### 3) demand-account: SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account \
+###                    AUTH_JWKS_URI=http://localhost:8083/oauth2/jwks \
+###                    KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+###                    ./mvnw -pl services/demand-account spring-boot:run                         # 8082
+### 4) notification:   KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+###                    ./mvnw -pl services/notification spring-boot:run                           # 8084
+
+@auth = http://localhost:8083
+@da   = http://localhost:8082
+@note = http://localhost:8084
+
+### A) Open a live SSE stream and LEAVE IT RUNNING in a terminal — watch transfers appear in real time:
+###    curl -N http://localhost:8084/api/notifications/stream
+GET {{note}}/api/notifications/stream
+Accept: text/event-stream
+
+### Log in for a token (paste the JWT below).
+POST {{auth}}/api/auth/login
+Content-Type: application/json
+
+{"username":"alice","password":"password"}
+
+@token = PASTE_JWT_HERE
+
+### B) Open two accounts, then transfer — this writes the ledger + an Outbox row in ONE transaction.
+POST {{da}}/api/accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"accountNumber":"ACC-A","currency":"USD","openingBalance":200.00}
+
+###
+POST {{da}}/api/accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"accountNumber":"ACC-B","currency":"USD","openingBalance":0.00}
+
+### C) Transfer → the relay publishes the Outbox row to Kafka → notification consumes it → your SSE stream
+### (step A) prints a "transfer ... completed" event within ~2s (the relay poll interval).
+POST {{da}}/api/v1/transfers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":40.00,"description":"rent"}
+
+### D) Or read the recent notifications buffer (newest first):
+GET {{note}}/api/notifications
+
+### 🧪 Experiment: send the SAME transfer twice with the SAME Idempotency-Key (Step 14) → money moves once
+### AND only ONE notification appears (the consumer dedupes by eventId → exactly-once effect).
+POST {{da}}/api/v1/transfers
+Authorization: Bearer {{token}}
+Idempotency-Key: demo-key-1
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":5.00,"description":"coffee"}

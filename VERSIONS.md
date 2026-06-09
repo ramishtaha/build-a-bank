@@ -30,6 +30,9 @@
 | Resilience4j | 2.4.0 | Step 37 | ✅ (verify Boot-4 artifact at that step) |
 | **springdoc-openapi** | **3.0.3** (NOT Boot-managed → pinned explicitly in `services/demand-account/pom.xml`) | Step 13 | ✅ (3.0.x supports Boot 4 / Spring 7; 2.8.x targets Boot 3. Verified: resolves + boots, live `/v3/api-docs` returns OpenAPI 3.1 — `steps/step-13` Verification Log) |
 | **Spring Cloud Gateway (server-webmvc)** | `spring-cloud-starter-gateway-server-webmvc` (BOM-managed by Spring Cloud 2025.1.1 → 5.0.x). The **SERVLET/MVC** variant, NOT reactive (ADR-0007). | Step 15 | ✅ (resolves on the BOM; gateway boots and routes to a stub with `StripPrefix`/`AddResponseHeader` — `steps/step-15` / `gateway/GatewayRoutingTest`. Config prefix: `spring.cloud.gateway.server.webmvc.routes`; `…gateway.mvc.routes` deprecated.) |
+| **Spring Kafka** | `org.springframework.kafka:spring-kafka` (+ `spring-kafka-test`) — Boot-managed | Step 20 | ✅ (producer in demand-account's Outbox relay + `@KafkaListener` consumer in notification; verified end-to-end on Redpanda via Testcontainers — `steps/step-20`) |
+| **Redpanda image** | `redpandadata/redpanda:v24.2.7` (digest `sha256:82a69763bef8d8b55ea5a520fa1b38f993908ef68946819ca1aed43541824c48`; Kafka-API-compatible broker) | Step 20 | ✅ (Testcontainers `RedpandaContainer` + Spring Boot `@ServiceConnection`; relay publishes & consumer receives — `steps/step-20` Verification Log) |
+| **Testcontainers Redpanda** | `org.testcontainers:testcontainers-redpanda` (BOM 2.0.5) | Step 20 | ✅ |
 
 ## ⚠️ Flagged step-backs / watch-items (honesty per the compatibility caveat)
 

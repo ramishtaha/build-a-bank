@@ -23,6 +23,12 @@ spring:
           # Validate tokens with the auth service's PUBLIC key, fetched from its JWKS (Step 17).
           # Lazy fetch on first token, so this service starts even if auth is down. Tests override the JwtDecoder.
           jwk-set-uri: ${AUTH_JWKS_URI:http://localhost:8083/oauth2/jwks}
+  # Step 20 — Kafka producer (the Outbox relay publishes here). String key+value (the payload is JSON we built).
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 # Step 18 (secure-by-default): deny-by-default CORS. Empty ⇒ no browser origin allowed.
 # Allow a specific front-end by listing its origin, e.g. APP_CORS_ALLOWED_ORIGINS=http://localhost:5173 (the React app, Step 29).
@@ -30,6 +36,15 @@ app:
   security:
     cors:
       allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
+
+# Step 20 — event publishing (Outbox → Kafka).
+bank:
+  events:
+    topic: transfers.completed       # the Kafka topic the relay publishes to (notification service consumes it)
+  outbox:
+    relay-delay-ms: 2000             # how often the scheduled relay drains the outbox
+    relay:
+      scheduled: true                # production: poll automatically. Tests set this false and call publishPending() directly.
 
 server:
   port: 8082                 # demand-account's port (hello=8080, cif=8081).

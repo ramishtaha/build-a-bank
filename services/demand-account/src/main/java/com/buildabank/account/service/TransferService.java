@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,8 @@ import com.buildabank.account.domain.AccountRepository;
 import com.buildabank.account.domain.EntryDirection;
 import com.buildabank.account.domain.LedgerEntry;
 import com.buildabank.account.domain.LedgerEntryRepository;
+import com.buildabank.account.event.TransferCompletedEvent;
+import com.buildabank.account.outbox.OutboxWriter;
 
 /**
  * Moves money between accounts and records it in the double-entry ledger. The interesting part is
@@ -36,10 +39,15 @@ public class TransferService {
 
     private final AccountRepository accounts;
     private final LedgerEntryRepository ledger;
+    private final ApplicationEventPublisher events;
+    private final OutboxWriter outbox;
 
-    public TransferService(AccountRepository accounts, LedgerEntryRepository ledger) {
+    public TransferService(AccountRepository accounts, LedgerEntryRepository ledger,
+                           ApplicationEventPublisher events, OutboxWriter outbox) {
         this.accounts = accounts;
         this.ledger = ledger;
+        this.events = events;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -131,6 +139,15 @@ public class TransferService {
         Instant now = Instant.now();
         ledger.save(new LedgerEntry(from.getId(), transactionId, EntryDirection.DEBIT, amount, description, now));
         ledger.save(new LedgerEntry(to.getId(), transactionId, EntryDirection.CREDIT, amount, description, now));
+
+        // Step 20 — emit the domain event two ways, both inside THIS transaction:
+        TransferCompletedEvent event = TransferCompletedEvent.of(
+                transactionId, from.getAccountNumber(), to.getAccountNumber(), amount);
+        // (1) In-process Spring event → @TransactionalEventListener(AFTER_COMMIT) consumers react post-commit.
+        events.publishEvent(event);
+        // (2) Reliable Outbox row, written in the same tx as the ledger → atomic, no dual-write loss; a relay
+        //     publishes it to Kafka at-least-once. If this transfer rolls back, the outbox row rolls back too.
+        outbox.write(event);
         return transactionId;
     }
 }
