@@ -33,6 +33,8 @@
 | **Spring Kafka** | `org.springframework.kafka:spring-kafka` (+ `spring-kafka-test`) — Boot-managed | Step 20 | ✅ (producer in demand-account's Outbox relay + `@KafkaListener` consumer in notification; verified end-to-end on Redpanda via Testcontainers — `steps/step-20`) |
 | **Redpanda image** | `redpandadata/redpanda:v24.2.7` (digest `sha256:82a69763bef8d8b55ea5a520fa1b38f993908ef68946819ca1aed43541824c48`; Kafka-API-compatible broker) | Step 20 | ✅ (Testcontainers `RedpandaContainer` + Spring Boot `@ServiceConnection`; relay publishes & consumer receives — `steps/step-20` Verification Log) |
 | **Testcontainers Redpanda** | `org.testcontainers:testcontainers-redpanda` (BOM 2.0.5) | Step 20 | ✅ |
+| **Spring Data Redis** | `org.springframework.boot:spring-boot-starter-data-redis` (Lettuce, Boot-managed) | Step 21 | ✅ (Redis-backed Idempotency Key for the payment Saga; verified on Testcontainers Redis — `steps/step-21`) |
+| **Redis image** | `redis:7.4-alpine` (digest `sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99`) | Step 21 | ✅ (Testcontainers `GenericContainer` + Spring Boot `@ServiceConnection(name="redis")`) |
 
 ## ⚠️ Flagged step-backs / watch-items (honesty per the compatibility caveat)
 

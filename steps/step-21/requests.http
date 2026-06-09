@@ -1,0 +1,62 @@
+### Build-a-Bank · Step 21 · Payments — Saga (compensation) + Redis Idempotency-Key + DLQ
+### Start (see Step 20 for the broker; Step 21 adds Redis):
+### 0) Redis:   docker run -d --name bank-redis -p 6379:6379 redis:7.4-alpine
+### 1) Auth:    ./mvnw -pl services/auth spring-boot:run                                           # 8083
+### 2) Postgres:docker compose -f services/demand-account/compose.yaml up -d                       # 5433
+### 3) demand-account: SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account \
+###                    AUTH_JWKS_URI=http://localhost:8083/oauth2/jwks REDIS_HOST=localhost \
+###                    ./mvnw -pl services/demand-account spring-boot:run                          # 8082
+
+@auth = http://localhost:8083
+@da   = http://localhost:8082
+
+### Log in for a token (paste the JWT below).
+POST {{auth}}/api/auth/login
+Content-Type: application/json
+
+{"username":"alice","password":"password"}
+
+@token = PASTE_JWT_HERE
+
+### Open two accounts.
+POST {{da}}/api/accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"accountNumber":"ACC-A","currency":"USD","openingBalance":200.00}
+
+###
+POST {{da}}/api/accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"accountNumber":"ACC-B","currency":"USD","openingBalance":0.00}
+
+### A) Pay A → B (Saga: debit then credit, each its own committed step) → 200 {"paymentId":...}
+POST {{da}}/api/v1/payments
+Authorization: Bearer {{token}}
+Idempotency-Key: PAY-001
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":40.00}
+
+### B) RETRY with the SAME Idempotency-Key → returns the SAME paymentId, money moves ONCE (Redis idempotency).
+POST {{da}}/api/v1/payments
+Authorization: Bearer {{token}}
+Idempotency-Key: PAY-001
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":40.00}
+
+### C) COMPENSATION: pay to a non-existent account → the debit commits, the credit fails, the Saga refunds the
+### source, and you get 422 application/problem+json {"title":"Payment failed",...}. Check ACC-A — its balance
+### is unchanged (debited then refunded). No money is lost or created.
+POST {{da}}/api/v1/payments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-NOPE","amount":25.00}
+
+### D) Confirm ACC-A is consistent after the compensated payment.
+GET {{da}}/api/accounts/ACC-A
+Authorization: Bearer {{token}}

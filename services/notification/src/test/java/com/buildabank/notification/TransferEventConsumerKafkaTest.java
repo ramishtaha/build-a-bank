@@ -43,6 +43,10 @@ class TransferEventConsumerKafkaTest {
     void duplicateEventsAreDeduped_yieldingExactlyOnceEffect() {
         String eventX = UUID.randomUUID().toString();
         String eventY = UUID.randomUUID().toString();
+        // Deltas, not absolutes: the Spring context (and so this consumer bean) may be cached/reused across the
+        // module's other @SpringBootTest, so we measure the change this test causes, not the running totals.
+        int receivedBefore = consumer.receivedCount();
+        int appliedBefore = consumer.appliedCount();
 
         try (Producer<String, String> producer = testProducer()) {
             producer.send(new ProducerRecord<>(TOPIC, eventX, payload(eventX, "ACC-A", "ACC-B", "40.00")));
@@ -53,13 +57,16 @@ class TransferEventConsumerKafkaTest {
 
         // All three deliveries arrive (at-least-once)...
         await().atMost(Duration.ofSeconds(20)).untilAsserted(() ->
-                assertThat(consumer.receivedCount()).isGreaterThanOrEqualTo(3));
+                assertThat(consumer.receivedCount() - receivedBefore).isGreaterThanOrEqualTo(3));
 
-        // ...but only two distinct events take effect (the duplicate eventX is ignored).
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
-                assertThat(consumer.appliedCount()).isEqualTo(2));
-        assertThat(hub.recent()).hasSize(2);
-        assertThat(hub.recent()).extracting(Notification::eventId).containsExactlyInAnyOrder(eventX, eventY);
+        // ...but only two distinct events take effect (the duplicate eventX is ignored) → exactly-once effect.
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                assertThat(consumer.appliedCount() - appliedBefore).isEqualTo(2));
+
+        // Both distinct events are present, and the duplicate did NOT create a second eventX notification.
+        assertThat(hub.recent()).extracting(Notification::eventId).contains(eventX, eventY);
+        long eventXNotifications = hub.recent().stream().filter(n -> n.eventId().equals(eventX)).count();
+        assertThat(eventXNotifications).isEqualTo(1);
     }
 
     private Producer<String, String> testProducer() {

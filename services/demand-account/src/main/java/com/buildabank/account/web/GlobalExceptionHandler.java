@@ -18,6 +18,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import com.buildabank.account.domain.InsufficientFundsException;
+import com.buildabank.account.payment.PaymentFailedException;
 
 /**
  * Centralized error handling that returns <strong>RFC 9457 Problem Details</strong> (the standard
@@ -39,6 +40,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
         problem.setTitle("Insufficient funds");
         problem.setType(URI.create(PROBLEM_BASE + "insufficient-funds"));
+        return problem;
+    }
+
+    /** Payment Saga failed after compensation (e.g. the credit leg failed; the source was refunded) → 422. */
+    @ExceptionHandler(PaymentFailedException.class)
+    public ProblemDetail handlePaymentFailed(PaymentFailedException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+        problem.setTitle("Payment failed");
+        problem.setType(URI.create(PROBLEM_BASE + "payment-failed"));
         return problem;
     }
 

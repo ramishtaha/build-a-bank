@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -105,6 +105,10 @@ run-notification: ## Run the Notification service on http://localhost:8084 (need
 play-20: ## Step 20: events + Outbox + Kafka + SSE notifications (needs Docker for Testcontainers Postgres + Redpanda)
 	$(MVNW) -pl services/demand-account,services/notification test -Dtest='OutboxWriteTest,OutboxRelayKafkaTest,TransferEventConsumerKafkaTest,NotificationControllerTest'
 	@echo "Live: start a broker + auth + demand-account + notification, open the SSE stream, then transfer — see steps/step-20/requests.http"
+
+play-21: ## Step 21: payment Saga (compensation) + Redis idempotency + Kafka DLQ (needs Docker: Postgres + Redis + Redpanda)
+	$(MVNW) -pl services/demand-account,services/notification test -Dtest='PaymentSagaTest,PaymentControllerTest,DeadLetterTest'
+	@echo "Live: docker run -d -p 6379:6379 redis:7.4-alpine; then POST /api/v1/payments with an Idempotency-Key — see steps/step-21/requests.http"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean

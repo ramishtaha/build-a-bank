@@ -29,6 +29,11 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  # Step 21 — Redis (payment Idempotency-Key store). Tests override host/port via Testcontainers @ServiceConnection.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 # Step 18 (secure-by-default): deny-by-default CORS. Empty ⇒ no browser origin allowed.
 # Allow a specific front-end by listing its origin, e.g. APP_CORS_ALLOWED_ORIGINS=http://localhost:5173 (the React app, Step 29).

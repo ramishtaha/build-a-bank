@@ -9,6 +9,9 @@ spring:
       auto-offset-reset: earliest      # a fresh consumer reads from the start of the topic
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:                          # Step 21: needed so the DLT recoverer can republish failed records
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 # The topic the demand-account Outbox relay publishes to (must match demand-account's bank.events.topic).
 bank:

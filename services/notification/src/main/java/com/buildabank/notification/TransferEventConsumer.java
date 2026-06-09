@@ -48,28 +48,26 @@ public class TransferEventConsumer {
             groupId = "${spring.kafka.consumer.group-id:notification-service}")
     public void onTransferCompleted(String payload) {
         received.incrementAndGet();
-        try {
-            JsonNode node = objectMapper.readTree(payload);
-            String eventId = node.get("eventId").asText();
-            if (!processedEventIds.add(eventId)) {
-                log.info("duplicate event {} ignored (exactly-once effect)", eventId);
-                return;   // already handled this event id → idempotent skip
-            }
-            Notification notification = new Notification(
-                    eventId,
-                    node.get("transactionId").asText(),
-                    node.get("from").asText(),
-                    node.get("to").asText(),
-                    node.get("amount").decimalValue(),
-                    node.get("occurredAt").asText(),
-                    buildMessage(node));
-            applied.incrementAndGet();
-            hub.publish(notification);
-            log.info("notified: {}", notification.message());
-        } catch (Exception e) {
-            // A real consumer routes un-parseable messages to a Dead-Letter Topic (Step 21). Here: log and skip.
-            log.error("could not handle event payload: {}", payload, e);
+        // We do NOT swallow exceptions here (Step 21): a poison/un-parseable message is allowed to throw so the
+        // container's DefaultErrorHandler retries it and then routes it to the Dead-Letter Topic
+        // (KafkaErrorHandlingConfig) — quarantined for inspection instead of silently dropped or blocking forever.
+        JsonNode node = objectMapper.readTree(payload);
+        String eventId = node.get("eventId").asText();
+        if (!processedEventIds.add(eventId)) {
+            log.info("duplicate event {} ignored (exactly-once effect)", eventId);
+            return;   // already handled this event id → idempotent skip
         }
+        Notification notification = new Notification(
+                eventId,
+                node.get("transactionId").asText(),
+                node.get("from").asText(),
+                node.get("to").asText(),
+                node.get("amount").decimalValue(),
+                node.get("occurredAt").asText(),
+                buildMessage(node));
+        applied.incrementAndGet();
+        hub.publish(notification);
+        log.info("notified: {}", notification.message());
     }
 
     private static String buildMessage(JsonNode node) {
