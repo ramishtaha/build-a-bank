@@ -1,0 +1,40 @@
+# gateway/src/main/resources/application.yml
+# Spring Cloud Gateway Server WebMVC (servlet) — the single front door. Routes by a service prefix and
+# strips it before forwarding, so external /cif/api/customers/1 → cif's /api/customers/1.
+# (Config prefix is spring.cloud.gateway.server.webmvc.* since Spring Cloud 2025; the old
+#  spring.cloud.gateway.mvc.* is deprecated.)
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            - id: cif
+              uri: ${services.cif.uri:http://localhost:8081}
+              predicates:
+                - Path=/cif/**
+              filters:
+                - StripPrefix=1                          # /cif/api/customers/1 → /api/customers/1
+                - AddResponseHeader=X-Gateway, build-a-bank
+            - id: demand-account
+              uri: ${services.demand-account.uri:http://localhost:8082}
+              predicates:
+                - Path=/bank/**
+              filters:
+                - StripPrefix=1                          # /bank/api/v1/transfers → /api/v1/transfers
+                - AddResponseHeader=X-Gateway, build-a-bank
+
+server:
+  port: 8080                                             # the gateway is the front door
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway                     # /actuator/gateway lists the routes
+
+logging:
+  level:
+    com.buildabank.gateway: INFO

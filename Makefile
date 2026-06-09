@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -66,6 +66,14 @@ play-13: ## Step 13: ProblemDetail + OpenAPI/Swagger UI. Run the service, then o
 play-14: ## Step 14: versioning, idempotency, pagination & signed webhooks (needs Docker)
 	$(MVNW) -pl services/demand-account -am verify
 	@echo "Then drive the live API with steps/step-14/requests.http (start it with 'make run-demand-account')"
+
+run-gateway: ## Run the API Gateway (front door) on http://localhost:8080 (start cif:8081 + demand-account:8082 first)
+	$(MVNW) -pl gateway spring-boot:run
+	# Windows: .\mvnw.cmd -pl gateway spring-boot:run
+
+play-15: ## Step 15: gateway routing + the declarative CifClient (needs Docker for demand-account tests)
+	$(MVNW) -pl gateway,services/demand-account -am verify
+	@echo "Then run all three (cif, demand-account, gateway) and drive steps/step-15/requests.http through :8080"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean

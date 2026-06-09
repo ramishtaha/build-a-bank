@@ -29,6 +29,7 @@
 | Spring Modulith | 2.0.6 | Step 27 | ✅ (2.x = Boot 4 line) |
 | Resilience4j | 2.4.0 | Step 37 | ✅ (verify Boot-4 artifact at that step) |
 | **springdoc-openapi** | **3.0.3** (NOT Boot-managed → pinned explicitly in `services/demand-account/pom.xml`) | Step 13 | ✅ (3.0.x supports Boot 4 / Spring 7; 2.8.x targets Boot 3. Verified: resolves + boots, live `/v3/api-docs` returns OpenAPI 3.1 — `steps/step-13` Verification Log) |
+| **Spring Cloud Gateway (server-webmvc)** | `spring-cloud-starter-gateway-server-webmvc` (BOM-managed by Spring Cloud 2025.1.1 → 5.0.x). The **SERVLET/MVC** variant, NOT reactive (ADR-0007). | Step 15 | ✅ (resolves on the BOM; gateway boots and routes to a stub with `StripPrefix`/`AddResponseHeader` — `steps/step-15` / `gateway/GatewayRoutingTest`. Config prefix: `spring.cloud.gateway.server.webmvc.routes`; `…gateway.mvc.routes` deprecated.) |
 
 ## ⚠️ Flagged step-backs / watch-items (honesty per the compatibility caveat)
 

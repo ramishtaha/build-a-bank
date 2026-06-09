@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      gateway — the API Gateway / BFF (single front door). Built on Spring Cloud Gateway Server WebMVC
+      (the SERVLET variant) to stay on the project's Spring MVC + virtual-threads stack — NOT the reactive
+      (WebFlux/Netty) gateway. Routes external traffic to the cif and demand-account services. (Step 15.)
+    -->
+    <parent>
+        <groupId>com.buildabank</groupId>
+        <artifactId>build-a-bank-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>gateway</artifactId>
+    <name>Build-a-Bank :: Gateway</name>
+    <description>API Gateway / BFF — Spring Cloud Gateway Server WebMVC routing to the services (Step 15).</description>
+
+    <dependencies>
+        <!-- The SERVLET-based gateway (Spring MVC), version managed by the Spring Cloud BOM (2025.1.1). -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway-server-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

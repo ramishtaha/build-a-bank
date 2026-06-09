@@ -111,3 +111,10 @@
 - **Q:** Why not serialize Spring Data's `Page` directly? — **A:** its JSON shape is an unstable internal detail; expose a stable DTO envelope (content + page/size/totalElements) so the API owns its contract.
 - **Q:** The dual-write problem with webhooks? — **A:** the DB commits but the send fails (or vice-versa) → state and notification diverge; fixed by the Outbox pattern (persist the event in the same transaction, deliver async) — Step 20.
 - **Q:** Spring Boot 4 + Jackson gotcha? — **A:** Boot 4's web stack defaults to Jackson 3, so a Jackson-2 `com.fasterxml…ObjectMapper` *bean* isn't auto-created; create your own instance or use the Jackson 3 mapper.
+
+## Step 15 — API Gateway / BFF + service-to-service HTTP
+- **Q:** What is an API Gateway / BFF? — **A:** a single front door that routes external requests to internal services and centralizes cross-cutting edge concerns (routing, auth, rate limiting, correlation ids), so clients see one endpoint instead of many.
+- **Q:** Reactive vs servlet Spring Cloud Gateway? — **A:** `spring-cloud-starter-gateway-server-webflux` (WebFlux/Netty, reactive) vs `spring-cloud-starter-gateway-server-webmvc` (Spring MVC, servlet). We use the **MVC** one to stay on the MVC + virtual-threads stack; config prefix `spring.cloud.gateway.server.webmvc.routes`.
+- **Q:** How do Spring services call each other today? — **A:** a declarative **HTTP interface** (`@HttpExchange`/`@GetExchange`) implemented by `HttpServiceProxyFactory` over a `RestClient` — type-safe, no hand-written plumbing; the modern successor to `RestTemplate`/OpenFeign for in-Spring calls.
+- **Q:** Why set timeouts on service-to-service calls? — **A:** a call must fail fast, never hang on a slow dependency — otherwise one slow service exhausts threads/pools and cascades into a system-wide outage. Set connect + read timeouts (full resilience: circuit breakers/Resilience4j in Step 37).
+- **Q:** What does a gateway `StripPrefix` filter do? — **A:** removes leading path segments before forwarding, so an external `/cif/api/customers/1` reaches the service's own `/api/customers/1`.

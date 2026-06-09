@@ -1,0 +1,34 @@
+### Build-a-Bank · Step 15 · API Gateway / BFF — one front door for all services
+### Bring up the downstreams + the gateway (three terminals), then hit ONLY the gateway (port 8080):
+###   1) docker compose -f services/cif/compose.yaml up -d            # cif Postgres (5432)
+###      ./mvnw -pl services/cif spring-boot:run                       # cif on 8081
+###   2) docker compose -f services/demand-account/compose.yaml up -d  # demand-account Postgres (5433)
+###      SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run   # 8082
+###   3) ./mvnw -pl gateway spring-boot:run                            # gateway on 8080 (the front door)
+
+@gateway = http://localhost:8080
+
+### Through the gateway → CIF. /cif/** is stripped to /** so this hits cif's /api/customers
+POST {{gateway}}/cif/api/customers
+Content-Type: application/json
+
+{"firstName":"Grace","lastName":"Hopper","email":"grace@bank.example","dateOfBirth":"1906-12-09"}
+
+### Through the gateway → CIF: fetch a customer (note the X-Gateway response header the gateway adds)
+GET {{gateway}}/cif/api/customers/1
+
+### Through the gateway → demand-account: open an account
+POST {{gateway}}/bank/api/accounts
+Content-Type: application/json
+
+{"accountNumber":"ACC-A","currency":"USD","openingBalance":200.00}
+
+### Through the gateway → demand-account: a v1 transfer (idempotent, from Step 14)
+POST {{gateway}}/bank/api/v1/transfers
+Idempotency-Key: gw-demo-1
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":50.00}
+
+### The gateway's own actuator: list the configured routes
+GET {{gateway}}/actuator/gateway/routes
