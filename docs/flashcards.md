@@ -65,3 +65,12 @@
 - **Q:** `LazyInitializationException` — cause & fix? — **A:** touching a lazy association after the persistence context/transaction closed (especially with OSIV off); fix by fetching it inside the transaction (join fetch/`@EntityGraph`) or mapping to a DTO there.
 - **Q:** Optimistic vs pessimistic locking? — **A:** optimistic (`@Version`) detects a conflict at commit via `WHERE version=?` — no DB locks, great for low contention; pessimistic (`SELECT … FOR UPDATE`) locks the row up front — for hot rows (Step 12).
 - **Q:** Why `open-in-view: false`? — **A:** OSIV keeps the persistence context open through view rendering, hiding N+1/lazy bugs and holding DB connections longer; turning it off makes those issues fail fast and forces explicit fetching.
+
+## Step 10 — Relational Databases Up Close
+- **Q:** How do you read `EXPLAIN (ANALYZE)`? — **A:** bottom-up/inside-out; name the scan node (Seq/Index/Bitmap/Index-Only), compare **estimated vs actual rows** (big gap → stale stats → `ANALYZE`), check `Buffers` for I/O.
+- **Q:** What is a covering index? — **A:** an index that `INCLUDE`s the extra columns a query reads, so it's answered from the index alone (an **Index Only Scan**, `Heap Fetches: 0`) — needs the visibility map set by VACUUM.
+- **Q:** What is MVCC? — **A:** multi-version concurrency control: rows have versions (`xmin`/`xmax`); each txn reads a snapshot of committed versions, so readers and writers never block; VACUUM reclaims dead versions.
+- **Q:** Which isolation level prevents which anomaly (Postgres)? — **A:** no dirty reads at any level; non-repeatable & phantom gone at REPEATABLE READ; **write skew** needs SERIALIZABLE.
+- **Q:** What is write skew and how do you fix it? — **A:** two txns read overlapping data, each writes a different row, together breaking an invariant; survives REPEATABLE READ; fix with SERIALIZABLE (SSI aborts with `40001` → retry) or `SELECT … FOR UPDATE`.
+- **Q:** What happens when a connection pool is exhausted? — **A:** borrowers wait up to `connectionTimeout` then throw `SQLTransientConnectionException`; `close()` returns a connection (not a socket close); size pools small, bound query time.
+- **Q:** Why can't `CREATE INDEX CONCURRENTLY` run in a transaction? — **A:** it commits internally between build phases (`SQLSTATE 25001`); migration tools run it outside a transaction — a primitive of zero-downtime/expand-contract change.

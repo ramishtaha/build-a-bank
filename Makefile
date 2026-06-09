@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -39,6 +39,11 @@ run-hello: ## Run the Step-1 hello-service (Ctrl-C to stop). http://localhost:80
 play-01: ## Step 1 demo: curl the running hello-service (start it first with `make run-hello`)
 	@echo "GET /api/hello:"        ; curl -s  http://localhost:8080/api/hello ; echo ; \
 	 echo "GET /actuator/health:" ; curl -s  http://localhost:8080/actuator/health ; echo
+
+play-10: ## Step 10: run the six database labs on a real Postgres (needs Docker)
+	$(MVNW) -pl services/cif test -Dtest='QueryPlanLabTest,MvccIsolationTest,WriteSkewTest,ConnectionPoolTest,PartitioningLabTest,OnlineSchemaChangeTest'
+	@echo "Tip: explore the same SQL by hand — see steps/step-10/queries.sql"
+	# Windows: .\mvnw.cmd -pl services/cif test -Dtest='QueryPlanLabTest,MvccIsolationTest,WriteSkewTest,ConnectionPoolTest,PartitioningLabTest,OnlineSchemaChangeTest'
 
 clean: ## Remove all build output
 	$(MVNW) -B clean

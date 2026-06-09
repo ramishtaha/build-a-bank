@@ -26,11 +26,16 @@
 > here collides with the local PG ("password authentication failed"). Workaround: map a free host port (e.g.
 > `5433:5432`) and set `SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/cif`. (Discovered in Step 8.)
 
-## 🟢 Kubernetes — now runnable locally (updated 2026-06-09)
+## 🟢 Kubernetes — now runnable locally (updated 2026-06-09; re-verified 2026-06-10)
 
-- **`kind` v0.32.0** is installed (`C:\Users\…\path\kind.exe`) → from **Phase G** we can create a REAL single-node
-  cluster (`kind create cluster`) and actually `kubectl apply` + `helm install`, not just lint/template. Docker is the
-  backing runtime (present). (`minikube` was not detected on PATH; `kind` suffices.)
+- **`kind` v0.32.0** is installed (`C:\Users\ramishtaha\path\kind.exe`, confirmed by `kind version` →
+  `kind v0.32.0 go1.26.3 windows/amd64`) → from **Phase G** we can create a REAL single-node cluster
+  (`kind create cluster`) and actually `kubectl apply` + `helm install`, not just lint/template. Docker is the
+  backing runtime (present). `kubectl` v1.34.1 client is on PATH.
+- **`minikube`: NOT on PATH (re-probed 2026-06-10 — `minikube version` → command not found).** The Step-10 run
+  brief mentioned minikube as installed, but the honest probe finds only `kind`. Per §12 (verify, don't claim) we
+  record what is actually runnable: **`kind` is the local-k8s path for Phase G** and is sufficient. If minikube is
+  added later, re-run `make doctor` and update this line.
 - We will still teach the verify-adjacent tools too (`helm lint`/`template`, `kubeconform`, `kubectl --dry-run=client`)
   so learners without a cluster aren't blocked — but the live path is now available on this machine.
 
