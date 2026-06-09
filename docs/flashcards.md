@@ -16,3 +16,10 @@
 - **Q:** What does a `record` generate for you? — **A:** the canonical constructor, accessors, `equals`, `hashCode`, `toString` — and it's shallowly immutable.
 - **Q:** `Instant` vs `LocalDate` vs `ZonedDateTime` — which do you store? — **A:** store `Instant` (UTC); `LocalDate` for zone-less dates (e.g. DOB); `ZonedDateTime` only at the display edge.
 - **Q:** What problem does `Optional` solve? — **A:** it models "maybe absent" in the type system so callers can't forget the not-found case → no surprise `NullPointerException`.
+
+## Step 3 — How the Internet & the Web Work
+- **Q:** What happens when you type a URL and press Enter? — **A:** DNS resolves host→IP → TCP connects (3-way handshake) to the port → TLS handshake if https → the HTTP request is sent, the response comes back and is rendered.
+- **Q:** Are HTTP header *names* case-sensitive? — **A:** No — case-insensitive (RFC 9110). Never assert exact header-name case (the JDK `HttpServer` emits `Content-type`).
+- **Q:** What does TLS give you? — **A:** confidentiality (encryption), integrity (tamper detection), and server authentication (via the certificate).
+- **Q:** HTTP/2 vs HTTP/1.1, one key difference? — **A:** HTTP/2 is binary and multiplexes many requests over one connection (no HTTP-layer head-of-line blocking), negotiated via ALPN during the TLS handshake.
+- **Q:** L4 vs L7 load balancer? — **A:** L4 routes by IP/port (transport layer); L7 routes by HTTP content (path/host/headers).

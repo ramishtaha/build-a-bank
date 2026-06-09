@@ -5,9 +5,9 @@
 
 ## Where we are
 - **Phase:** A — Foundations 🟢 (building Steps 2–7 continuously this phase)
-- **Step:** 2 of 67 — *Java language primer* — ✅ **COMPLETE & VERIFIED**
-- **Last verified tag:** `step-02-end` (== `step-03-start`) — `./mvnw verify` → BUILD SUCCESS, 18 tests, demo + smoke green.
-- **Next action:** **Step 3 — How the Internet & the Web Work** (TCP/IP, DNS, ports, HTTP/HTTPS, the TLS handshake, request/response anatomy, load-balancer concept, "what happens when you type a URL"). Buildable artifact: extend `playground/java-basics` (or add a small net-lab) with a `java.net.http.HttpClient` demo against `services/hello` + real CLI captures (curl -v, nslookup, openssl s_client). Keep `step-03-end == step-04-start`.
+- **Step:** 3 of 67 — *How the Internet & the Web Work* — ✅ **COMPLETE & VERIFIED**
+- **Last verified tag:** `step-03-end` (== `step-04-start`) — `./mvnw verify` → BUILD SUCCESS, 20 tests, loopback HTTP round-trip + smoke green.
+- **Next action:** **Step 4 — How Java Runs: the JVM Up Close** (bytecode, `javac`/`java`, classloading, JIT, heap/stack/metaspace, GC basics, JARs, a first look with JFR). Buildable artifact: add a `jvm` package to `playground/java-basics` (a small allocation/loop program for JIT/GC/JFR) + CLI exploration (`javap -c` disassembly of Step-2 classes, `java -Xlog:gc`, a `.jfr` recording via `-XX:StartFlightRecording`). Keep `step-04-end == step-05-start`.
 
 ## Done so far
 - ✅ **Step 0 — capability preflight** → `CAPABILITIES.md` (JDK 25.0.3 LTS, Maven 3.9.12, Docker running, no local k8s, scanners install-on-demand).
@@ -18,6 +18,7 @@
 ## Verification ledger (most recent first)
 | Tag | Tier | `./mvnw verify` | Proof |
 |---|---|---|---|
+| `step-03-end` | 🟠 Standard | BUILD SUCCESS · 20 tests (+4 net) | `LoopbackHttpTest` (JDK HttpServer) round-trips via `HttpClient` + raw socket; `HttpClientDemo`/`RawHttpDemo` vs hello-service; curl -v / nslookup / TLS captures; `steps/step-03/smoke.sh` PASSED |
 | `step-02-end` | 🟠 Standard | BUILD SUCCESS · 18 tests (java-basics 16 + hello 2) | `Step2Demo` prints net 1124.50 USD; `steps/step-02/smoke.sh` PASSED; records/sealed/streams/Optional/java.time exercised |
 | `step-01-end` | 🟠 Standard | BUILD SUCCESS · 2/2 tests | Tomcat 11.0.21, random test port, `GET /api/hello` → 200 JSON, `/actuator/health` → UP, repackaged jar |
 | `step-01-start` | 🟢 Light | BUILD SUCCESS | parent aggregator, no modules yet |

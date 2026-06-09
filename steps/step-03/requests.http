@@ -1,0 +1,18 @@
+### Build-a-Bank · Step 3 · Seeing HTTP for real
+### Start the hello-service first:  make run-hello   (or  .\mvnw.cmd -pl services/hello spring-boot:run )
+### Then send these and watch the request/response anatomy (status line, headers, body).
+
+@host = http://localhost:8080
+
+### A plain GET — note the response status line, Content-Type header, and JSON body
+GET {{host}}/api/hello
+Accept: application/json
+# curl equivalent (with -v to SEE the wire: DNS, TCP connect, request/response headers):
+#   curl -v http://localhost:8080/api/hello
+
+### Content negotiation: ask for something the server can't give → still 200 here (no XML view configured)
+GET {{host}}/api/hello
+Accept: application/xml
+
+### The raw-socket view (no client library) — run the demo to see the exact bytes:
+#   java -cp playground/java-basics/target/classes com.buildabank.basics.net.RawHttpDemo
