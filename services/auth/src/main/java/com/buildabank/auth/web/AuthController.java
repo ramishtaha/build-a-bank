@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -60,9 +61,20 @@ public class AuthController {
         return new MeResponse(authentication.getName(), roles);
     }
 
-    /** ADMIN-only — reachable only with a token carrying ROLE_ADMIN (else the filter chain returns 403). */
+    /** ADMIN-only via URL rule (the filter chain's `requestMatchers("/api/auth/admin").hasRole("ADMIN")`). */
     @GetMapping("/admin")
     public Map<String, String> admin() {
         return Map.of("message", "admin access granted");
+    }
+
+    /**
+     * ADMIN-only via <strong>method security</strong> ({@code @PreAuthorize}) instead of a URL rule — the
+     * authorization lives on the method, closer to the domain and reusable from any caller. (There's no URL
+     * rule for this path beyond `anyRequest().authenticated()`, so the @PreAuthorize is what enforces ADMIN.)
+     */
+    @GetMapping("/admin-method")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, String> adminViaMethodSecurity() {
+        return Map.of("message", "admin (method security) access granted");
     }
 }

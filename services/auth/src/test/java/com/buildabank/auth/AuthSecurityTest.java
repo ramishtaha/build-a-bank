@@ -80,6 +80,21 @@ class AuthSecurityTest {
         assertThat(response.headers().firstValue("X-Content-Type-Options")).hasValue("nosniff");
     }
 
+    @Test
+    void jwksEndpointPublishesPublicKeyOnly() throws Exception {
+        HttpResponse<String> jwks = get("/oauth2/jwks", null);   // public — no token needed
+        assertThat(jwks.statusCode()).isEqualTo(200);
+        assertThat(jwks.body()).contains("\"kty\":\"RSA\"").contains("\"keys\"");
+        // The PUBLIC JWK must NOT leak private key material (RSA private exponent "d", primes "p"/"q").
+        assertThat(jwks.body()).doesNotContain("\"d\":").doesNotContain("\"p\":").doesNotContain("\"q\":");
+    }
+
+    @Test
+    void methodSecurity_adminMethod_enforcesRole() throws Exception {
+        assertThat(get("/api/auth/admin-method", tokenFor("alice", "password")).statusCode()).isEqualTo(403);
+        assertThat(get("/api/auth/admin-method", tokenFor("admin", "admin123")).statusCode()).isEqualTo(200);
+    }
+
     // ── helpers ──
     private String tokenFor(String username, String password) throws Exception {
         return JsonPath.read(login(username, password).body(), "$.token");

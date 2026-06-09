@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -82,6 +82,10 @@ run-auth: ## Run the Auth service on http://localhost:8083 (no DB needed; demo u
 play-16: ## Step 16: Spring Security — login for a JWT, then 401/403/200. See steps/step-16/requests.http
 	$(MVNW) -pl services/auth test
 	@echo "Run it: make run-auth  → then drive steps/step-16/requests.http (login alice/password, call /me, /admin)"
+
+play-17: ## Step 17: resource servers + RS256/JWKS. Get a token from auth, use it at the secured money service.
+	$(MVNW) -pl services/auth,services/demand-account -am verify
+	@echo "Live: run auth (8083) + demand-account (8082, AUTH_JWKS_URI=http://localhost:8083/oauth2/jwks) — see steps/step-17/requests.http"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean

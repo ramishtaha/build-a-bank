@@ -6,9 +6,12 @@ import java.util.UUID;
 
 import jakarta.validation.Valid;
 
+import java.util.Map;
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -92,6 +95,16 @@ public class TransferController {
         // Webhooks are at-least-once, so a retried request may re-emit — receivers must be idempotent.
         webhookPublisher.transferCompleted(transactionId, request.from(), request.to(), request.amount());
         return ResponseEntity.ok(new TransferResponse(transactionId));
+    }
+
+    /**
+     * ADMIN-only operational endpoint, guarded by <strong>method security</strong> ({@code @PreAuthorize}) —
+     * fine-grained authorization expressed on the method (a USER token gets 403, an ADMIN token 200).
+     */
+    @GetMapping("/api/v1/admin/ping")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, String> adminPing() {
+        return Map.of("message", "admin ok");
     }
 
     /** v1 paginated ledger entries for an account → 200 with a {@link PageResponse} envelope. */

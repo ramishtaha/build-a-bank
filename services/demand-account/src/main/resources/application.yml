@@ -16,6 +16,13 @@ spring:
         format_sql: true
   flyway:
     enabled: true            # runs db/migration/V*.sql on startup, before Hibernate validates.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Validate tokens with the auth service's PUBLIC key, fetched from its JWKS (Step 17).
+          # Lazy fetch on first token, so this service starts even if auth is down. Tests override the JwtDecoder.
+          jwk-set-uri: ${AUTH_JWKS_URI:http://localhost:8083/oauth2/jwks}
 
 server:
   port: 8082                 # demand-account's port (hello=8080, cif=8081).

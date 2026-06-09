@@ -1,0 +1,40 @@
+### Build-a-Bank · Step 17 · Spring Security deep II — resource servers, RS256 + JWKS, method security
+### The end-to-end flow: get a token from AUTH, use it at the (now-secured) money service.
+### 1) Auth:           ./mvnw -pl services/auth spring-boot:run                                   # 8083
+### 2) Postgres:       docker compose -f services/demand-account/compose.yaml up -d               # 5433
+### 3) demand-account: SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account \
+###                    AUTH_JWKS_URI=http://localhost:8083/oauth2/jwks \
+###                    ./mvnw -pl services/demand-account spring-boot:run                         # 8082
+
+@auth = http://localhost:8083
+@da   = http://localhost:8082
+
+### auth's public keys (JWKS) — what demand-account fetches to validate tokens (public material only)
+GET {{auth}}/oauth2/jwks
+
+### Log in to AUTH → an RS256 JWT (copy the token into @token below). admin/admin123 for an ADMIN token.
+POST {{auth}}/api/auth/login
+Content-Type: application/json
+
+{"username":"alice","password":"password"}
+
+@token = PASTE_JWT_HERE
+
+### demand-account WITHOUT a token → 401 (it's now a resource server)
+POST {{da}}/api/accounts
+Content-Type: application/json
+
+{"accountNumber":"ACC-A","currency":"USD","openingBalance":200.00}
+
+### demand-account WITH auth's token → 201 (demand-account validated it via auth's JWKS — cross-service trust)
+POST {{da}}/api/accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"accountNumber":"ACC-A","currency":"USD","openingBalance":200.00}
+
+### Method security: /api/v1/admin/ping with a USER token → 403 (needs ROLE_ADMIN)
+GET {{da}}/api/v1/admin/ping
+Authorization: Bearer {{token}}
+
+### Decode the token at https://jwt.io — note alg=RS256 and the kid matching the JWKS key id.
