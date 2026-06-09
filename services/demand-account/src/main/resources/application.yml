@@ -1,0 +1,32 @@
+# services/demand-account/src/main/resources/application.yml
+spring:
+  application:
+    name: demand-account
+  datasource:
+    # Env-driven (12-factor). Defaults match a local Postgres; tests use Testcontainers (random port).
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/demand_account}
+    username: ${SPRING_DATASOURCE_USERNAME:bank}
+    password: ${SPRING_DATASOURCE_PASSWORD:change-me-locally}
+  jpa:
+    hibernate:
+      ddl-auto: validate     # Flyway OWNS the schema; Hibernate only validates the mapping matches.
+    open-in-view: false      # OSIV off (Step 9): fetch deliberately, fail fast on lazy-outside-tx.
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true            # runs db/migration/V*.sql on startup, before Hibernate validates.
+
+server:
+  port: 8082                 # demand-account's port (hello=8080, cif=8081).
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,flyway
+
+logging:
+  level:
+    com.buildabank.account: INFO

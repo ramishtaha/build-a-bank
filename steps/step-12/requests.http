@@ -1,0 +1,47 @@
+### Build-a-Bank · Step 12 · Demand Account — accounts, transfers & the double-entry ledger
+### 1) Start Postgres:  docker compose -f services/demand-account/compose.yaml up -d
+###    (maps host 5433 → container 5432 to avoid the local Postgres on 5432 — see CAPABILITIES.md)
+### 2) Start the service:
+###    SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run
+###    (port 8082)
+
+@host = http://localhost:8082
+
+### Open account A with $200 → 201 Created
+POST {{host}}/api/accounts
+Content-Type: application/json
+
+{"accountNumber":"ACC-A","currency":"USD","openingBalance":200.00}
+
+### Open account B with $0 → 201 Created
+POST {{host}}/api/accounts
+Content-Type: application/json
+
+{"accountNumber":"ACC-B","currency":"USD","openingBalance":0.00}
+
+### Transfer $50 A → B → 200 OK + the transactionId of the two ledger legs
+POST {{host}}/api/transfers
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":50.00,"description":"rent"}
+
+### Check A's balance → 200 (now 150.00)
+GET {{host}}/api/accounts/ACC-A
+
+### Check B's balance → 200 (now 50.00)
+GET {{host}}/api/accounts/ACC-B
+
+### Try to overdraw A (only 150 left) → 422 Unprocessable Entity {"error":"insufficient_funds"}
+POST {{host}}/api/transfers
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":9999.00,"description":"too much"}
+
+### Unknown account → 400 Bad Request
+POST {{host}}/api/transfers
+Content-Type: application/json
+
+{"from":"ACC-A","to":"NOPE","amount":1.00}
+
+### See applied Flyway migrations
+GET {{host}}/actuator/flyway

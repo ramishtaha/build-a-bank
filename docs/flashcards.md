@@ -83,3 +83,13 @@
 - **Q:** `AtomicLong` vs `LongAdder` vs `synchronized`? — **A:** AtomicLong = lock-free CAS (low contention); LongAdder = striped cells (high contention, `sum()` aggregates); synchronized/Lock when updating multiple fields atomically.
 - **Q:** What are virtual threads (Java 21)? — **A:** lightweight threads scheduled onto a few carrier OS threads; they unmount the carrier when they block, so blocking is cheap and millions are fine — but they do NOT make racy code safe or change the memory model.
 - **Q:** Name three classic concurrency bugs. — **A:** deadlock (fix: lock ordering), double-checked locking (needs `volatile`), false sharing / TOCTOU (use atomic compound ops / `ConcurrentHashMap`).
+
+## Step 12 — Demand Account, Double-Entry Ledger & Transactions
+- **Q:** How do you stop two concurrent withdrawals from overdrawing an account? — **A:** make check-and-debit atomic: pessimistic `SELECT … FOR UPDATE` (lock-and-wait), or optimistic `@Version` + retry, or SERIALIZABLE + retry.
+- **Q:** Optimistic vs pessimistic locking? — **A:** optimistic (`@Version`) detects a conflict at write time and retries (rare-conflict friendly); pessimistic (`FOR UPDATE`) locks at read time so others wait (high-contention friendly). We use pessimistic for hot money rows.
+- **Q:** What is double-entry bookkeeping? — **A:** every movement writes two entries (DEBIT + CREDIT) of equal amount sharing a transaction id; the ledger is append-only and always nets to zero, so the books balance.
+- **Q:** Does `@Transactional` roll back on a checked exception? — **A:** No — by default only on `RuntimeException`/`Error`; checked exceptions commit unless you set `rollbackFor`.
+- **Q:** What does `@Transactional(propagation = REQUIRES_NEW)` do? — **A:** suspends the caller's transaction and runs in a new one that commits independently (e.g. an audit row survives an outer rollback).
+- **Q:** Why does the REQUIRES_NEW audit live in a separate bean? — **A:** `@Transactional` is proxy-based; a `this.`-call (self-invocation) bypasses the proxy so the new transaction never starts (Step 7 pitfall).
+- **Q:** How do you avoid deadlock when a transfer locks two rows? — **A:** acquire locks in a consistent global order (e.g. by account number) regardless of transfer direction.
+- **Q:** Why `BigDecimal` for money, not `double`? — **A:** `double` is binary floating point (can't represent 0.10 exactly) and drifts; `BigDecimal` is exact decimal, stored as `numeric`, compared with `compareTo`.

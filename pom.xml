@@ -42,6 +42,7 @@
     <modules>
         <module>services/hello</module>
         <module>services/cif</module>
+        <module>services/demand-account</module>
         <module>playground/java-basics</module>
         <module>playground/spring-lab</module>
         <module>playground/concurrency-lab</module>

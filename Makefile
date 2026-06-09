@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -48,6 +48,15 @@ play-10: ## Step 10: run the six database labs on a real Postgres (needs Docker)
 play-11: ## Step 11: run the concurrency labs (pure JVM, no Docker) — watch the race lose deposits
 	$(MVNW) -pl playground/concurrency-lab test
 	# Windows: .\mvnw.cmd -pl playground/concurrency-lab test
+
+run-demand-account: ## Run the Demand Account service (needs a Postgres; see services/demand-account/compose.yaml). http://localhost:8082
+	SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account $(MVNW) -pl services/demand-account spring-boot:run
+	# First: docker compose -f services/demand-account/compose.yaml up -d
+	# Windows: $$env:SPRING_DATASOURCE_URL='jdbc:postgresql://localhost:5433/demand_account'; .\mvnw.cmd -pl services/demand-account spring-boot:run
+
+play-12: ## Step 12: the Phase-B capstone — fails without locking, passes with it (needs Docker)
+	$(MVNW) -pl services/demand-account test -Dtest=ConcurrentTransferTest
+	@echo "Then drive the live API with steps/step-12/requests.http (start it with 'make run-demand-account')"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean
