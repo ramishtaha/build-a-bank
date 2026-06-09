@@ -5,9 +5,9 @@
 
 ## Where we are
 - **Phase:** A — Foundations 🟢 (building Steps 2–7 continuously this phase)
-- **Step:** 4 of 67 — *How Java Runs: the JVM Up Close* — ✅ **COMPLETE & VERIFIED**
-- **Last verified tag:** `step-04-end` (== `step-05-start`) — `./mvnw verify` → BUILD SUCCESS, 22 tests; javap/GC/JIT/JFR/classloading captured; smoke green.
-- **Next action:** **Step 5 — Spring Core & IoC deep** (bean lifecycle, scopes, `@Bean` vs `@Component`, conditional beans, `@Profile`, SpEL, dependency injection — the IoC container demystified). Buildable artifact: NEW module `playground/spring-lab` (per ADR-0003) — a `spring-boot-starter` (no web yet) app with several beans demonstrating constructor DI, scopes (singleton vs prototype), `@Bean` factory methods, `@Conditional`/`@Profile`, a `BeanPostProcessor`, and a `CommandLineRunner` that prints the lifecycle; tests with `ApplicationContextRunner`. Keep `step-05-end == step-06-start`.
+- **Step:** 5 of 67 — *Spring Core & IoC Deep* — ✅ **COMPLETE & VERIFIED**
+- **Last verified tag:** `step-05-end` (== `step-06-start`) — `./mvnw verify` → BUILD SUCCESS, 28 tests; app run shows lifecycle 1→4 + @PreDestroy; smoke green.
+- **Next action:** **Step 6 — Spring Boot internals & config** (how auto-configuration actually works, `@ConfigurationProperties`, Actuator basics). Buildable artifact: (a) add type-safe `@ConfigurationProperties` (`BankProperties` binding `bank.*`) to `playground/spring-lab` + a tiny CUSTOM auto-configuration (an `AutoConfiguration` class registered via `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`, previewing the Step-28 starter); (b) on `services/hello`, expose more Actuator endpoints (`conditions`, `beans`, `configprops`, `env`) and curl `/actuator/conditions` to SEE auto-config positive/negative matches. Keep `step-06-end == step-07-start`.
 
 ## Done so far
 - ✅ **Step 0 — capability preflight** → `CAPABILITIES.md` (JDK 25.0.3 LTS, Maven 3.9.12, Docker running, no local k8s, scanners install-on-demand).
@@ -18,6 +18,7 @@
 ## Verification ledger (most recent first)
 | Tag | Tier | `./mvnw verify` | Proof |
 |---|---|---|---|
+| `step-05-end` | 🟠 Standard | BUILD SUCCESS · 28 tests (+6 spring-lab) | conditional beans (fixed/market via `@ConditionalOnProperty`), constructor DI, singleton vs prototype scopes, SpEL, lifecycle order 1→4 + `@PreDestroy` in app run; `steps/step-05/smoke.sh` PASSED |
 | `step-04-end` | 🟠 Standard | BUILD SUCCESS · 22 tests (+2 jvm) | `javap -c` bytecode; `-Xlog:gc` G1 young pauses; `-XX:+PrintCompilation` C1/C2/OSR; JFR summary; `-Xlog:class+load` (CDS); escape-analysis discovery; `steps/step-04/smoke.sh` PASSED |
 | `step-03-end` | 🟠 Standard | BUILD SUCCESS · 20 tests (+4 net) | `LoopbackHttpTest` (JDK HttpServer) round-trips via `HttpClient` + raw socket; `HttpClientDemo`/`RawHttpDemo` vs hello-service; curl -v / nslookup / TLS captures; `steps/step-03/smoke.sh` PASSED |
 | `step-02-end` | 🟠 Standard | BUILD SUCCESS · 18 tests (java-basics 16 + hello 2) | `Step2Demo` prints net 1124.50 USD; `steps/step-02/smoke.sh` PASSED; records/sealed/streams/Optional/java.time exercised |

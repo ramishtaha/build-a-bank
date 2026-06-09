@@ -1,0 +1,17 @@
+# playground/spring-lab/src/main/resources/application.yml
+spring:
+  application:
+    name: spring-lab
+  main:
+    banner-mode: "off"        # quieter output so the lab logs stand out
+
+# Custom config the beans read (via @Value / @ConditionalOnProperty). Try flipping source to "market".
+bank:
+  name: Build-a-Bank
+  rates:
+    source: fixed            # fixed | market  (selects which RateProvider bean is created)
+    fixed: 0.0325            # 3.25% annual
+
+logging:
+  level:
+    com.buildabank.springlab: INFO

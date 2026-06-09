@@ -30,3 +30,10 @@
 - **Q:** Default GC since Java 9? — **A:** **G1** (Garbage-First). Low-pause alternatives: ZGC, Shenandoah (tuning in Step 55).
 - **Q:** What is tiered JIT compilation? — **A:** start interpreting; compile hot methods with C1 (levels 1–3) then C2 (level 4); deoptimize ("uncommon trap") back to the interpreter when assumptions break.
 - **Q:** What is escape analysis? — **A:** a JIT optimization that proves an object doesn't escape its method and scalar-replaces/stack-allocates it — so no heap allocation or GC happens (we saw 5M "allocations" in 9 ms with zero GC).
+
+## Step 5 — Spring Core & IoC Deep
+- **Q:** What is Inversion of Control? — **A:** your code declares the collaborators it needs; the container creates and injects them, instead of your code `new`-ing its own dependencies.
+- **Q:** Why constructor injection over field injection? — **A:** allows `final`/immutable fields, makes dependencies explicit, fails fast if one is missing, and needs no reflection to test (just pass a mock).
+- **Q:** `@Component` vs `@Bean`? — **A:** `@Component` (+ scanning) for your own classes; a `@Bean` factory method in a `@Configuration` for types you don't own or that need custom construction.
+- **Q:** Singleton vs prototype scope? — **A:** singleton = one shared instance per context (the default); prototype = a new instance every time the bean is requested.
+- **Q:** What is a `BeanPostProcessor`? — **A:** a container extension point invoked around every bean's initialization — how Spring itself wires AOP proxies, resolves `@Value`, etc.
