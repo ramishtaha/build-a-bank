@@ -1,0 +1,39 @@
+### Build-a-Bank · Step 16 · Spring Security deep I — JWT auth, filter chain, BCrypt
+### Start the auth service:  ./mvnw -pl services/auth spring-boot:run     (port 8083, no DB needed)
+### Demo users (fake creds): alice/password (ROLE_USER) · admin/admin123 (ROLE_USER, ROLE_ADMIN)
+
+@host = http://localhost:8083
+
+### 1) Log in → 200 with a JWT (copy the token into @token below). Wrong password → 401.
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{"username":"alice","password":"password"}
+
+### (paste the token from the login response)
+@token = PASTE_JWT_HERE
+
+### 2) Who am I? — needs a valid token (no token → 401)
+GET {{host}}/api/auth/me
+Authorization: Bearer {{token}}
+
+### 3) /me WITHOUT a token → 401 Unauthorized (authentication required)
+GET {{host}}/api/auth/me
+
+### 4) /admin as alice (ROLE_USER) → 403 Forbidden (authorization denied)
+GET {{host}}/api/auth/admin
+Authorization: Bearer {{token}}
+
+### 5) Log in as admin, then /admin → 200 (admin@admin123 has ROLE_ADMIN)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{"username":"admin","password":"admin123"}
+
+### (paste the admin token, then call /admin)
+GET {{host}}/api/auth/admin
+Authorization: Bearer PASTE_ADMIN_JWT_HERE
+
+### Decode a JWT (no secret needed to READ it) at https://jwt.io — see the header (HS256),
+### and claims sub/roles/exp/iat. The signature is what the server verifies with the shared secret.

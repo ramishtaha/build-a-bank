@@ -1,0 +1,26 @@
+# services/auth/src/main/resources/application.yml
+spring:
+  application:
+    name: auth
+
+bank:
+  jwt:
+    # DEMO secret only (fake — never a real secret in git; Vault in Phase H). HS256 needs >= 32 bytes.
+    secret: ${BANK_JWT_SECRET:dev-only-change-me-build-a-bank-hmac-secret-key-256bit-minimum}
+    ttl-minutes: 30
+    issuer: build-a-bank-auth
+
+server:
+  port: 8083                 # auth's port (hello/gateway 8080, cif 8081, demand-account 8082)
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    org.springframework.security: INFO
+    com.buildabank.auth: INFO

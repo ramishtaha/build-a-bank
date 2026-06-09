@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -74,6 +74,14 @@ run-gateway: ## Run the API Gateway (front door) on http://localhost:8080 (start
 play-15: ## Step 15: gateway routing + the declarative CifClient (needs Docker for demand-account tests)
 	$(MVNW) -pl gateway,services/demand-account -am verify
 	@echo "Then run all three (cif, demand-account, gateway) and drive steps/step-15/requests.http through :8080"
+
+run-auth: ## Run the Auth service on http://localhost:8083 (no DB needed; demo users alice/admin)
+	$(MVNW) -pl services/auth spring-boot:run
+	# Windows: .\mvnw.cmd -pl services/auth spring-boot:run
+
+play-16: ## Step 16: Spring Security — login for a JWT, then 401/403/200. See steps/step-16/requests.http
+	$(MVNW) -pl services/auth test
+	@echo "Run it: make run-auth  → then drive steps/step-16/requests.http (login alice/password, call /me, /admin)"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean
