@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -57,6 +57,11 @@ run-demand-account: ## Run the Demand Account service (needs a Postgres; see ser
 play-12: ## Step 12: the Phase-B capstone — fails without locking, passes with it (needs Docker)
 	$(MVNW) -pl services/demand-account test -Dtest=ConcurrentTransferTest
 	@echo "Then drive the live API with steps/step-12/requests.http (start it with 'make run-demand-account')"
+
+play-13: ## Step 13: ProblemDetail + OpenAPI/Swagger UI. Run the service, then open http://localhost:8082/swagger-ui.html
+	@echo "Start Postgres:  docker compose -f services/demand-account/compose.yaml up -d"
+	@echo "Run service:     make run-demand-account   (then browse http://localhost:8082/swagger-ui.html)"
+	@echo "Or just test it: $(MVNW) -pl services/demand-account -am verify"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean

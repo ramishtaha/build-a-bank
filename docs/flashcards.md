@@ -93,3 +93,12 @@
 - **Q:** Why does the REQUIRES_NEW audit live in a separate bean? — **A:** `@Transactional` is proxy-based; a `this.`-call (self-invocation) bypasses the proxy so the new transaction never starts (Step 7 pitfall).
 - **Q:** How do you avoid deadlock when a transfer locks two rows? — **A:** acquire locks in a consistent global order (e.g. by account number) regardless of transfer direction.
 - **Q:** Why `BigDecimal` for money, not `double`? — **A:** `double` is binary floating point (can't represent 0.10 exactly) and drifts; `BigDecimal` is exact decimal, stored as `numeric`, compared with `compareTo`.
+
+## Step 13 — Spring MVC / REST Deep (Problem Details, OpenAPI, filters/interceptors)
+- **Q:** Walk through a Spring MVC request. — **A:** servlet filter chain → DispatcherServlet → HandlerMapping (find the @RequestMapping) → interceptor preHandle → HandlerAdapter (bind args + @Valid + HttpMessageConverter) → handler → return value serialized to JSON; exceptions go to @ControllerAdvice.
+- **Q:** What is RFC 9457? — **A:** Problem Details for HTTP APIs — a standard error body (`application/problem+json`) with type/title/status/detail/instance + custom extension members.
+- **Q:** How do you return ProblemDetail for validation errors too? — **A:** make the `@RestControllerAdvice` extend `ResponseEntityExceptionHandler` and override `handleMethodArgumentNotValid`.
+- **Q:** Filter vs interceptor? — **A:** filter = servlet-container level, sees every request (even 404s), no handler context (correlation ids/CORS); interceptor = Spring-MVC level, around the matched handler, has handler metadata (timing/auth). Filters auto-register; interceptors need WebMvcConfigurer.
+- **Q:** What turns `@RequestBody` JSON into a Java object? — **A:** an `HttpMessageConverter` (Jackson) in the HandlerAdapter, before the controller method runs; content negotiation picks it by Accept.
+- **Q:** Which springdoc version works with Spring Boot 4? — **A:** 3.0.x (e.g. 3.0.3); 2.8.x targets Boot 3. It generates OpenAPI 3.1 at /v3/api-docs and Swagger UI at /swagger-ui.html.
+- **Q:** Are controllers/filters/interceptors thread-safe? — **A:** they're shared singletons, so keep them stateless; put per-request state in request attributes/ThreadLocal, never instance fields.

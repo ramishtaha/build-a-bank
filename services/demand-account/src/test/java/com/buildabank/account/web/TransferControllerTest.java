@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -63,7 +65,7 @@ class TransferControllerTest {
     }
 
     @Test
-    void overdrawReturns422() throws Exception {
+    void overdrawReturnsProblemDetail422() throws Exception {
         given(transfers.transfer(any(), any(), any(), any()))
                 .willThrow(new InsufficientFundsException("balance too low"));
 
@@ -73,17 +75,39 @@ class TransferControllerTest {
                                 {"from":"ACC-A","to":"ACC-B","amount":9999.00}
                                 """))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.error").value("insufficient_funds"));
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))   // RFC 9457
+                .andExpect(jsonPath("$.title").value("Insufficient funds"))
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.detail").value("balance too low"))
+                .andExpect(jsonPath("$.type").value("https://buildabank.example/problems/insufficient-funds"));
     }
 
     @Test
-    void negativeAmountReturns400() throws Exception {
+    void negativeAmountReturnsValidationProblemDetail400() throws Exception {
         // @Positive on the amount fails Bean Validation before the controller body runs.
         mvc.perform(post("/api/transfers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"from":"ACC-A","to":"ACC-B","amount":-5.00}
                                 """))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.title").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.amount").exists());   // per-field error attached
+    }
+
+    @Test
+    void responseCarriesTheCorrelationIdHeader() throws Exception {
+        UUID txId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        given(transfers.transfer(any(), any(), any(), any())).willReturn(txId);
+
+        mvc.perform(post("/api/transfers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":25.00}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("X-Request-Id"))        // set by RequestIdFilter
+                .andExpect(header().string("X-Timing-Enabled", "true"));   // set by TimingInterceptor.preHandle
     }
 }

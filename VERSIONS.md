@@ -28,6 +28,7 @@
 | ArchUnit (junit5) | 1.4.2 | Step 27 | ✅ |
 | Spring Modulith | 2.0.6 | Step 27 | ✅ (2.x = Boot 4 line) |
 | Resilience4j | 2.4.0 | Step 37 | ✅ (verify Boot-4 artifact at that step) |
+| **springdoc-openapi** | **3.0.3** (NOT Boot-managed → pinned explicitly in `services/demand-account/pom.xml`) | Step 13 | ✅ (3.0.x supports Boot 4 / Spring 7; 2.8.x targets Boot 3. Verified: resolves + boots, live `/v3/api-docs` returns OpenAPI 3.1 — `steps/step-13` Verification Log) |
 
 ## ⚠️ Flagged step-backs / watch-items (honesty per the compatibility caveat)
 

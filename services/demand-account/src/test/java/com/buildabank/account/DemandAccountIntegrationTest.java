@@ -59,15 +59,37 @@ class DemandAccountIntegrationTest {
                 "{\"from\":\"ACC-A\",\"to\":\"ACC-B\",\"amount\":50.00,\"description\":\"rent\"}");
         assertThat(transfer.statusCode()).isEqualTo(200);
         assertThat(transfer.body()).contains("transactionId");
+        // The RequestIdFilter (Step 13) stamps a correlation id on every response.
+        assertThat(transfer.headers().firstValue("X-Request-Id")).isPresent();
+        // The TimingInterceptor's preHandle marker header is present too.
+        assertThat(transfer.headers().firstValue("X-Timing-Enabled")).hasValue("true");
 
         HttpResponse<String> balanceA = get("/api/accounts/ACC-A");
         assertThat(balanceA.statusCode()).isEqualTo(200);
         assertThat(balanceA.body()).contains("150");   // 200 − 50
 
-        // Overdraft → 422 Unprocessable Entity (mapped by ApiExceptionHandler).
-        assertThat(post("/api/transfers",
-                "{\"from\":\"ACC-A\",\"to\":\"ACC-B\",\"amount\":9999.00}").statusCode())
-                .isEqualTo(422);
+        // Overdraft → 422 as an RFC 9457 Problem Detail (application/problem+json).
+        HttpResponse<String> overdraft = post("/api/transfers",
+                "{\"from\":\"ACC-A\",\"to\":\"ACC-B\",\"amount\":9999.00}");
+        assertThat(overdraft.statusCode()).isEqualTo(422);
+        assertThat(overdraft.headers().firstValue("Content-Type")).hasValueSatisfying(
+                ct -> assertThat(ct).contains("application/problem+json"));
+        assertThat(overdraft.body()).contains("\"title\":\"Insufficient funds\"").contains("\"status\":422");
+    }
+
+    @Test
+    void openApiDocsAndSwaggerUiAreServed() throws Exception {
+        // springdoc generates the spec from the controllers (Step 13).
+        HttpResponse<String> apiDocs = get("/v3/api-docs");
+        assertThat(apiDocs.statusCode()).isEqualTo(200);
+        assertThat(apiDocs.body())
+                .contains("Demand Account API")     // our OpenApiConfig title
+                .contains("/api/transfers")         // the documented endpoints
+                .contains("/api/accounts");
+
+        // Swagger UI is served (it redirects /swagger-ui.html → /swagger-ui/index.html).
+        HttpResponse<String> swagger = get("/swagger-ui/index.html");
+        assertThat(swagger.statusCode()).isEqualTo(200);
     }
 
     private HttpResponse<String> post(String path, String json) throws Exception {

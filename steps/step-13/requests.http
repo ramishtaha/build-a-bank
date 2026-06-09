@@ -1,0 +1,50 @@
+### Build-a-Bank · Step 13 · Spring MVC deep — Problem Details, OpenAPI & Swagger UI
+### 1) Start Postgres:  docker compose -f services/demand-account/compose.yaml up -d   (maps host 5433)
+### 2) Start the service:
+###    SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run
+### 3) Browse Swagger UI:  http://localhost:8082/swagger-ui.html
+
+@host = http://localhost:8082
+
+### The generated OpenAPI 3.1 spec (springdoc) → 200 JSON
+GET {{host}}/v3/api-docs
+
+### Swagger UI (browsable client) → 200 HTML
+GET {{host}}/swagger-ui/index.html
+
+### Open account A → 201 (note the X-Request-Id + X-Timing-Enabled response headers)
+POST {{host}}/api/accounts
+Content-Type: application/json
+
+{"accountNumber":"ACC-A","currency":"USD","openingBalance":200.00}
+
+### Open account B → 201
+POST {{host}}/api/accounts
+Content-Type: application/json
+
+{"accountNumber":"ACC-B","currency":"USD","openingBalance":0.00}
+
+### Transfer → 200 + transactionId. Pass your own correlation id and watch it echo back.
+POST {{host}}/api/transfers
+X-Request-Id: my-trace-123
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":50.00,"description":"rent"}
+
+### Overdraw → 422 application/problem+json {type,title,status,detail,instance}
+POST {{host}}/api/transfers
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":9999.00}
+
+### Validation failure (negative amount) → 400 application/problem+json with $.errors.amount
+POST {{host}}/api/transfers
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":-5.00}
+
+### Unknown account → 400 Problem Detail
+POST {{host}}/api/transfers
+Content-Type: application/json
+
+{"from":"ACC-A","to":"NOPE","amount":1.00}

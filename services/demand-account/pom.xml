@@ -55,6 +55,14 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- OpenAPI/Swagger UI (Step 13). springdoc 3.0.x is the line that supports Spring Boot 4 / Spring
+             Framework 7 (2.8.x targets Boot 3). Pinned — NOT Boot-managed, so we set the version. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>3.0.3</version>
+        </dependency>
+
         <!-- ── Test ── -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
