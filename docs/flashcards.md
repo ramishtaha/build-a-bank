@@ -37,3 +37,10 @@
 - **Q:** `@Component` vs `@Bean`? — **A:** `@Component` (+ scanning) for your own classes; a `@Bean` factory method in a `@Configuration` for types you don't own or that need custom construction.
 - **Q:** Singleton vs prototype scope? — **A:** singleton = one shared instance per context (the default); prototype = a new instance every time the bean is requested.
 - **Q:** What is a `BeanPostProcessor`? — **A:** a container extension point invoked around every bean's initialization — how Spring itself wires AOP proxies, resolves `@Value`, etc.
+
+## Step 6 — Spring Boot Internals & Config
+- **Q:** How does Boot discover auto-configurations? — **A:** it reads `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` (Boot 2.7+/3+), each line an `@AutoConfiguration` class, then evaluates their `@Conditional*` annotations.
+- **Q:** What does `@ConditionalOnMissingBean` enable? — **A:** "a sensible default you can override" — the auto-config bean is created only if you haven't defined your own.
+- **Q:** `@Value` vs `@ConfigurationProperties`? — **A:** `@Value` for one property; `@ConfigurationProperties` for a typed, validated group bound by prefix (constructor binding for records).
+- **Q:** How do you debug "why is/isn't this bean here?" — **A:** `GET /actuator/conditions` — the positive/negative auto-config match report (with reasons).
+- **Q:** Why not expose all Actuator endpoints in prod? — **A:** `beans`/`env`/`configprops`/`conditions` leak internal structure + config; expose minimally and secure them.

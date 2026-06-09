@@ -17,7 +17,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info   # expose only what we need; never expose everything in prod.
+        # Step 6: expose endpoints that reveal Boot's auto-configuration decisions.
+        # 'conditions' = the auto-config positive/negative match report; 'configprops' = bound @ConfigurationProperties;
+        # 'beans' = every bean in the context; 'env' = resolved configuration. (Locked down again before prod — Phase H.)
+        include: health,info,conditions,beans,configprops,env,mappings
   endpoint:
     health:
       show-details: always     # fine for a local learning app; locked down later.

@@ -1,0 +1,3 @@
+# Spring Boot discovers auto-configurations listed here (one fully-qualified class name per line).
+# This is the modern replacement (Boot 2.7+/3+) for the old spring.factories EnableAutoConfiguration key.
+com.buildabank.springlab.autoconfig.GreetingAutoConfiguration

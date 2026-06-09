@@ -1,0 +1,21 @@
+### Build-a-Bank · Step 6 · Seeing Spring Boot auto-configuration via Actuator
+### Start hello-service first:  make run-hello   (or  .\mvnw.cmd -pl services/hello spring-boot:run )
+
+@host = http://localhost:8080
+
+### The auto-configuration REPORT: which auto-configs matched (positiveMatches) and which were
+### skipped and WHY (negativeMatches). This is how Boot's "magic" becomes visible.
+GET {{host}}/actuator/conditions
+# curl: curl -s http://localhost:8080/actuator/conditions | jq '.contexts."hello-service".positiveMatches | keys | length'
+
+### Every bound @ConfigurationProperties object (sensitive values are sanitized)
+GET {{host}}/actuator/configprops
+
+### Every bean in the container
+GET {{host}}/actuator/beans
+
+### The resolved environment (property sources, in precedence order; secrets sanitized)
+GET {{host}}/actuator/env
+
+### Request mappings (every URL → handler)
+GET {{host}}/actuator/mappings

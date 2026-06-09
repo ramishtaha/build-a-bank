@@ -5,9 +5,9 @@
 
 ## Where we are
 - **Phase:** A — Foundations 🟢 (building Steps 2–7 continuously this phase)
-- **Step:** 5 of 67 — *Spring Core & IoC Deep* — ✅ **COMPLETE & VERIFIED**
-- **Last verified tag:** `step-05-end` (== `step-06-start`) — `./mvnw verify` → BUILD SUCCESS, 28 tests; app run shows lifecycle 1→4 + @PreDestroy; smoke green.
-- **Next action:** **Step 6 — Spring Boot internals & config** (how auto-configuration actually works, `@ConfigurationProperties`, Actuator basics). Buildable artifact: (a) add type-safe `@ConfigurationProperties` (`BankProperties` binding `bank.*`) to `playground/spring-lab` + a tiny CUSTOM auto-configuration (an `AutoConfiguration` class registered via `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`, previewing the Step-28 starter); (b) on `services/hello`, expose more Actuator endpoints (`conditions`, `beans`, `configprops`, `env`) and curl `/actuator/conditions` to SEE auto-config positive/negative matches. Keep `step-06-end == step-07-start`.
+- **Step:** 6 of 67 — *Spring Boot Internals & Config* — ✅ **COMPLETE & VERIFIED**
+- **Last verified tag:** `step-06-end` (== `step-07-start`) — `./mvnw verify` → BUILD SUCCESS, 34 tests; custom auto-config + typed props proven; `/actuator/conditions` = 141 applied / 82 skipped; smoke green.
+- **Next action:** **Step 7 — AOP & the proxy model** (aspects/pointcuts/advice; JDK dynamic proxy vs CGLIB; the self-invocation pitfall) — the bank's audit/logging aspect — PLUS the 🎓 **Phase A Capstone**: a tiny end-to-end vertical slice (one endpoint → service → in-memory store). Buildable artifact: add `spring-boot-starter-aop` + `spring-boot-starter-web` to `playground/spring-lab`; an `@Audited` annotation + `AuditAspect` (`@Around`); a vertical slice `AccountController → AccountService(@Audited) → InMemoryAccountStore`; demonstrate the CGLIB-vs-JDK proxy and the self-invocation pitfall (aspect skipped on `this.` calls). MockMvc + AOP tests. This is the **Phase A boundary** → after verifying Step 7, write the Phase A checkpoint summary and PAUSE for the user's "continue".
 
 ## Done so far
 - ✅ **Step 0 — capability preflight** → `CAPABILITIES.md` (JDK 25.0.3 LTS, Maven 3.9.12, Docker running, no local k8s, scanners install-on-demand).
@@ -18,6 +18,7 @@
 ## Verification ledger (most recent first)
 | Tag | Tier | `./mvnw verify` | Proof |
 |---|---|---|---|
+| `step-06-end` | 🟠 Standard | BUILD SUCCESS · 34 tests (+4 spring-lab) | typed `@ConfigurationProperties` binding; custom `GreetingAutoConfiguration` (on/off/back-off); `/actuator/conditions` 141 applied / 82 skipped on hello-service; `steps/step-06/smoke.sh` PASSED |
 | `step-05-end` | 🟠 Standard | BUILD SUCCESS · 28 tests (+6 spring-lab) | conditional beans (fixed/market via `@ConditionalOnProperty`), constructor DI, singleton vs prototype scopes, SpEL, lifecycle order 1→4 + `@PreDestroy` in app run; `steps/step-05/smoke.sh` PASSED |
 | `step-04-end` | 🟠 Standard | BUILD SUCCESS · 22 tests (+2 jvm) | `javap -c` bytecode; `-Xlog:gc` G1 young pauses; `-XX:+PrintCompilation` C1/C2/OSR; JFR summary; `-Xlog:class+load` (CDS); escape-analysis discovery; `steps/step-04/smoke.sh` PASSED |
 | `step-03-end` | 🟠 Standard | BUILD SUCCESS · 20 tests (+4 net) | `LoopbackHttpTest` (JDK HttpServer) round-trips via `HttpClient` + raw socket; `HttpClientDemo`/`RawHttpDemo` vs hello-service; curl -v / nslookup / TLS captures; `steps/step-03/smoke.sh` PASSED |
