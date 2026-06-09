@@ -3,7 +3,10 @@ package com.buildabank.cif.domain;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -11,7 +14,9 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 /**
  * A bank customer (JPA entity). The table is owned by Flyway (see {@code db/migration}); Hibernate is set
@@ -54,6 +59,22 @@ public class Customer {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    /**
+     * Optimistic-locking version. Hibernate increments it on every update and adds
+     * {@code WHERE version = ?} to UPDATEs; a mismatch (someone else updated first) throws — no row is
+     * silently overwritten. This is how the bank prevents lost updates without locking rows.
+     */
+    @Version
+    private long version;
+
+    /**
+     * The "one" side of Customer → Address. {@code LAZY} by default: addresses are NOT loaded until touched
+     * — which is exactly what triggers the N+1 problem when you iterate many customers and read each one's
+     * addresses. Fix it with a fetch join / {@code @EntityGraph} (see the repository).
+     */
+    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Address> addresses = new ArrayList<>();
 
     /** JPA requires a no-arg constructor (may be package-private). */
     protected Customer() {
@@ -104,5 +125,19 @@ public class Customer {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public long getVersion() {
+        return version;
+    }
+
+    public List<Address> getAddresses() {
+        return addresses;
+    }
+
+    /** Adds an address and keeps BOTH sides of the relationship consistent (the JPA way). */
+    public void addAddress(Address address) {
+        addresses.add(address);
+        address.setCustomer(this);
     }
 }

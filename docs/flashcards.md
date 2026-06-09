@@ -58,3 +58,10 @@
 - **Q:** `ddl-auto=validate` + Flyway, who owns the schema? — **A:** Flyway (versioned migrations) owns it; Hibernate only validates the entity mapping matches — it never alters the schema.
 - **Q:** What is a Spring Data derived query? — **A:** a repository method whose NAME (`findByCustomerNumber`, `existsByEmail`) Spring Data parses into a query at startup — you write no implementation.
 - **Q:** Why return a DTO instead of the JPA entity? — **A:** it decouples the API contract from the DB schema, avoids leaking fields/lazy associations, and dodges serialization surprises.
+
+## Step 9 — Hibernate Performance & Correctness
+- **Q:** The N+1 problem? — **A:** loading N parents and then lazily loading each one's children fires 1 + N queries; fix with a fetch join / `@EntityGraph` (a single query). Proven here: 3 statements lazy vs 1 with `@EntityGraph`.
+- **Q:** What does `@EntityGraph` do? — **A:** tells Hibernate to eagerly fetch named associations for THIS query (lazy → join), without changing the entity's default fetch type.
+- **Q:** `LazyInitializationException` — cause & fix? — **A:** touching a lazy association after the persistence context/transaction closed (especially with OSIV off); fix by fetching it inside the transaction (join fetch/`@EntityGraph`) or mapping to a DTO there.
+- **Q:** Optimistic vs pessimistic locking? — **A:** optimistic (`@Version`) detects a conflict at commit via `WHERE version=?` — no DB locks, great for low contention; pessimistic (`SELECT … FOR UPDATE`) locks the row up front — for hot rows (Step 12).
+- **Q:** Why `open-in-view: false`? — **A:** OSIV keeps the persistence context open through view rendering, hiding N+1/lazy bugs and holding DB connections longer; turning it off makes those issues fail fast and forces explicit fetching.

@@ -5,9 +5,9 @@
 
 ## Where we are
 - **Phase:** B — Data, Databases, Concurrency & Transactions 🔵 (in progress; Steps 8–12)
-- **Step:** 8 of 67 — *CIF Service — Spring Data JPA, Flyway & Testcontainers* — ✅ **COMPLETE & VERIFIED** (🔴 Full tier)
-- **Last verified tag:** `step-08-end` (== `step-09-start`) — `./mvnw verify` → BUILD SUCCESS, **46 tests**; CIF on REAL Postgres via Testcontainers (random port, Flyway v1 applied); live POST→201/GET→200/400/404; mutation sanity-check done.
-- **Next action:** **Step 9 — Hibernate performance & correctness** on `services/cif`: lazy vs eager + `LazyInitializationException` (and why we already set `open-in-view: false`), the **N+1 problem** shown failing then fixed with fetch joins / `@EntityGraph`, DTO **projections**, and **optimistic locking with `@Version`**. Add a second entity/association (e.g. `Address` or `Account`-stub under CIF) to demonstrate N+1; prove with SQL logs + a `@Version` conflict test. Keep `step-09-end == step-10-start`. (Docker required.)
+- **Step:** 9 of 67 — *Hibernate Performance & Correctness* — ✅ **COMPLETE & VERIFIED** (🔴 Full tier)
+- **Last verified tag:** `step-09-end` (== `step-10-start`) — `./mvnw verify` → BUILD SUCCESS, **50 tests**; N+1 proven (3 stmts lazy vs 1 with `@EntityGraph`), `@Version` optimistic-lock conflict proven, projection; §12.3 mutation (remove `@Version`) caught + reverted.
+- **Next action:** **Step 10 — Relational Databases Up Close**: SQL depth, **indexing**, reading **`EXPLAIN`/query plans** (seq scan vs index scan on real Postgres), **isolation anomalies** (dirty/non-repeatable/phantom + **write skew**), **MVCC**, **partitioning**, **read replicas** & lag, **online/zero-downtime schema change**, connection-pool (HikariCP) internals. Buildable: SQL exploration on the cif Postgres (Testcontainers) — a test/script that runs `EXPLAIN (ANALYZE)` and shows index vs seq scan, plus a concurrency test demonstrating an isolation anomaly (e.g. write skew under READ COMMITTED) and its fix. Keep `step-10-end == step-11-start`. (Docker required.)
 
 ## Done so far
 - ✅ **Step 0 — capability preflight** → `CAPABILITIES.md` (JDK 25.0.3 LTS, Maven 3.9.12, Docker running, no local k8s, scanners install-on-demand).
@@ -18,6 +18,7 @@
 ## Verification ledger (most recent first)
 | Tag | Tier | `./mvnw verify` | Proof |
 |---|---|---|---|
+| `step-09-end` | 🔴 Full | BUILD SUCCESS · 50 tests (+4 cif) | N+1 proven via Hibernate statistics (3 stmts lazy vs 1 with `@EntityGraph`); `@Version` optimistic-lock conflict → `ObjectOptimisticLockingFailureException`; interface projection; §12.3 mutation (remove `@Version`) caught; `steps/step-09/smoke.sh` PASSED |
 | `step-08-end` | 🔴 Full | BUILD SUCCESS · 46 tests (+6 cif) | CIF on real Postgres (Testcontainers, random port 57881, PG 17.10); Flyway v1 migrated; live POST→201/GET→200, 400, 404; §12.3 mutation (404→200) caught + reverted; `steps/step-08/smoke.sh` PASSED |
 | `step-07-end` | 🟠 Standard | BUILD SUCCESS · 40 tests (+6 spring-lab) | `@Around` audit aspect fires on `@Audited` HTTP calls; `AccountService$$SpringCGLIB$$0` proxy; self-invocation pitfall proven by counter; capstone slice 200/404; `steps/step-07/smoke.sh` PASSED. **Phase A complete.** |
 | `step-06-end` | 🟠 Standard | BUILD SUCCESS · 34 tests (+4 spring-lab) | typed `@ConfigurationProperties` binding; custom `GreetingAutoConfiguration` (on/off/back-off); `/actuator/conditions` 141 applied / 82 skipped on hello-service; `steps/step-06/smoke.sh` PASSED |
