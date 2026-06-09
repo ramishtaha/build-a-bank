@@ -1,0 +1,21 @@
+### Build-a-Bank · Step 1 · hello-service
+### Use with VS Code "REST Client", IntelliJ HTTP Client, or copy the curl equivalents below.
+### Start the app first:  make run-hello   (or  .\mvnw.cmd -pl services/hello spring-boot:run )
+
+@host = http://localhost:8080
+
+### Your first endpoint — should return 200 + a JSON welcome
+GET {{host}}/api/hello
+Accept: application/json
+# curl equivalent:
+#   curl -i http://localhost:8080/api/hello
+
+### Liveness/readiness — should return {"status":"UP"}
+GET {{host}}/actuator/health
+Accept: application/json
+# curl equivalent:
+#   curl -s http://localhost:8080/actuator/health
+
+### App info (build/step metadata)
+GET {{host}}/actuator/info
+Accept: application/json

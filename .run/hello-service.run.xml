@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <!-- Committed IntelliJ run config (convenience for IDE users; CLI users use `make run-hello`). -->
+  <configuration default="false" name="hello-service" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="hello-service" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.buildabank.hello.HelloApplication" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="false" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

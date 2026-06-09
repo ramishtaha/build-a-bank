@@ -1,0 +1,6 @@
+# asdf / mise tool pins. SDKMAN users: see VERSIONS.md for exact identifiers.
+# Vendor note: this machine uses Oracle JDK 25.0.3; Eclipse Temurin 25.0.3 is an equivalent drop-in.
+java 25.0.3
+maven 3.9.12
+nodejs 22.20.0
+python 3.13.7

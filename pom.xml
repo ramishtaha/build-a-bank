@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      Build-a-Bank — parent (aggregator) POM.
+      Inherits Spring Boot's starter parent so every module gets the curated,
+      mutually-compatible dependency + plugin versions for Spring Boot 4.0.x.
+      Exact pinned versions live in /VERSIONS.md (never "latest").
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.6</version>
+        <relativePath/> <!-- look the parent up from the repository, not a local path -->
+    </parent>
+
+    <groupId>com.buildabank</groupId>
+    <artifactId>build-a-bank-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>Build-a-Bank :: Parent</name>
+    <description>Educational, non-production retail-banking platform + course (JVM).</description>
+
+    <properties>
+        <!-- Pinned toolchain. The latest LTS present in the environment. See VERSIONS.md. -->
+        <java.version>25</java.version>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <!-- Pinned BOM versions for modules added in later steps (verified GA, Boot-4 line). -->
+        <spring-cloud.version>2025.1.1</spring-cloud.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
+        <archunit.version>1.4.2</archunit.version>
+    </properties>
+
+    <!-- Modules are added step-by-step. The hello-service is added during Step 1 (it is the
+         deliverable at step-01-end). At step-01-start this list is empty and the aggregator
+         still builds clean ("nothing to compile"). -->
+    <modules>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring Cloud release train aligned to Spring Boot 4.0.x (used from Step 15). -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Real infra in tests (Postgres/Kafka/Redis) from Step 8. -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

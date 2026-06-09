@@ -1,0 +1,46 @@
+# 📌 VERSIONS.md — the pinned, mutually-compatible version set
+
+> **Resolved & pinned:** 2026-06-09 · **Rule:** never `latest`; prefer the newest *stable* the ecosystem supports.
+> **Status: ✅ VERIFIED TO BUILD TOGETHER** — `./mvnw verify` is green on this set (proof: `steps/step-01/lesson.md`
+> §🔬 Verification Log, and `services/hello`). See [adr/0002-jdk-25-and-spring-boot-4.md](adr/0002-jdk-25-and-spring-boot-4.md).
+
+## Core toolchain (pinned)
+
+| Thing | Pinned version | Where pinned |
+|---|---|---|
+| **Java (JDK)** | **25.0.3 LTS** (Oracle; Temurin 25 equivalent fine) | `pom.xml` `<java.version>25</java.version>`, `.tool-versions` |
+| **Maven** | **3.9.12** | `./mvnw` (`.mvn/wrapper/maven-wrapper.properties`) |
+| **Spring Boot** | **4.0.6** (GA — latest stable; 4.1.0 is still RC) | parent `pom.xml` |
+| **Spring Framework** | **7.0.x** (managed by Boot 4.0.6) | transitive |
+| **Spring Cloud** | **2025.1.1** (GA — the Boot-4.0 release train) | parent `dependencyManagement` |
+| **Node.js / npm** | **22.20.0 / 11.16.0** | `frontend/` (added Phase F) |
+| **Python** | **3.13.7** | `ml/` venv (added Phase I) |
+
+## Managed library BOMs (verified GA on the Boot-4 line)
+
+| Library | Pinned | First used | Verified GA? |
+|---|---|---|---|
+| Testcontainers | 2.0.5 | Step 8 | ✅ |
+| Flyway | 12.8.1 (managed by Boot) | Step 8 | ✅ |
+| ArchUnit (junit5) | 1.4.2 | Step 27 | ✅ |
+| Spring Modulith | 2.0.6 | Step 27 | ✅ (2.x = Boot 4 line) |
+| Resilience4j | 2.4.0 | Step 37 | ✅ (verify Boot-4 artifact at that step) |
+
+## ⚠️ Flagged step-backs / watch-items (honesty per the compatibility caveat)
+
+1. **Spring AI** — only **2.0.0-RC1** exists on the **Boot-4** line today (1.1.7 GA targets the Boot-3 line).
+   Phase I (Step 46+) is months of learner-effort away. **Action:** re-pin to Spring AI **2.0.0 GA** when Phase I is
+   reached; if still RC, document the step-back and pin the newest RC, or run the Python FastAPI sidecar path instead.
+2. **ErrorProne / NullAway** — historically lag new JDKs and may not yet support **JDK 25** bytecode.
+   **Action:** at Step 28 (code-quality), verify support; if absent, keep **Spotless + Checkstyle** (which work on 25)
+   and document ErrorProne/NullAway as "enable when JDK-25 support ships." Never block the build on an unsupported tool.
+3. **`TestRestTemplate` REMOVED in Spring Boot 4** (along with `org.springframework.boot.test.web.client`).
+   Replacements: **`RestTestClient`** and **`MockMvcTester`** (Spring Framework 7, `org.springframework.test.web.servlet.client`).
+   We hit this for real in Step 1 — it's now a "Then vs Now" teaching moment. The course uses `RestClient` / `RestTestClient`.
+
+## Infra image tags (pinned when introduced — never `latest`)
+- Postgres, Redis, Redpanda, Prometheus/Grafana/Loki/Tempo image **digests** are pinned in the step that adds them
+  (Steps 8, 20, 22, 36). Recorded here as they land.
+
+## Reproducibility
+`./mvnw verify` twice yields the same result. Prerequisites + cross-platform notes live in the README.
