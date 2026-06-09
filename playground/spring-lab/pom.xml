@@ -20,15 +20,34 @@
     <description>Spring Core &amp; IoC deep dive — beans, scopes, conditions, profiles, SpEL, lifecycle (Step 5).</description>
 
     <dependencies>
-        <!-- spring-boot-starter (core): the IoC container + auto-configuration + logging. NO web yet. -->
+        <!-- spring-boot-starter (core): the IoC container + auto-configuration + logging. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <!-- Step 7: web (the capstone vertical slice). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <!-- AOP: Spring Boot 4 REMOVED spring-boot-starter-aop. spring-aop is already on the classpath
+             (via spring-context); adding the AspectJ weaver lets Boot's AopAutoConfiguration enable
+             @AspectJ annotation proxying (@Aspect/@Around). Version is managed by the Spring Boot BOM. -->
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjweaver</artifactId>
         </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Spring Boot 4 split web-MVC test support (MockMvc, @AutoConfigureMockMvc, @WebMvcTest) into its
+             own module; it is no longer pulled transitively by spring-boot-starter-test. Add it explicitly. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

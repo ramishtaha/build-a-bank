@@ -4,10 +4,10 @@
 > from **Next action**. A single session will not reach Step 67 — that is expected, not a failure.
 
 ## Where we are
-- **Phase:** A — Foundations 🟢 (building Steps 2–7 continuously this phase)
-- **Step:** 6 of 67 — *Spring Boot Internals & Config* — ✅ **COMPLETE & VERIFIED**
-- **Last verified tag:** `step-06-end` (== `step-07-start`) — `./mvnw verify` → BUILD SUCCESS, 34 tests; custom auto-config + typed props proven; `/actuator/conditions` = 141 applied / 82 skipped; smoke green.
-- **Next action:** **Step 7 — AOP & the proxy model** (aspects/pointcuts/advice; JDK dynamic proxy vs CGLIB; the self-invocation pitfall) — the bank's audit/logging aspect — PLUS the 🎓 **Phase A Capstone**: a tiny end-to-end vertical slice (one endpoint → service → in-memory store). Buildable artifact: add `spring-boot-starter-aop` + `spring-boot-starter-web` to `playground/spring-lab`; an `@Audited` annotation + `AuditAspect` (`@Around`); a vertical slice `AccountController → AccountService(@Audited) → InMemoryAccountStore`; demonstrate the CGLIB-vs-JDK proxy and the self-invocation pitfall (aspect skipped on `this.` calls). MockMvc + AOP tests. This is the **Phase A boundary** → after verifying Step 7, write the Phase A checkpoint summary and PAUSE for the user's "continue".
+- **Phase:** A — Foundations 🟢 — ✅ **COMPLETE** (Steps 1–7 all done & verified)
+- **Step:** 7 of 67 — *AOP & the Proxy Model* — ✅ **COMPLETE & VERIFIED** (incl. the 🎓 Phase A Capstone vertical slice)
+- **Last verified tag:** `step-07-end` (== `step-08-start`) — full reactor `./mvnw verify` → BUILD SUCCESS, **40 tests**; capstone slice serves 200/404; audit aspect + CGLIB proxy + self-invocation pitfall all proven; `steps/step-07/smoke.sh` PASSED.
+- **Next action:** ⏸️ **PAUSED at the Phase A boundary — awaiting user "continue".** Next phase is **Phase B — Data, Databases, Concurrency & Transactions 🔵 (Steps 8–12)**, beginning with **Step 8 — CIF service + Spring Data JPA + persistence context + Flyway + Bean Validation + `@DataJpaTest` with Testcontainers (real Postgres)**. This is the first REAL microservice (`services/cif`) — Docker IS required from here (Testcontainers spins up Postgres). Keep `step-08-end == step-09-start`.
 
 ## Done so far
 - ✅ **Step 0 — capability preflight** → `CAPABILITIES.md` (JDK 25.0.3 LTS, Maven 3.9.12, Docker running, no local k8s, scanners install-on-demand).
@@ -18,6 +18,7 @@
 ## Verification ledger (most recent first)
 | Tag | Tier | `./mvnw verify` | Proof |
 |---|---|---|---|
+| `step-07-end` | 🟠 Standard | BUILD SUCCESS · 40 tests (+6 spring-lab) | `@Around` audit aspect fires on `@Audited` HTTP calls; `AccountService$$SpringCGLIB$$0` proxy; self-invocation pitfall proven by counter; capstone slice 200/404; `steps/step-07/smoke.sh` PASSED. **Phase A complete.** |
 | `step-06-end` | 🟠 Standard | BUILD SUCCESS · 34 tests (+4 spring-lab) | typed `@ConfigurationProperties` binding; custom `GreetingAutoConfiguration` (on/off/back-off); `/actuator/conditions` 141 applied / 82 skipped on hello-service; `steps/step-06/smoke.sh` PASSED |
 | `step-05-end` | 🟠 Standard | BUILD SUCCESS · 28 tests (+6 spring-lab) | conditional beans (fixed/market via `@ConditionalOnProperty`), constructor DI, singleton vs prototype scopes, SpEL, lifecycle order 1→4 + `@PreDestroy` in app run; `steps/step-05/smoke.sh` PASSED |
 | `step-04-end` | 🟠 Standard | BUILD SUCCESS · 22 tests (+2 jvm) | `javap -c` bytecode; `-Xlog:gc` G1 young pauses; `-XX:+PrintCompilation` C1/C2/OSR; JFR summary; `-Xlog:class+load` (CDS); escape-analysis discovery; `steps/step-04/smoke.sh` PASSED |

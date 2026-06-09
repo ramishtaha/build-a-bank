@@ -44,3 +44,10 @@
 - **Q:** `@Value` vs `@ConfigurationProperties`? — **A:** `@Value` for one property; `@ConfigurationProperties` for a typed, validated group bound by prefix (constructor binding for records).
 - **Q:** How do you debug "why is/isn't this bean here?" — **A:** `GET /actuator/conditions` — the positive/negative auto-config match report (with reasons).
 - **Q:** Why not expose all Actuator endpoints in prod? — **A:** `beans`/`env`/`configprops`/`conditions` leak internal structure + config; expose minimally and secure them.
+
+## Step 7 — AOP & the Proxy Model
+- **Q:** The four AOP terms? — **A:** *aspect* (the cross-cutting concern), *pointcut* (where it applies), *advice* (what runs — `@Around`/`@Before`/`@After`), *join point* (the intercepted method execution).
+- **Q:** How does Spring AOP apply advice? — **A:** it wraps the bean in a runtime **proxy** (CGLIB subclass by default in Boot; JDK dynamic proxy for interface-based, `proxyTargetClass=false`); calls from outside go through the proxy.
+- **Q:** The self-invocation pitfall? — **A:** a `this.method()` call inside the same bean bypasses the proxy, so `@Around`/`@Transactional`/`@PreAuthorize` advice does NOT run — a real correctness/security trap.
+- **Q:** Boot 4 AOP dependency change? — **A:** `spring-boot-starter-aop` was removed; add `org.aspectj:aspectjweaver` (spring-aop is already present) and Boot auto-enables @AspectJ proxying.
+- **Q:** JDK proxy vs CGLIB? — **A:** JDK dynamic proxy implements the bean's interfaces; CGLIB subclasses the class; Spring Boot defaults to CGLIB (`proxyTargetClass=true`).

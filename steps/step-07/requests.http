@@ -1,0 +1,18 @@
+### Build-a-Bank · Step 7 · AOP audit aspect + the Phase-A capstone slice
+### Start spring-lab:  ./mvnw -pl playground/spring-lab spring-boot:run   (defaults to port 8080)
+### Watch the app log: every call to an @Audited method prints "AUDIT ▶ … / AUDIT ✔ …".
+
+@host = http://localhost:8080
+
+### List all accounts (audited) — 200 + JSON array
+GET {{host}}/api/accounts
+Accept: application/json
+
+### Fetch one account (audited) — 200 + JSON
+GET {{host}}/api/accounts/1
+Accept: application/json
+# curl: curl -i http://localhost:8080/api/accounts/1
+
+### Missing account — clean 404
+GET {{host}}/api/accounts/999
+Accept: application/json
