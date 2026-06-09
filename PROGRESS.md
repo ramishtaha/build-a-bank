@@ -4,10 +4,10 @@
 > from **Next action**. A single session will not reach Step 67 — that is expected, not a failure.
 
 ## Where we are
-- **Phase:** A — Foundations 🟢
-- **Step:** 1 of 67 — *Setup + CLI/Linux/Git + first running Spring Boot app* — ✅ **COMPLETE & VERIFIED**
-- **Last verified tag:** `step-01-end` (== `step-02-start`) — `./mvnw verify` → BUILD SUCCESS, 2/2 tests, app serves `GET /api/hello` 200.
-- **Next action:** **Step 2 — Java language primer** (syntax → OOP → generics → collections → streams/lambdas → `Optional` → records/sealed → exceptions → `java.time`). Build it in a small, runnable `playground`/learning module; keep `step-02-end == step-03-start`.
+- **Phase:** A — Foundations 🟢 (building Steps 2–7 continuously this phase)
+- **Step:** 2 of 67 — *Java language primer* — ✅ **COMPLETE & VERIFIED**
+- **Last verified tag:** `step-02-end` (== `step-03-start`) — `./mvnw verify` → BUILD SUCCESS, 18 tests, demo + smoke green.
+- **Next action:** **Step 3 — How the Internet & the Web Work** (TCP/IP, DNS, ports, HTTP/HTTPS, the TLS handshake, request/response anatomy, load-balancer concept, "what happens when you type a URL"). Buildable artifact: extend `playground/java-basics` (or add a small net-lab) with a `java.net.http.HttpClient` demo against `services/hello` + real CLI captures (curl -v, nslookup, openssl s_client). Keep `step-03-end == step-04-start`.
 
 ## Done so far
 - ✅ **Step 0 — capability preflight** → `CAPABILITIES.md` (JDK 25.0.3 LTS, Maven 3.9.12, Docker running, no local k8s, scanners install-on-demand).
@@ -18,6 +18,7 @@
 ## Verification ledger (most recent first)
 | Tag | Tier | `./mvnw verify` | Proof |
 |---|---|---|---|
+| `step-02-end` | 🟠 Standard | BUILD SUCCESS · 18 tests (java-basics 16 + hello 2) | `Step2Demo` prints net 1124.50 USD; `steps/step-02/smoke.sh` PASSED; records/sealed/streams/Optional/java.time exercised |
 | `step-01-end` | 🟠 Standard | BUILD SUCCESS · 2/2 tests | Tomcat 11.0.21, random test port, `GET /api/hello` → 200 JSON, `/actuator/health` → UP, repackaged jar |
 | `step-01-start` | 🟢 Light | BUILD SUCCESS | parent aggregator, no modules yet |
 
