@@ -1,0 +1,31 @@
+### Build-a-Bank · Step 8 · CIF service (Spring Data JPA + Flyway + Postgres)
+### 1) Start Postgres:  docker compose -f services/cif/compose.yaml up -d
+###    (If host port 5432 is already taken by a local Postgres, change the mapping in compose.yaml
+###     to e.g. "5433:5432" and run with SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/cif — see 🩺.)
+### 2) Start CIF:       ./mvnw -pl services/cif spring-boot:run     (port 8081)
+
+@host = http://localhost:8081
+
+### Create a customer → 201 Created + Location header + JSON body (kycStatus starts PENDING)
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{"firstName":"Grace","lastName":"Hopper","email":"grace@bank.example","dateOfBirth":"1906-12-09"}
+
+### Fetch by id → 200 (use the id returned above)
+GET {{host}}/api/customers/1
+
+### Fetch by customer number → 200 (use the customerNumber returned above)
+GET {{host}}/api/customers/by-number/CIF-D6E5380A
+
+### Invalid body → 400 (blank name, bad email, future birth date)
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{"firstName":"","lastName":"X","email":"not-an-email","dateOfBirth":"3000-01-01"}
+
+### Missing customer → 404
+GET {{host}}/api/customers/99999
+
+### See which Flyway migrations have been applied
+GET {{host}}/actuator/flyway

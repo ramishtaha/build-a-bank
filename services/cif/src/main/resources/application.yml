@@ -1,0 +1,32 @@
+# services/cif/src/main/resources/application.yml
+spring:
+  application:
+    name: cif
+  datasource:
+    # Env-driven (12-factor). Defaults match services/cif/compose.yaml for local runs.
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/cif}
+    username: ${SPRING_DATASOURCE_USERNAME:bank}
+    password: ${SPRING_DATASOURCE_PASSWORD:change-me-locally}
+  jpa:
+    hibernate:
+      ddl-auto: validate     # Flyway OWNS the schema; Hibernate only validates the mapping matches.
+    open-in-view: false      # disable OSIV from day one (why → Step 9). Avoids lazy-loading in the view layer.
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true            # runs db/migration/V*.sql on startup, before Hibernate validates.
+
+server:
+  port: 8081                 # CIF's port (hello-service uses 8080).
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,flyway   # /actuator/flyway shows the applied migrations.
+
+logging:
+  level:
+    com.buildabank.cif: INFO

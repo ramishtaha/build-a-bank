@@ -41,6 +41,7 @@
          (added at step-01-end). Real banking microservices begin at Step 8 (CIF). -->
     <modules>
         <module>services/hello</module>
+        <module>services/cif</module>
         <module>playground/java-basics</module>
         <module>playground/spring-lab</module>
     </modules>

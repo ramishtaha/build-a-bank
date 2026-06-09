@@ -20,8 +20,11 @@
 
 | Library | Pinned | First used | Verified GA? |
 |---|---|---|---|
-| Testcontainers | 2.0.5 | Step 8 | ✅ |
-| Flyway | 12.8.1 (managed by Boot) | Step 8 | ✅ |
+| Testcontainers | 2.0.5 (Boot-managed; modules renamed `testcontainers-*` in 2.0; `PostgreSQLContainer` non-generic) | Step 8 | ✅ |
+| Flyway | **11.14.1** (Boot-managed; needs `spring-boot-flyway` integration module + `flyway-database-postgresql`) | Step 8 | ✅ |
+| Hibernate ORM / Validator | 7.2.12.Final / 9.0.1.Final (Boot-managed) | Step 8 | ✅ |
+| PostgreSQL JDBC driver | 42.7.10 (Boot-managed) | Step 8 | ✅ |
+| **Postgres image** | `postgres:17-alpine` (digest `sha256:979c4379dd698aba0b890599a6104e082035f98ef31d9b9291ec22f2b13059ca`; reports PostgreSQL 17.10) | Step 8 | ✅ |
 | ArchUnit (junit5) | 1.4.2 | Step 27 | ✅ |
 | Spring Modulith | 2.0.6 | Step 27 | ✅ (2.x = Boot 4 line) |
 | Resilience4j | 2.4.0 | Step 37 | ✅ (verify Boot-4 artifact at that step) |
@@ -34,6 +37,7 @@
 2. **ErrorProne / NullAway** — historically lag new JDKs and may not yet support **JDK 25** bytecode.
    **Action:** at Step 28 (code-quality), verify support; if absent, keep **Spotless + Checkstyle** (which work on 25)
    and document ErrorProne/NullAway as "enable when JDK-25 support ships." Never block the build on an unsupported tool.
+3a. **Spring Boot 4 modularization (Step 8 findings):** test slices moved to per-tech modules — `@DataJpaTest`∈`spring-boot-data-jpa-test`, `@WebMvcTest`/`@AutoConfigureMockMvc`∈`spring-boot-webmvc-test`, `@AutoConfigureTestDatabase`∈`spring-boot-jdbc-test`; **Flyway** needs the Boot integration module `spring-boot-flyway` (the `flyway-core` library alone gives no `FlywayAutoConfiguration`), and `@DataJpaTest` excludes Flyway (use `@ImportAutoConfiguration(FlywayAutoConfiguration.class)`); `@MockBean`→`@MockitoBean`.
 3. **`TestRestTemplate` REMOVED in Spring Boot 4** (along with `org.springframework.boot.test.web.client`).
    Replacements: **`RestTestClient`** and **`MockMvcTester`** (Spring Framework 7, `org.springframework.test.web.servlet.client`).
    We hit this for real in Step 1 — it's now a "Then vs Now" teaching moment. The course uses `RestClient` / `RestTestClient`.

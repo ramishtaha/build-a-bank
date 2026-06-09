@@ -51,3 +51,10 @@
 - **Q:** The self-invocation pitfall? — **A:** a `this.method()` call inside the same bean bypasses the proxy, so `@Around`/`@Transactional`/`@PreAuthorize` advice does NOT run — a real correctness/security trap.
 - **Q:** Boot 4 AOP dependency change? — **A:** `spring-boot-starter-aop` was removed; add `org.aspectj:aspectjweaver` (spring-aop is already present) and Boot auto-enables @AspectJ proxying.
 - **Q:** JDK proxy vs CGLIB? — **A:** JDK dynamic proxy implements the bean's interfaces; CGLIB subclasses the class; Spring Boot defaults to CGLIB (`proxyTargetClass=true`).
+
+## Step 8 — CIF Service (Spring Data JPA, Flyway, Testcontainers)
+- **Q:** Database-per-service? — **A:** each microservice owns its own database/schema; services integrate via APIs/events, never by reaching into another service's tables.
+- **Q:** Why test on real Postgres (Testcontainers) not H2? — **A:** H2 ≠ Postgres (different SQL/types/behavior); Testcontainers runs the real engine, so tests catch real issues. The random high JDBC port proves it's a live container.
+- **Q:** `ddl-auto=validate` + Flyway, who owns the schema? — **A:** Flyway (versioned migrations) owns it; Hibernate only validates the entity mapping matches — it never alters the schema.
+- **Q:** What is a Spring Data derived query? — **A:** a repository method whose NAME (`findByCustomerNumber`, `existsByEmail`) Spring Data parses into a query at startup — you write no implementation.
+- **Q:** Why return a DTO instead of the JPA entity? — **A:** it decouples the API contract from the DB schema, avoids leaking fields/lazy associations, and dodges serialization surprises.

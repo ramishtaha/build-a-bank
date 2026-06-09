@@ -20,6 +20,12 @@
 
 **Network:** Maven Central, PyPI, and the npm registry are all reachable (HTTP 200).
 
+> [!NOTE]
+> **Host port 5432 is occupied by a local PostgreSQL install on this machine.** Testcontainers is unaffected
+> (it uses random high ports). But the per-service `compose.yaml` maps `5432:5432`, so a manual Compose run
+> here collides with the local PG ("password authentication failed"). Workaround: map a free host port (e.g.
+> `5433:5432`) and set `SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/cif`. (Discovered in Step 8.)
+
 ## 🟠 Verify-adjacent only (no live target here — we lint/template/dry-run instead)
 
 - **Kubernetes:** no `kind`, no `minikube`, and Docker Desktop's built-in Kubernetes is **off** (no kube-contexts).
