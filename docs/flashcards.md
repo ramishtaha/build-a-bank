@@ -23,3 +23,10 @@
 - **Q:** What does TLS give you? — **A:** confidentiality (encryption), integrity (tamper detection), and server authentication (via the certificate).
 - **Q:** HTTP/2 vs HTTP/1.1, one key difference? — **A:** HTTP/2 is binary and multiplexes many requests over one connection (no HTTP-layer head-of-line blocking), negotiated via ALPN during the TLS handshake.
 - **Q:** L4 vs L7 load balancer? — **A:** L4 routes by IP/port (transport layer); L7 routes by HTTP content (path/host/headers).
+
+## Step 4 — How Java Runs: the JVM Up Close
+- **Q:** `javac` vs `java`? — **A:** `javac` compiles `.java` → `.class` bytecode; `java` launches the JVM, loads classes, and executes bytecode (interpreting + JIT-compiling hot paths).
+- **Q:** Where does class metadata live since Java 8? — **A:** **Metaspace** (native memory), which replaced the old fixed-size PermGen.
+- **Q:** Default GC since Java 9? — **A:** **G1** (Garbage-First). Low-pause alternatives: ZGC, Shenandoah (tuning in Step 55).
+- **Q:** What is tiered JIT compilation? — **A:** start interpreting; compile hot methods with C1 (levels 1–3) then C2 (level 4); deoptimize ("uncommon trap") back to the interpreter when assumptions break.
+- **Q:** What is escape analysis? — **A:** a JIT optimization that proves an object doesn't escape its method and scalar-replaces/stack-allocates it — so no heap allocation or GC happens (we saw 5M "allocations" in 9 ms with zero GC).
