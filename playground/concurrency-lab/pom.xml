@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      concurrency-lab — the Step 11 concurrency & thread-safety primer (plain Java, no Spring).
+      Banking-flavoured examples (a shared account balance) that prove the Java Memory Model the hard way:
+      a lost-update race shown FAILING, then fixed with synchronized / AtomicLong / LongAdder and proven
+      correct under heavy contention. Pure JUnit 5 + AssertJ; everything runs in `./mvnw verify`.
+    -->
+    <parent>
+        <groupId>com.buildabank</groupId>
+        <artifactId>build-a-bank-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>concurrency-lab</artifactId>
+    <name>Build-a-Bank :: Playground :: Concurrency Lab</name>
+    <description>Concurrency and thread safety — JMM, races, atomics, executors, virtual threads (Step 11).</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

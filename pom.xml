@@ -44,6 +44,7 @@
         <module>services/cif</module>
         <module>playground/java-basics</module>
         <module>playground/spring-lab</module>
+        <module>playground/concurrency-lab</module>
     </modules>
 
     <dependencyManagement>

@@ -74,3 +74,12 @@
 - **Q:** What is write skew and how do you fix it? — **A:** two txns read overlapping data, each writes a different row, together breaking an invariant; survives REPEATABLE READ; fix with SERIALIZABLE (SSI aborts with `40001` → retry) or `SELECT … FOR UPDATE`.
 - **Q:** What happens when a connection pool is exhausted? — **A:** borrowers wait up to `connectionTimeout` then throw `SQLTransientConnectionException`; `close()` returns a connection (not a socket close); size pools small, bound query time.
 - **Q:** Why can't `CREATE INDEX CONCURRENTLY` run in a transaction? — **A:** it commits internally between build phases (`SQLSTATE 25001`); migration tools run it outside a transaction — a primitive of zero-downtime/expand-contract change.
+
+## Step 11 — Concurrency & Thread Safety in Java
+- **Q:** Is `i++` / `balance += x` atomic? — **A:** No — it's a read-modify-write (read, add, write); two threads can interleave and lose an update. Fix with `AtomicLong`/`LongAdder`/`synchronized`.
+- **Q:** What three things is the Java Memory Model about? — **A:** atomicity, visibility, and ordering — tied together by **happens-before**.
+- **Q:** What creates a happens-before edge? — **A:** monitor unlock→lock, volatile write→read, `Thread.start()`→thread actions, thread actions→`join()`, and final-field publication.
+- **Q:** `volatile` vs `synchronized`? — **A:** volatile = visibility + ordering (and atomic single read/write), NOT compound atomicity; synchronized = mutual exclusion + visibility + ordering for a whole block.
+- **Q:** `AtomicLong` vs `LongAdder` vs `synchronized`? — **A:** AtomicLong = lock-free CAS (low contention); LongAdder = striped cells (high contention, `sum()` aggregates); synchronized/Lock when updating multiple fields atomically.
+- **Q:** What are virtual threads (Java 21)? — **A:** lightweight threads scheduled onto a few carrier OS threads; they unmount the carrier when they block, so blocking is cheap and millions are fine — but they do NOT make racy code safe or change the memory model.
+- **Q:** Name three classic concurrency bugs. — **A:** deadlock (fix: lock ordering), double-checked locking (needs `volatile`), false sharing / TOCTOU (use atomic compound ops / `ConcurrentHashMap`).

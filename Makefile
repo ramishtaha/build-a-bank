@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -44,6 +44,10 @@ play-10: ## Step 10: run the six database labs on a real Postgres (needs Docker)
 	$(MVNW) -pl services/cif test -Dtest='QueryPlanLabTest,MvccIsolationTest,WriteSkewTest,ConnectionPoolTest,PartitioningLabTest,OnlineSchemaChangeTest'
 	@echo "Tip: explore the same SQL by hand — see steps/step-10/queries.sql"
 	# Windows: .\mvnw.cmd -pl services/cif test -Dtest='QueryPlanLabTest,MvccIsolationTest,WriteSkewTest,ConnectionPoolTest,PartitioningLabTest,OnlineSchemaChangeTest'
+
+play-11: ## Step 11: run the concurrency labs (pure JVM, no Docker) — watch the race lose deposits
+	$(MVNW) -pl playground/concurrency-lab test
+	# Windows: .\mvnw.cmd -pl playground/concurrency-lab test
 
 clean: ## Remove all build output
 	$(MVNW) -B clean
