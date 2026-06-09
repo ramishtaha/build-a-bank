@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -62,6 +62,10 @@ play-13: ## Step 13: ProblemDetail + OpenAPI/Swagger UI. Run the service, then o
 	@echo "Start Postgres:  docker compose -f services/demand-account/compose.yaml up -d"
 	@echo "Run service:     make run-demand-account   (then browse http://localhost:8082/swagger-ui.html)"
 	@echo "Or just test it: $(MVNW) -pl services/demand-account -am verify"
+
+play-14: ## Step 14: versioning, idempotency, pagination & signed webhooks (needs Docker)
+	$(MVNW) -pl services/demand-account -am verify
+	@echo "Then drive the live API with steps/step-14/requests.http (start it with 'make run-demand-account')"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean

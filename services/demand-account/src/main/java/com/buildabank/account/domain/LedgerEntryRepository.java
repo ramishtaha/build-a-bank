@@ -5,12 +5,17 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> {
 
     List<LedgerEntry> findByAccountIdOrderByCreatedAtAsc(Long accountId);
+
+    /** A page of an account's entries — Spring Data applies the {@link Pageable}'s page/size/sort to the SQL. */
+    Page<LedgerEntry> findByAccountId(Long accountId, Pageable pageable);
 
     List<LedgerEntry> findByTransactionId(UUID transactionId);
 

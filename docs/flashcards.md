@@ -102,3 +102,12 @@
 - **Q:** What turns `@RequestBody` JSON into a Java object? — **A:** an `HttpMessageConverter` (Jackson) in the HandlerAdapter, before the controller method runs; content negotiation picks it by Accept.
 - **Q:** Which springdoc version works with Spring Boot 4? — **A:** 3.0.x (e.g. 3.0.3); 2.8.x targets Boot 3. It generates OpenAPI 3.1 at /v3/api-docs and Swagger UI at /swagger-ui.html.
 - **Q:** Are controllers/filters/interceptors thread-safe? — **A:** they're shared singletons, so keep them stateless; put per-request state in request attributes/ThreadLocal, never instance fields.
+
+## Step 14 — API Design, Versioning, Idempotency & Webhooks
+- **Q:** API versioning strategies? — **A:** URI (`/api/v1/…`, visible/cacheable — our choice), header (`Accept`/custom — clean URLs, invisible), media-type (most RESTful, heavy). Deprecate old paths with `Deprecation`/`Sunset`/`Link` headers (RFC 8594).
+- **Q:** What makes an API idempotent, and how? — **A:** a retried request has the same effect as one request; implement with an `Idempotency-Key` header + a store (key → result). A repeat key returns the stored result without re-executing; the key's unique PK guards concurrency.
+- **Q:** How do you secure outbound webhooks? — **A:** sign the payload with HMAC-SHA256 over `"<timestamp>.<body>"` (shared secret); receivers verify the signature (constant-time) AND reject stale timestamps (replay protection).
+- **Q:** Webhook delivery semantics? — **A:** at-least-once (retry with backoff on failure) → receivers MUST be idempotent (they may see an event twice).
+- **Q:** Why not serialize Spring Data's `Page` directly? — **A:** its JSON shape is an unstable internal detail; expose a stable DTO envelope (content + page/size/totalElements) so the API owns its contract.
+- **Q:** The dual-write problem with webhooks? — **A:** the DB commits but the send fails (or vice-versa) → state and notification diverge; fixed by the Outbox pattern (persist the event in the same transaction, deliver async) — Step 20.
+- **Q:** Spring Boot 4 + Jackson gotcha? — **A:** Boot 4's web stack defaults to Jackson 3, so a Jackson-2 `com.fasterxml…ObjectMapper` *bean* isn't auto-created; create your own instance or use the Jackson 3 mapper.

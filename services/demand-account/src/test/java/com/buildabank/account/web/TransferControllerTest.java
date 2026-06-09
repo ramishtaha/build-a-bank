@@ -23,9 +23,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.buildabank.account.domain.Account;
 import com.buildabank.account.domain.InsufficientFundsException;
+import com.buildabank.account.service.IdempotentTransferService;
 import com.buildabank.account.service.TransferService;
+import com.buildabank.account.webhook.WebhookPublisher;
 
-/** Web-layer slice: just the controller + advice + MVC infra (no DB). The service is a Mockito mock. */
+/** Web-layer slice: just the controller + advice + MVC infra (no DB). The services are Mockito mocks. */
 @WebMvcTest(TransferController.class)
 class TransferControllerTest {
 
@@ -34,6 +36,12 @@ class TransferControllerTest {
 
     @MockitoBean
     TransferService transfers;
+
+    @MockitoBean
+    IdempotentTransferService idempotentTransfers;
+
+    @MockitoBean
+    WebhookPublisher webhookPublisher;
 
     @Test
     void openReturns201() throws Exception {
@@ -94,6 +102,37 @@ class TransferControllerTest {
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.title").value("Validation failed"))
                 .andExpect(jsonPath("$.errors.amount").exists());   // per-field error attached
+    }
+
+    @Test
+    void deprecatedTransferAdvertisesSuccessor() throws Exception {
+        given(transfers.transfer(any(), any(), any(), any())).willReturn(UUID.randomUUID());
+
+        mvc.perform(post("/api/transfers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":25.00}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Deprecation", "true"))
+                .andExpect(header().exists("Sunset"))
+                .andExpect(header().string("Link", "</api/v1/transfers>; rel=\"successor-version\""));
+    }
+
+    @Test
+    void v1TransferPassesTheIdempotencyKey() throws Exception {
+        UUID txId = UUID.fromString("00000000-0000-0000-0000-0000000000cc");
+        given(idempotentTransfers.transfer(eq("KEY-1"), eq("ACC-A"), eq("ACC-B"), any(), any()))
+                .willReturn(txId);
+
+        mvc.perform(post("/api/v1/transfers")
+                        .header("Idempotency-Key", "KEY-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":25.00}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.transactionId").value(txId.toString()));
     }
 
     @Test

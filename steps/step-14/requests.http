@@ -1,0 +1,44 @@
+### Build-a-Bank · Step 14 · API Design — versioning, idempotency, pagination & webhooks
+### 1) Postgres:  docker compose -f services/demand-account/compose.yaml up -d   (maps host 5433)
+### 2) Service (optionally point webhooks at a receiver like https://webhook.site):
+###    SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account \
+###    BANK_WEBHOOK_URL=https://webhook.site/your-id BANK_WEBHOOK_SECRET=whsec_demo \
+###    ./mvnw -pl services/demand-account spring-boot:run
+
+@host = http://localhost:8082
+
+### Open accounts
+POST {{host}}/api/accounts
+Content-Type: application/json
+
+{"accountNumber":"ACC-A","currency":"USD","openingBalance":200.00}
+
+###
+POST {{host}}/api/accounts
+Content-Type: application/json
+
+{"accountNumber":"ACC-B","currency":"USD","openingBalance":0.00}
+
+### v1 transfer WITH an idempotency key → 200. Send this TWICE with the SAME key:
+### the money moves only once and you get the same transactionId back. (Also fires a signed webhook.)
+POST {{host}}/api/v1/transfers
+Idempotency-Key: demo-key-001
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":50.00,"description":"rent"}
+
+### Confirm A only dropped by 50 (to 150), even if you sent the above twice
+GET {{host}}/api/accounts/ACC-A
+
+### v1 paginated ledger entries for A → a PageResponse {content,page,size,totalElements,totalPages}
+GET {{host}}/api/v1/accounts/ACC-A/entries?page=0&size=2&sort=createdAt,desc
+
+### The DEPRECATED transfer endpoint still works but returns Deprecation / Sunset / Link headers
+POST {{host}}/api/transfers
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":1.00}
+
+### Webhook receivers verify our signature like this (pseudocode):
+###   expected = hmac_sha256(secret, "<X-Webhook-Timestamp>." + rawBody)
+###   reject if expected != X-Webhook-Signature  OR  abs(now - timestamp) > 300s   (replay protection)

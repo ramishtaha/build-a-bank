@@ -5,6 +5,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,6 +90,14 @@ public class TransferService {
         ledger.save(new LedgerEntry(from.getId(), transactionId, EntryDirection.DEBIT, amount, description, now));
         ledger.save(new LedgerEntry(to.getId(), transactionId, EntryDirection.CREDIT, amount, description, now));
         return transactionId;
+    }
+
+    /** A page of an account's ledger entries (Step 14 — pagination/sorting via the {@link Pageable}). */
+    @Transactional(readOnly = true)
+    public Page<LedgerEntry> entriesOf(String accountNumber, Pageable pageable) {
+        Account account = accounts.findByAccountNumber(accountNumber)
+                .orElseThrow(() -> new IllegalArgumentException("no such account: " + accountNumber));
+        return ledger.findByAccountId(account.getId(), pageable);
     }
 
     @Transactional(readOnly = true)

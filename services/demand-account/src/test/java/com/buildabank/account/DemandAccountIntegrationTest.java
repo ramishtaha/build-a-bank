@@ -36,11 +36,15 @@ class DemandAccountIntegrationTest {
     @Autowired
     LedgerEntryRepository ledger;
 
+    @Autowired
+    com.buildabank.account.domain.IdempotencyRecordRepository idempotencyKeys;
+
     private final HttpClient http = HttpClient.newHttpClient();
     private String base;
 
     @BeforeEach
     void setup() {
+        idempotencyKeys.deleteAll();
         ledger.deleteAll();
         accounts.deleteAll();
         base = "http://localhost:" + port;
@@ -92,9 +96,46 @@ class DemandAccountIntegrationTest {
         assertThat(swagger.statusCode()).isEqualTo(200);
     }
 
+    @Test
+    void v1Idempotency_pagination_andDeprecation_overHttp() throws Exception {
+        post("/api/accounts", "{\"accountNumber\":\"ACC-A\",\"currency\":\"USD\",\"openingBalance\":200.00}");
+        post("/api/accounts", "{\"accountNumber\":\"ACC-B\",\"currency\":\"USD\",\"openingBalance\":0.00}");
+
+        // Idempotency: two POSTs with the same key move money ONCE.
+        String body = "{\"from\":\"ACC-A\",\"to\":\"ACC-B\",\"amount\":50.00,\"description\":\"rent\"}";
+        assertThat(postWithHeader("/api/v1/transfers", body, "Idempotency-Key", "K1").statusCode()).isEqualTo(200);
+        assertThat(postWithHeader("/api/v1/transfers", body, "Idempotency-Key", "K1").statusCode()).isEqualTo(200);
+        assertThat(get("/api/accounts/ACC-A").body()).contains("150");   // moved once (200 − 50), not 100
+
+        // A couple more (distinct) transfers to build up ledger entries for ACC-A.
+        postWithHeader("/api/v1/transfers", body, "Idempotency-Key", "K2");
+        postWithHeader("/api/v1/transfers", body, "Idempotency-Key", "K3");
+
+        // Pagination: page of ACC-A's entries → a PageResponse envelope.
+        HttpResponse<String> page = get("/api/v1/accounts/ACC-A/entries?page=0&size=2&sort=createdAt,desc");
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body())
+                .contains("\"content\":").contains("\"totalElements\":").contains("\"size\":2");
+
+        // Deprecation: the old transfer endpoint advertises its successor.
+        HttpResponse<String> deprecated = post("/api/transfers",
+                "{\"from\":\"ACC-A\",\"to\":\"ACC-B\",\"amount\":1.00}");
+        assertThat(deprecated.statusCode()).isEqualTo(200);
+        assertThat(deprecated.headers().firstValue("Deprecation")).hasValue("true");
+    }
+
     private HttpResponse<String> post(String path, String json) throws Exception {
         return http.send(HttpRequest.newBuilder(URI.create(base + path))
                         .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(json)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> postWithHeader(String path, String json, String name, String value)
+            throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create(base + path))
+                        .header("Content-Type", "application/json")
+                        .header(name, value)
                         .POST(HttpRequest.BodyPublishers.ofString(json)).build(),
                 HttpResponse.BodyHandlers.ofString());
     }
