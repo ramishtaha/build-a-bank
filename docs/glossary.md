@@ -109,3 +109,29 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 - **`@RequestHeader`** — binds an HTTP request header to a controller method parameter; `required = false` makes the header optional (the parameter is `null` when absent) — how the optional `Idempotency-Key` is read.
 - **`@PageableDefault`** — sets the default page number/size/sort for an injected `Pageable` when the client omits the query params; also a cheap cap on unbounded responses.
 - **Jackson 3 vs Jackson 2 (Spring Boot 4)** — Boot 4's web stack defaults to **Jackson 3** (`tools.jackson`), so a Jackson-2 (`com.fasterxml.jackson.databind`) `ObjectMapper` **bean** isn't auto-created. Injecting one fails at context startup; own a `new ObjectMapper()` or use the Jackson-3 mapper.
+
+---
+
+## Step 15 — API Gateway / BFF & Service-to-Service HTTP
+
+- **API Gateway** — a single service in front of all the others that receives every external request and **routes** it to the right internal service. The natural home for **edge cross-cutting concerns** (routing, auth, rate limiting, TLS termination, correlation ids, request/response shaping). Clients see one address; internal services stay private. Business logic does **not** belong here.
+- **BFF (Backend-For-Frontend)** — a gateway **specialized per client type** (a web BFF, a mobile BFF) that aggregates/tailors responses for that frontend (e.g. combine three service calls into one trimmed payload for a phone). Trade-off: more gateways to operate, each simpler and evolving with its client.
+- **route** — a gateway rule: an `id`, a target `uri`, **predicates** (when it matches), and **filters** (transforms). The first matching route wins.
+- **predicate** — a route's match condition (e.g. `Path=/cif/**` matches any path starting with `/cif/`; the `**` is an Ant-style wildcard for the remaining segments). Also available: method, header, host predicates.
+- **filter** — a transform applied to the request and/or response of a matched route (rewrite path, add/remove headers, rate-limit, authenticate). Runs in declared order.
+- **`StripPrefix=N`** — a gateway filter that removes the first **N** path segments before forwarding, so the downstream receives its own path (`/cif/api/customers/1` with `StripPrefix=1` → `/api/customers/1`).
+- **`AddResponseHeader` / `AddRequestHeader`** — gateway filters that tag the response (or forwarded request) with a header — here `X-Gateway: build-a-bank` proves a filter ran; later this slot carries correlation/auth headers.
+- **Spring Cloud Gateway Server WebMVC** — the **servlet** (Spring MVC) gateway (`spring-cloud-starter-gateway-server-webmvc`), as opposed to the **reactive** one (`-server-webflux`, WebFlux/Netty). We use the servlet variant to stay on the MVC + virtual-threads stack; its blocking forwards scale cheaply on virtual threads. Config prefix: **`spring.cloud.gateway.server.webmvc.routes`** (the 2025 rename; `spring.cloud.gateway.mvc.routes` is deprecated and won't bind).
+- **declarative HTTP interface (`@HttpExchange`)** — an annotated **interface** describing remote calls (`@HttpExchange` base path + `@GetExchange`/`@PostExchange` methods, `@PathVariable`/`@RequestParam`/`@RequestBody` bindings). You declare *what*; Spring generates the *how*. The modern, type-safe successor to hand-written `RestTemplate` calls and to OpenFeign for in-Spring use (Spring Framework 6.1+).
+- **`@GetExchange`** — the declarative-client analogue of `@GetMapping`: declares a `GET` to the given path (combined with the interface's `@HttpExchange` base path).
+- **`HttpServiceProxyFactory`** — the factory that reads a `@HttpExchange` interface and builds a **dynamic proxy** implementing it, turning each method call into an HTTP request via a backing client adapter.
+- **`RestClientAdapter`** — the bridge that lets `HttpServiceProxyFactory` drive its calls through a `RestClient` (`RestClientAdapter.create(restClient)`).
+- **`RestClient`** — Spring Framework 6.1+'s fluent, **synchronous** HTTP client (the modern `RestTemplate` replacement). Built with a base URL and a request factory; its message converters (de)serialize bodies.
+- **`JdkClientHttpRequestFactory`** — Spring's request factory wrapping the JDK's `java.net.http.HttpClient`; where you set the **read timeout** (`setReadTimeout`) for a `RestClient`.
+- **connect timeout** — how long to wait to **establish** the TCP/TLS connection before giving up (set on the JDK `HttpClient`).
+- **read timeout** — how long to wait for the **response** after the request is sent (set on `JdkClientHttpRequestFactory`). The one that saves you from a connected-but-slow downstream.
+- **`ResourceAccessException`** — Spring's "transport-level problem" exception. A read-timeout (`HttpTimeoutException`) surfaces as this — a clean, catchable failure instead of a hung thread.
+- **cascading failure** — when one slow/failed component, called without a timeout, ties up callers' threads until they're exhausted, propagating the outage system-wide. Timeouts (then circuit breakers) are the availability control against it.
+- **circuit breaker** — (Step 37, Resilience4j) a resilience pattern that "opens" after a failure threshold and fails fast (or serves a fallback) without even trying, protecting both caller and callee and giving the downstream room to recover. Pairs with bulkheads and retries-with-backoff.
+- **temporal coupling** — the property of synchronous calls that the caller is affected *now* if the callee is down/slow (vs async messaging, which decouples them in time).
+- **`@DynamicPropertySource`** — a JUnit/Spring test hook that runs **before** the context starts, used to feed a runtime-discovered value (here a random stub-server port; in Step 8, a Testcontainers JDBC port) into Spring config before beans/routes are wired.
