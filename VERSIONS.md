@@ -60,5 +60,22 @@
 - Postgres, Redis, Redpanda, Prometheus/Grafana/Loki/Tempo image **digests** are pinned in the step that adds them
   (Steps 8, 20, 22, 36). Recorded here as they land.
 
+## Frontend (npm) — pinned by `frontend/package-lock.json` (Step 29, Phase F)
+The SPA is a separate Node/npm project (not a Maven module). `package.json` carries ranges; the **committed
+`package-lock.json` is the real pin** — `npm ci` reproduces the exact tree. Resolved at Step 29 (Node 22.20.0 / npm 11.16.0):
+
+| Package | Resolved | Notes |
+|---|---|---|
+| react / react-dom | 19.2.7 | function components + hooks |
+| react-router-dom | 7.17.0 | client-side routing + guard |
+| vite | 6.4.3 | dev server (native ESM) + prod build (Rollup/esbuild) |
+| @vitejs/plugin-react | 4.7.0 | React fast-refresh |
+| typescript | 5.9.3 | strict mode |
+| vitest | 3.2.6 | Vite-native test runner (jsdom) |
+| @testing-library/react | 16.3.2 | component/route tests |
+| jsdom | 25.0.1 | DOM for tests (note: localStorage shim in src/test/setup.ts) |
+| eslint / typescript-eslint | 9.39.4 / 8.61.0 | the SPA's quality gate (flat config) |
+
 ## Reproducibility
-`./mvnw verify` twice yields the same result. Prerequisites + cross-platform notes live in the README.
+`./mvnw verify` twice yields the same result; `npm ci` in `frontend/` reproduces the locked SPA tree.
+Prerequisites + cross-platform notes live in the README.

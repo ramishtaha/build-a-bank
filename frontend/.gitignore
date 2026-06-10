@@ -1,0 +1,6 @@
+# Step 29 · frontend build/deps (the lockfile IS committed — it pins exact versions for reproducible npm ci)
+node_modules
+dist
+dist-ssr
+*.local
+coverage

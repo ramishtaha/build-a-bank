@@ -25,9 +25,24 @@ spring:
               filters:
                 - StripPrefix=1                          # /bank/api/v1/transfers → /api/v1/transfers
                 - AddResponseHeader=X-Gateway, build-a-bank
+            # Step 29: front the auth service so the React app has ONE base URL (the gateway). Auth's own
+            # paths already start with /api/auth, so we DON'T strip — /api/auth/login → auth's /api/auth/login.
+            - id: auth
+              uri: ${services.auth.uri:http://localhost:8083}
+              predicates:
+                - Path=/api/auth/**
+              filters:
+                - AddResponseHeader=X-Gateway, build-a-bank
 
 server:
   port: 8080                                             # the gateway is the front door
+
+# Step 29: CORS so the React dev app (Vite, http://localhost:5173) can call the gateway from the browser.
+# Comma-separated origins; override per environment (tighten/replace in prod). Consumed by GatewayCorsConfig.
+app:
+  security:
+    cors:
+      allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
 management:
   endpoints:

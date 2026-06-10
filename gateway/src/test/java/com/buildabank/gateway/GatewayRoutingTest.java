@@ -56,6 +56,8 @@ class GatewayRoutingTest {
         String stubUri = "http://localhost:" + stub.getAddress().getPort();
         registry.add("services.cif.uri", () -> stubUri);
         registry.add("services.demand-account.uri", () -> stubUri);
+        registry.add("services.auth.uri", () -> stubUri);                                  // Step 29: auth route target
+        registry.add("app.security.cors.allowed-origins", () -> "http://localhost:5173");  // Step 29: allowed dev origin
     }
 
     @AfterAll
@@ -76,5 +78,51 @@ class GatewayRoutingTest {
         assertThat(response.body()).contains("\"ok\":true");                       // downstream's body returned
         assertThat(receivedPath.get()).isEqualTo("/api/customers/1");               // StripPrefix removed "/cif"
         assertThat(response.headers().firstValue("X-Gateway")).hasValue("build-a-bank");   // gateway filter ran
+    }
+
+    @Test
+    void routesAuthWithoutStrippingPrefix() throws Exception {
+        // Step 29: the React app calls the gateway for login; auth's paths already start with /api/auth,
+        // so the auth route does NOT strip — the downstream receives the path unchanged.
+        HttpResponse<String> response = http.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/api/auth/me"))
+                        .GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(receivedPath.get()).isEqualTo("/api/auth/me");                   // NOT stripped
+        assertThat(response.headers().firstValue("X-Gateway")).hasValue("build-a-bank");
+    }
+
+    @Test
+    void corsPreflightFromTheAllowedOriginIsAllowed() throws Exception {
+        // A browser preflight: OPTIONS + Origin + Access-Control-Request-Method. The gateway's CorsFilter
+        // answers it directly with the matching Access-Control-Allow-Origin (the route is never reached).
+        HttpResponse<String> preflight = http.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/api/auth/login"))
+                        .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "POST")
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(preflight.statusCode()).isEqualTo(200);
+        assertThat(preflight.headers().firstValue("Access-Control-Allow-Origin"))
+                .hasValue("http://localhost:5173");
+    }
+
+    @Test
+    void corsPreflightFromADisallowedOriginIsRejected() throws Exception {
+        // deny-by-default: an origin not on the allow-list gets no Access-Control-Allow-Origin (browser blocks it).
+        HttpResponse<String> preflight = http.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/api/auth/login"))
+                        .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                        .header("Origin", "http://evil.example")
+                        .header("Access-Control-Request-Method", "POST")
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(preflight.statusCode()).isEqualTo(403);
+        assertThat(preflight.headers().firstValue("Access-Control-Allow-Origin")).isEmpty();
     }
 }
