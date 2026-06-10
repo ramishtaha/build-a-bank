@@ -1,0 +1,71 @@
+### Build-a-Bank · Step 25 · SOLID refactor of the notification consumer — the API is UNCHANGED (that's the point)
+### A behaviour-preserving refactor is invisible from outside: same endpoints, same JSON shape, same live SSE
+### push as Step 20 — now produced by parser → ProcessedEventStore port → Notification.from factory.
+### Use these requests to verify that invisibility with your own eyes.
+###
+### Start the pieces (4 terminals) — identical to Step 20:
+### 0) Broker (Redpanda, Kafka-API):
+###    docker run -d --name bank-redpanda -p 9092:9092 redpandadata/redpanda:v24.2.7 \
+###        redpanda start --mode dev-container --kafka-addr PLAINTEXT://0.0.0.0:9092 \
+###        --advertise-kafka-addr PLAINTEXT://localhost:9092
+### 1) Auth:           ./mvnw -pl services/auth spring-boot:run                                   # 8083
+### 2) Postgres:       docker compose -f services/demand-account/compose.yaml up -d               # 5433
+### 3) demand-account: SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account \
+###                    AUTH_JWKS_URI=http://localhost:8083/oauth2/jwks \
+###                    KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+###                    ./mvnw -pl services/demand-account spring-boot:run                         # 8082
+### 4) notification:   KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+###                    ./mvnw -pl services/notification spring-boot:run                           # 8084
+
+@auth = http://localhost:8083
+@da   = http://localhost:8082
+@note = http://localhost:8084
+
+### A) The recent-notifications buffer (newest first) — same endpoint, same JSON shape as before the refactor.
+### Empty [] until an event flows; after request E below you'll see the "Transfer of … completed." message
+### (built by Notification.from now — byte-identical wording to the old buildMessage).
+GET {{note}}/api/notifications
+
+### B) Open a live SSE stream and LEAVE IT RUNNING — watch transfers appear in real time.
+###    Terminal equivalent:  curl -N http://localhost:8084/api/notifications/stream
+GET {{note}}/api/notifications/stream
+Accept: text/event-stream
+
+### C) Log in for a token (paste the JWT below).
+POST {{auth}}/api/auth/login
+Content-Type: application/json
+
+{"username":"alice","password":"password"}
+
+@token = PASTE_JWT_HERE
+
+### D) Open two accounts (the flow seeds its own data — no separate seed file needed).
+POST {{da}}/api/accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"accountNumber":"ACC-A","currency":"USD","openingBalance":200.00}
+
+###
+POST {{da}}/api/accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"accountNumber":"ACC-B","currency":"USD","openingBalance":0.00}
+
+### E) Transfer → Outbox row → relay → Kafka → the REFACTORED consumer (parse → markIfNew → from → publish)
+### → your SSE stream (request B) prints the event within ~2s. Same observable flow as Step 20.
+POST {{da}}/api/v1/transfers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":40.00,"description":"rent"}
+
+### 🧪 Experiment 1 (the dedupe line, through the port): the Outbox relay's at-least-once delivery is hard to
+### provoke by hand, but the consumer's log proves the path — run the suite and grep:
+###   ./mvnw -pl services/notification test | grep "duplicate event"
+###   → "duplicate event <uuid> ignored (exactly-once effect)"   ← that line is markIfNew returning false.
+
+### 🧪 Experiment 2 (restart amnesia — the documented in-memory trade-off): restart the notification service,
+### replay request E with a NEW transfer, then check request A: notifications survive only in the new process's
+### buffer. The in-memory adapter forgets seen ids on restart (the lesson's sub-step 5 and the Redis stretch goal).
