@@ -1,9 +1,6 @@
 // services/notification/src/main/java/com/buildabank/notification/TransferEventConsumer.java
 package com.buildabank.notification;
 
-import java.math.BigDecimal;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
@@ -11,36 +8,31 @@ import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
 /**
- * Step 20 · the <strong>Kafka consumer</strong>. Reads {@code transfer.completed} events and turns each into a
- * {@link Notification} pushed via {@link SseHub}.
+ * The Kafka consumer for {@code transfer.completed} events. After the Step-25 refactor it is a thin
+ * <strong>orchestration</strong> of single-responsibility collaborators it depends on through abstractions
+ * (Dependency Inversion): a {@link TransferEventParser} (parsing), a {@link ProcessedEventStore} port
+ * (idempotency), and the {@link SseHub} (push). The flow is one line each: parse → dedupe → notify.
  *
- * <p><strong>Idempotent consumer = exactly-once effect (Step 19).</strong> Kafka delivers at-least-once (a
- * rebalance or a relay retry can redeliver), so we dedupe by {@code eventId}: the first time we see an id we
- * process and remember it; a duplicate is skipped. Effect is exactly-once even though delivery isn't. (The
- * dedupe set is in-memory here for teaching; a real consumer persists processed ids — Redis/DB — so it
- * survives restarts. Step 21 makes this durable with the Idempotency Key in Redis.)
- *
- * <p>We use the Boot-autoconfigured Jackson 3 {@link ObjectMapper} ({@code tools.jackson}) to parse the JSON
- * payload — Spring Boot 4 defaults the web stack to Jackson 3, so that's the mapper bean on the classpath.
+ * <p><strong>Idempotent consumer = exactly-once effect (Step 19/20).</strong> Kafka delivers at-least-once;
+ * {@code ProcessedEventStore.markIfNew} makes a duplicate a no-op. A poison payload throws in the parser and is
+ * NOT swallowed, so the container routes it to the Dead-Letter Topic (Step 21).
  */
 @Component
 public class TransferEventConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(TransferEventConsumer.class);
 
+    private final TransferEventParser parser;
+    private final ProcessedEventStore processedEvents;
     private final SseHub hub;
-    private final ObjectMapper objectMapper;
-    private final Set<String> processedEventIds = ConcurrentHashMap.newKeySet();
     private final AtomicInteger received = new AtomicInteger();
     private final AtomicInteger applied = new AtomicInteger();
 
-    public TransferEventConsumer(SseHub hub, ObjectMapper objectMapper) {
+    public TransferEventConsumer(TransferEventParser parser, ProcessedEventStore processedEvents, SseHub hub) {
+        this.parser = parser;
+        this.processedEvents = processedEvents;
         this.hub = hub;
-        this.objectMapper = objectMapper;
     }
 
     @KafkaListener(
@@ -48,32 +40,15 @@ public class TransferEventConsumer {
             groupId = "${spring.kafka.consumer.group-id:notification-service}")
     public void onTransferCompleted(String payload) {
         received.incrementAndGet();
-        // We do NOT swallow exceptions here (Step 21): a poison/un-parseable message is allowed to throw so the
-        // container's DefaultErrorHandler retries it and then routes it to the Dead-Letter Topic
-        // (KafkaErrorHandlingConfig) — quarantined for inspection instead of silently dropped or blocking forever.
-        JsonNode node = objectMapper.readTree(payload);
-        String eventId = node.get("eventId").asText();
-        if (!processedEventIds.add(eventId)) {
-            log.info("duplicate event {} ignored (exactly-once effect)", eventId);
-            return;   // already handled this event id → idempotent skip
+        TransferEvent event = parser.parse(payload);          // poison → throws → Dead-Letter Topic
+        if (!processedEvents.markIfNew(event.eventId())) {
+            log.info("duplicate event {} ignored (exactly-once effect)", event.eventId());
+            return;                                            // duplicate → idempotent skip
         }
-        Notification notification = new Notification(
-                eventId,
-                node.get("transactionId").asText(),
-                node.get("from").asText(),
-                node.get("to").asText(),
-                node.get("amount").decimalValue(),
-                node.get("occurredAt").asText(),
-                buildMessage(node));
+        Notification notification = Notification.from(event);
         applied.incrementAndGet();
         hub.publish(notification);
         log.info("notified: {}", notification.message());
-    }
-
-    private static String buildMessage(JsonNode node) {
-        BigDecimal amount = node.get("amount").decimalValue();
-        return "Transfer of " + amount + " from " + node.get("from").asText()
-                + " to " + node.get("to").asText() + " completed.";
     }
 
     /** Total messages delivered to this consumer (includes duplicates). */

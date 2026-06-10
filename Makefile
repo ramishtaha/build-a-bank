@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 run-market-info play-22 run-onboarding play-23 play-24 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 run-market-info play-22 run-onboarding play-23 play-24 play-25 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -130,6 +130,10 @@ play-23: ## Step 23: onboarding orchestration + compensation (no Docker for the 
 play-24: ## Step 24: Spring Batch EOD interest accrual + the Phase-D exactly-once capstone (needs Docker: Postgres + Redpanda)
 	$(MVNW) -pl services/demand-account test -Dtest='InterestAccrualJobTest,PaymentExactlyOnceCapstoneTest'
 	@echo "End of Phase D 🎖️ — fault-tolerant batch (skip/retry) + exactly-once effect end-to-end"
+
+play-25: ## Step 25: SOLID refactor of the notification consumer — unchanged integration tests + new unit tests (needs Docker)
+	$(MVNW) -pl services/notification test
+	@echo "Behaviour-preserving refactor: the UNCHANGED integration tests pass + new TransferEventParserTest/InMemoryProcessedEventStoreTest"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean
