@@ -53,4 +53,14 @@ public class CustomerController {
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
+
+    /**
+     * Deactivate a customer (KYC → REJECTED) → 204. The Step-23 onboarding orchestrator calls this as a
+     * <strong>compensating</strong> action when account-opening fails after the customer was created.
+     */
+    @PostMapping("/{id}/deactivate")
+    public ResponseEntity<Void> deactivate(@PathVariable Long id) {
+        service.deactivate(id);
+        return ResponseEntity.noContent().build();
+    }
 }

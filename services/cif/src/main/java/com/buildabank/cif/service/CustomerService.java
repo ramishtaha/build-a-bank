@@ -44,4 +44,17 @@ public class CustomerService {
     public Optional<Customer> findByCustomerNumber(String customerNumber) {
         return repository.findByCustomerNumber(customerNumber);
     }
+
+    /**
+     * Deactivate a customer (KYC → {@link KycStatus#REJECTED}). Added for the Step-23 onboarding orchestration:
+     * if opening the account fails after the customer was created, the orchestrator calls this as a
+     * <strong>compensating</strong> action so a half-onboarded customer isn't left active. Dirty checking
+     * flushes the status change at commit.
+     */
+    @Transactional
+    public void deactivate(Long id) {
+        Customer customer = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("no such customer: " + id));
+        customer.setKycStatus(KycStatus.REJECTED);
+    }
 }

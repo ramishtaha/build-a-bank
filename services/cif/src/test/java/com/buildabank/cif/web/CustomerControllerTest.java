@@ -68,4 +68,11 @@ class CustomerControllerTest {
         given(service.findById(99L)).willReturn(Optional.empty());
         mvc.perform(get("/api/customers/99")).andExpect(status().isNotFound());
     }
+
+    @Test
+    void deactivateReturns204_andCallsTheService() throws Exception {
+        // The Step-23 onboarding orchestrator's compensation hook.
+        mvc.perform(post("/api/customers/7/deactivate")).andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(service).deactivate(7L);
+    }
 }

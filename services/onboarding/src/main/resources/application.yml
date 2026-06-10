@@ -1,0 +1,29 @@
+# services/onboarding/src/main/resources/application.yml
+spring:
+  application:
+    name: onboarding
+
+# Step 23: where the orchestrated services live. Behind a gateway these point at the gateway instead.
+services:
+  cif:
+    url: ${CIF_URL:http://localhost:8081}
+    connect-timeout-ms: 2000
+    read-timeout-ms: 5000
+  account:
+    url: ${ACCOUNT_URL:http://localhost:8082}
+    connect-timeout-ms: 2000
+    read-timeout-ms: 5000
+
+server:
+  port: 8086                 # hello=8080 cif=8081 demand-account=8082 auth=8083 notification=8084 market-info=8085
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.buildabank.onboarding: INFO

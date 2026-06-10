@@ -1,0 +1,35 @@
+### Build-a-Bank · Step 23 · Retail onboarding orchestration (create customer → open account, compensate on failure)
+### Start the orchestrated services + the orchestrator:
+### 1) Postgres (cif + demand-account DBs):  docker compose -f services/demand-account/compose.yaml up -d  (+ cif's)
+### 2) Auth:           ./mvnw -pl services/auth spring-boot:run                                   # 8083
+### 3) cif:            ./mvnw -pl services/cif spring-boot:run                                     # 8081
+### 4) demand-account: AUTH_JWKS_URI=http://localhost:8083/oauth2/jwks ./mvnw -pl services/demand-account spring-boot:run  # 8082
+### 5) onboarding:     CIF_URL=http://localhost:8081 ACCOUNT_URL=http://localhost:8082 ./mvnw -pl services/onboarding spring-boot:run  # 8086
+
+@auth = http://localhost:8083
+@onboard = http://localhost:8086
+
+### Get a token (demand-account is secured; the orchestrator forwards this bearer downstream).
+POST {{auth}}/api/auth/login
+Content-Type: application/json
+
+{"username":"alice","password":"password"}
+
+@token = PASTE_JWT_HERE
+
+### A) Onboard a customer → the orchestrator creates the CIF customer, then opens their demand account.
+### → 201 {"customerNumber":"CIF-...","accountNumber":"DDA-CIF-...","status":"ONBOARDED"}
+POST {{onboard}}/api/onboarding
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"firstName":"Ada","lastName":"Lovelace","email":"ada@bank.example","dateOfBirth":"1990-05-17","currency":"USD"}
+
+### B) COMPENSATION demo: stop demand-account (so account-open fails), then onboard again.
+### → 502 (the orchestrator created the customer, failed to open the account, and DEACTIVATED the customer).
+### Verify in CIF: GET http://localhost:8081/api/customers/by-number/{the new number} → kycStatus REJECTED.
+POST {{onboard}}/api/onboarding
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"firstName":"Grace","lastName":"Hopper","email":"grace@bank.example","dateOfBirth":"1906-12-09","currency":"USD"}

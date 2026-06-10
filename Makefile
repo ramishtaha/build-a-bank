@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 run-market-info play-22 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 run-market-info play-22 run-onboarding play-23 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -118,6 +118,14 @@ run-market-info: ## Run the Market Info service on http://localhost:8085 (needs 
 play-22: ## Step 22: Redis cache read model + @Async (virtual threads) + ShedLock scheduling (needs Docker: Redis)
 	$(MVNW) -pl services/market-info test -Dtest='MarketCacheTest,ShedLockTest,MarketControllerTest'
 	@echo "Live: run-market-info, then GET /api/market/rates/USD/EUR (first slow, then cached) — see steps/step-22/requests.http"
+
+run-onboarding: ## Run the Onboarding orchestrator on http://localhost:8086 (set CIF_URL/ACCOUNT_URL to the services)
+	CIF_URL=$${CIF_URL:-http://localhost:8081} ACCOUNT_URL=$${ACCOUNT_URL:-http://localhost:8082} $(MVNW) -pl services/onboarding spring-boot:run
+	# Windows: $$env:CIF_URL='http://localhost:8081'; $$env:ACCOUNT_URL='http://localhost:8082'; .\mvnw.cmd -pl services/onboarding spring-boot:run
+
+play-23: ## Step 23: onboarding orchestration + compensation (no Docker for the orchestration tests)
+	$(MVNW) -pl services/onboarding test
+	@echo "Live: run auth+cif+demand-account+onboarding, then POST /api/onboarding (with a token) — see steps/step-23/requests.http"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean
