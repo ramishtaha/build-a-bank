@@ -1,0 +1,25 @@
+### Build-a-Bank · Step 22 · Market Info — Redis caching, @Async (virtual threads), ShedLock scheduling
+### Start:
+### 0) Redis:        docker run -d --name bank-redis -p 6379:6379 redis:7.4-alpine
+### 1) market-info:  REDIS_HOST=localhost ./mvnw -pl services/market-info spring-boot:run               # 8085
+
+@market = http://localhost:8085
+
+### A) First read of a pair — SLOW (the upstream provider is hit, ~30ms+ simulated latency).
+GET {{market}}/api/market/rates/USD/EUR
+
+### B) Read it again immediately — FAST (served from the Redis cache; no upstream call). Same value/asOf.
+GET {{market}}/api/market/rates/USD/EUR
+
+### C) A different pair — slow again (its own cache entry).
+GET {{market}}/api/market/rates/USD/GBP
+
+### 🧪 Experiments:
+### • Watch the scheduled refresh: leave the service running ~1 min — the log shows "refreshed N FX rate(s)".
+###   Run a SECOND instance (different server.port) pointed at the same Redis → only ONE logs the refresh each
+###   tick (ShedLock holds the lock; the other skips).
+### • Inspect the cache via actuator: GET http://localhost:8085/actuator/caches
+GET {{market}}/actuator/caches
+
+### • After ~60s (the cache TTL) a pair is re-fetched on next read (eventually-consistent read model).
+GET {{market}}/api/market/rates/EUR/USD

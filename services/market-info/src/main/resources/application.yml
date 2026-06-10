@@ -1,0 +1,37 @@
+# services/market-info/src/main/resources/application.yml
+spring:
+  application:
+    name: market-info
+  # Step 22: virtual threads are scoped to the @Async executor (AsyncConfig), NOT enabled globally — keeping
+  # the Lettuce/Redis client and Tomcat on their normal threading.
+  threads:
+    virtual:
+      enabled: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cache:
+    type: redis
+    redis:
+      time-to-live: 60s         # the FX read model is eventually consistent — entries expire after 60s
+
+# Step 22: market read model + clustered refresh.
+market:
+  refresh-rate-ms: 60000        # how often the scheduled refresh runs
+  scheduling:
+    enabled: true               # production polls; tests set this false and drive refresh/lock directly
+
+server:
+  port: 8085                    # hello=8080 cif=8081 demand-account=8082 auth=8083 notification=8084
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,caches
+
+logging:
+  level:
+    com.buildabank.marketinfo: INFO

@@ -35,6 +35,8 @@
 | **Testcontainers Redpanda** | `org.testcontainers:testcontainers-redpanda` (BOM 2.0.5) | Step 20 | ✅ |
 | **Spring Data Redis** | `org.springframework.boot:spring-boot-starter-data-redis` (Lettuce, Boot-managed) | Step 21 | ✅ (Redis-backed Idempotency Key for the payment Saga; verified on Testcontainers Redis — `steps/step-21`) |
 | **Redis image** | `redis:7.4-alpine` (digest `sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99`) | Step 21 | ✅ (Testcontainers `GenericContainer` + Spring Boot `@ServiceConnection(name="redis")`) |
+| **ShedLock** | `net.javacrumbs.shedlock:shedlock-spring` + `shedlock-provider-redis-spring` **6.10.0** (NOT Boot-managed → pinned explicitly in `services/market-info/pom.xml`) | Step 22 | ✅ (clustered `@Scheduled` lock via Redis; verified — lock held blocks a second acquire, releasable. `steps/step-22`) |
+| **Spring Cache (Redis)** | `spring-boot-starter-cache` + `spring-boot-starter-data-redis`, `spring.cache.type=redis` (Boot-managed) | Step 22 | ✅ (`@Cacheable` FX-rate read model on Redis; cache hit proven — provider called once for two reads) |
 
 ## ⚠️ Flagged step-backs / watch-items (honesty per the compatibility caveat)
 

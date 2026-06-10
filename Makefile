@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 run-market-info play-22 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -109,6 +109,15 @@ play-20: ## Step 20: events + Outbox + Kafka + SSE notifications (needs Docker f
 play-21: ## Step 21: payment Saga (compensation) + Redis idempotency + Kafka DLQ (needs Docker: Postgres + Redis + Redpanda)
 	$(MVNW) -pl services/demand-account,services/notification test -Dtest='PaymentSagaTest,PaymentControllerTest,DeadLetterTest'
 	@echo "Live: docker run -d -p 6379:6379 redis:7.4-alpine; then POST /api/v1/payments with an Idempotency-Key — see steps/step-21/requests.http"
+
+run-market-info: ## Run the Market Info service on http://localhost:8085 (needs Redis; set REDIS_HOST)
+	REDIS_HOST=$${REDIS_HOST:-localhost} $(MVNW) -pl services/market-info spring-boot:run
+	# Redis: docker run -d --name bank-redis -p 6379:6379 redis:7.4-alpine
+	# Windows: $$env:REDIS_HOST='localhost'; .\mvnw.cmd -pl services/market-info spring-boot:run
+
+play-22: ## Step 22: Redis cache read model + @Async (virtual threads) + ShedLock scheduling (needs Docker: Redis)
+	$(MVNW) -pl services/market-info test -Dtest='MarketCacheTest,ShedLockTest,MarketControllerTest'
+	@echo "Live: run-market-info, then GET /api/market/rates/USD/EUR (first slow, then cached) — see steps/step-22/requests.http"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean
