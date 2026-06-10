@@ -142,6 +142,20 @@
             <artifactId>testcontainers-redpanda</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Spring Modulith (Step 27): used here purely as a VERIFICATION + DOCS tool (test scope only — it does
+             NOT change the runtime context). starter-test brings spring-modulith-core (ApplicationModules#verify,
+             a static bytecode analysis — no Spring context, no Docker); -docs brings Documenter (PlantUML + the
+             per-module "canvas"). Versions from the Modulith BOM imported in the parent (VERSIONS.md). -->
+        <dependency>
+            <groupId>org.springframework.modulith</groupId>
+            <artifactId>spring-modulith-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.modulith</groupId>
+            <artifactId>spring-modulith-docs</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

@@ -35,6 +35,7 @@
         <spring-cloud.version>2025.1.1</spring-cloud.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <archunit.version>1.4.2</archunit.version>
+        <spring-modulith.version>2.0.6</spring-modulith.version>
     </properties>
 
     <!-- Modules are added step-by-step. The hello-service is the Step 1 deliverable
@@ -69,6 +70,14 @@
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-bom</artifactId>
                 <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Spring Modulith — module boundaries + verification + docs (Step 27). -->
+            <dependency>
+                <groupId>org.springframework.modulith</groupId>
+                <artifactId>spring-modulith-bom</artifactId>
+                <version>${spring-modulith.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

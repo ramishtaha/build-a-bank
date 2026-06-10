@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 run-market-info play-22 run-onboarding play-23 play-24 play-25 play-26 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 run-market-info play-22 run-onboarding play-23 play-24 play-25 play-26 play-27 clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -138,6 +138,11 @@ play-25: ## Step 25: SOLID refactor of the notification consumer — unchanged i
 play-26: ## Step 26: hexagonal restructure of notification (domain/application/adapter) — behaviour preserved (needs Docker)
 	$(MVNW) -pl services/notification test
 	@echo "Inspect the hexagon: ls -R services/notification/src/main/java/com/buildabank/notification — domain has only java.* imports"
+
+play-27: ## Step 27: enforce architecture — ArchUnit hexagon (notification) + Spring Modulith modules (demand-account); NO Docker
+	$(MVNW) -pl services/notification  -Dtest=HexagonalArchitectureTest test
+	$(MVNW) -pl services/demand-account -Dtest=ModularityTest test
+	@echo "Living docs: services/demand-account/target/spring-modulith-docs/ (components.puml + per-module canvases)"
 
 clean: ## Remove all build output
 	$(MVNW) -B clean
