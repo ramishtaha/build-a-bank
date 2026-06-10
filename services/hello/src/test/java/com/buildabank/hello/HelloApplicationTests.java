@@ -3,11 +3,16 @@ package com.buildabank.hello;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.math.BigDecimal;
+
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
+
+import com.buildabank.common.money.MoneyFormatter;
 
 /**
  * Two tests that actually prove the app works (not just compiles):
@@ -28,9 +33,21 @@ class HelloApplicationTests {
     @LocalServerPort
     int port;
 
+    // Step 28: injected straight from our OWN starter (libs/common). It's here ONLY because the
+    // common-spring-boot-starter jar is on the classpath — proof Boot discovered the auto-configuration via
+    // the AutoConfiguration.imports file, with no @Import in this app.
+    @Autowired
+    MoneyFormatter moneyFormatter;
+
     @Test
     void contextLoads() {
         // If the application context fails to start, this test fails — the cheapest smoke test there is.
+    }
+
+    @Test
+    void ourCustomStarterAutoConfiguresTheMoneyFormatter() {
+        assertThat(moneyFormatter).as("auto-configured by common-spring-boot-starter").isNotNull();
+        assertThat(moneyFormatter.format(new BigDecimal("1234.5"))).isEqualTo("USD 1234.50");
     }
 
     @Test

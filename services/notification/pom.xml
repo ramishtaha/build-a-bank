@@ -75,6 +75,14 @@
             <version>${archunit.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- jqwik (Step 28): property-based testing — generate many randomized inputs + shrink failures. A
+             separate JUnit-Platform test engine; Surefire runs it alongside Jupiter. Pinned (VERSIONS.md). -->
+        <dependency>
+            <groupId>net.jqwik</groupId>
+            <artifactId>jqwik</artifactId>
+            <version>${jqwik.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -85,4 +93,62 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+          Step 28 · MUTATION TESTING (the Phase-E capstone). Off by default (it re-runs the unit tests against
+          hundreds of bytecode mutants, so it's slower than a normal build) — run it on demand:
+              ./mvnw -pl services/notification -Pmutation test
+          It mutates ONLY the hexagon CORE (the domain factory + the application use case) and runs ONLY the
+          fast, Docker-free unit tests against the mutants (the Kafka/SSE integration tests are excluded — they
+          need a broker and would make every mutant a Testcontainers boot). A surviving mutant = a behaviour
+          change no test noticed = a gap in the suite. The build FAILS below the justified threshold.
+        -->
+        <profile>
+            <id>mutation</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <version>${pitest.version}</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.pitest</groupId>
+                                <artifactId>pitest-junit5-plugin</artifactId>
+                                <version>${pitest-junit5.version}</version>
+                            </dependency>
+                        </dependencies>
+                        <configuration>
+                            <targetClasses>
+                                <param>com.buildabank.notification.domain.Notification</param>
+                                <param>com.buildabank.notification.application.NotificationService</param>
+                            </targetClasses>
+                            <targetTests>
+                                <param>com.buildabank.notification.application.NotificationServiceTest</param>
+                                <param>com.buildabank.notification.domain.NotificationTest</param>
+                                <param>com.buildabank.notification.domain.NotificationPropertyTest</param>
+                            </targetTests>
+                            <!-- The integration tests cover the core too, but each is a Testcontainers boot —
+                                 exclude them so mutation analysis stays fast and Docker-free. -->
+                            <excludedTestClasses>
+                                <param>com.buildabank.notification.TransferEventConsumerKafkaTest</param>
+                                <param>com.buildabank.notification.DeadLetterTest</param>
+                                <param>com.buildabank.notification.NotificationControllerTest</param>
+                                <param>com.buildabank.notification.HexagonalArchitectureTest</param>
+                            </excludedTestClasses>
+                            <!-- Justified target: the core is small, pure, and fully unit-tested → demand a high
+                                 score. The build fails below this. (See steps/step-28/lesson.md for the rationale.) -->
+                            <mutationThreshold>90</mutationThreshold>
+                            <coverageThreshold>90</coverageThreshold>
+                            <outputFormats>
+                                <param>HTML</param>
+                                <param>XML</param>
+                            </outputFormats>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

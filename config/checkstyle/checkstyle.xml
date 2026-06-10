@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+        "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+        "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  Build-a-Bank · Checkstyle ruleset (Step 28).
+
+  Deliberately LEAN. Retrofitting a 200-rule Google/Sun ruleset onto an existing codebase floods you with
+  thousands of pre-existing violations nobody fixes, so the gate gets switched off — the classic failure mode.
+  Instead we start with a small set of HIGH-VALUE, LOW-NOISE checks the code already satisfies, fail the build
+  on any violation, and tighten over time. (Notably we do NOT ban star imports — the course's controllers use
+  `import ...annotation.*` on purpose.) Every rule here is a real bug-or-smell, not a style opinion.
+-->
+<module name="Checker">
+    <property name="severity" value="warning"/>
+    <property name="charset" value="UTF-8"/>
+
+    <module name="TreeWalker">
+        <!-- Imports: dead/duplicate imports are pure noise and hint at half-finished edits. -->
+        <module name="UnusedImports">
+            <property name="processJavadoc" value="true"/>
+        </module>
+        <module name="RedundantImport"/>
+
+        <!-- Real bugs / smells. -->
+        <module name="EmptyStatement"/>              <!-- a stray ';' -->
+        <module name="OneStatementPerLine"/>          <!-- 'a(); b();' on one line hides control flow -->
+        <module name="EqualsHashCode"/>               <!-- override equals() without hashCode() (or vice-versa) -->
+        <module name="UpperEll"/>                     <!-- long literal 100l (lowercase L) reads as 1001 -->
+        <module name="ModifierOrder"/>                <!-- 'static public' → 'public static' (JLS order) -->
+        <module name="DefaultComesLast"/>             <!-- a switch 'default' not last is a readability trap -->
+        <module name="FallThrough"/>                  <!-- silent switch fall-through is a classic bug -->
+        <module name="StringLiteralEquality"/>        <!-- comparing strings with == instead of equals() -->
+    </module>
+</module>

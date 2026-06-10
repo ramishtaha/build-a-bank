@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      common — the bank's shared library, turned into a REAL auto-configured Spring Boot STARTER (Step 28).
+      §5 of the master plan promised this. A starter is just a normal jar that ships:
+        (1) some beans worth reusing (here a MoneyFormatter — money is BigDecimal everywhere in the bank),
+        (2) an @AutoConfiguration that creates them conditionally, and
+        (3) a META-INF/.../AutoConfiguration.imports file so Spring Boot DISCOVERS the config automatically
+            the moment this jar is on a service's classpath — no @Import, no component scan needed.
+      Production convention splits this into `-autoconfigure` + `-starter` modules; we keep ONE module for
+      teaching clarity and explain the split in the lesson. This module is a plain library — NO
+      spring-boot-maven-plugin (we don't repackage a library into an executable jar).
+    -->
+    <parent>
+        <groupId>com.buildabank</groupId>
+        <artifactId>build-a-bank-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>common-spring-boot-starter</artifactId>
+    <name>Build-a-Bank :: Libs :: Common (Spring Boot Starter)</name>
+    <description>A real auto-configured Spring Boot starter — shared bank beans (MoneyFormatter) (Step 28).</description>
+
+    <dependencies>
+        <!-- Brings @AutoConfiguration, @ConditionalOn*, @ConfigurationProperties — the auto-config machinery.
+             A consumer that already has spring-boot gets this transitively; we depend on it directly so the
+             starter compiles and so a service only needs this ONE dependency to gain the feature. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <!-- Generates META-INF/spring-configuration-metadata.json from @ConfigurationProperties so IDEs give
+             auto-complete + docs for `buildabank.money.*` in application.yml. Optional, compile-only. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- ── Test ── ApplicationContextRunner (in spring-boot-test) is the canonical way to test an
+             auto-configuration without booting a full app: it loads the config exactly as Boot would. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

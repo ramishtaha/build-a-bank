@@ -1,0 +1,4 @@
+# Step 28 · how Spring Boot DISCOVERS this starter's auto-configuration. When this jar is on a service's
+# classpath, Boot reads this file and applies the listed @AutoConfiguration class — no @Import or @ComponentScan
+# needed. (Boot 2 used spring.factories' EnableAutoConfiguration key; Boot 2.7+ / 3 / 4 use this dedicated file.)
+com.buildabank.common.money.MoneyAutoConfiguration

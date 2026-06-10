@@ -31,11 +31,26 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Our OWN starter (Step 28). Adding this ONE dependency auto-configures a MoneyFormatter bean — no
+             @Import, no @ComponentScan. The proof it's discovered via the AutoConfiguration.imports file is the
+             MoneyFormatter injected in HelloApplicationTests (real consumption of the libs/common starter). -->
+        <dependency>
+            <groupId>com.buildabank</groupId>
+            <artifactId>common-spring-boot-starter</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
 
         <!-- Test stack: JUnit 5 + AssertJ + Mockito + Spring Test, all version-managed by the parent. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Boot 4 modularized the test slices: @WebMvcTest + MockMvcTester live in spring-boot-webmvc-test
+             (Boot 3 had them under spring-boot-test-autoconfigure). Needed for the Step-28 slice test. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

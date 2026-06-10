@@ -53,3 +53,6 @@ desktop.ini
 *.log
 logs/
 tmp/
+
+# jqwik failure-sample database (property-based testing, Step 28) — local, not committed
+.jqwik-database

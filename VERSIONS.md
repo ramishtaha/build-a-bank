@@ -27,6 +27,11 @@
 | **Postgres image** | `postgres:17-alpine` (digest `sha256:979c4379dd698aba0b890599a6104e082035f98ef31d9b9291ec22f2b13059ca`; reports PostgreSQL 17.10) | Step 8 | ✅ |
 | ArchUnit (junit5) | 1.4.2 | Step 27 | ✅ |
 | Spring Modulith | 2.0.6 | Step 27 | ✅ (2.x = Boot 4 line) |
+| **PITest** | **1.25.4** (+ `pitest-junit5-plugin` **1.2.2**) | Step 28 | ✅ (mutation testing. **NOT 1.19.1** — its ASM fails on JDK-25 bytecode `major version 69`; 1.25.4 reads it. Maven Central search API was stale → verified latest via GitHub releases. `-Pmutation` profile; 100% on the notification core — `steps/step-28`) |
+| **jqwik** | **1.9.3** | Step 28 | ✅ (property-based testing; own JUnit-Platform engine; 1000 generated cases — `steps/step-28`) |
+| **Spotless (maven plugin)** | **3.6.0** | Step 28 | ✅ (lean: removeUnusedImports + whitespace + EOF newline; **`lineEndings=PRESERVE`** to avoid CRLF→LF churn. Bound to `verify`) |
+| **Checkstyle / maven-checkstyle-plugin** | **13.5.0 / 3.6.0** | Step 28 | ✅ (lean ruleset `config/checkstyle/checkstyle.xml`; 0 violations repo-wide; `violationSeverity=warning` fails the build. Bound to `verify`) |
+| **Error Prone / NullAway** | **2.49.0 / 0.13.6** | Step 28 | ✅ **verified working on JDK 25** (compiled `libs/common`; a planted `@Nullable` deref was flagged). Off-by-default `-Perrorprone` profile at `:WARN` (needs javac `--add-exports/--add-opens`). NOT the historical "lags JDK" outcome. |
 | Resilience4j | 2.4.0 | Step 37 | ✅ (verify Boot-4 artifact at that step) |
 | **springdoc-openapi** | **3.0.3** (NOT Boot-managed → pinned explicitly in `services/demand-account/pom.xml`) | Step 13 | ✅ (3.0.x supports Boot 4 / Spring 7; 2.8.x targets Boot 3. Verified: resolves + boots, live `/v3/api-docs` returns OpenAPI 3.1 — `steps/step-13` Verification Log) |
 | **Spring Cloud Gateway (server-webmvc)** | `spring-cloud-starter-gateway-server-webmvc` (BOM-managed by Spring Cloud 2025.1.1 → 5.0.x). The **SERVLET/MVC** variant, NOT reactive (ADR-0007). | Step 15 | ✅ (resolves on the BOM; gateway boots and routes to a stub with `StripPrefix`/`AddResponseHeader` — `steps/step-15` / `gateway/GatewayRoutingTest`. Config prefix: `spring.cloud.gateway.server.webmvc.routes`; `…gateway.mvc.routes` deprecated.) |

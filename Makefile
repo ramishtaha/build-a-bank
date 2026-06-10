@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 run-market-info play-22 run-onboarding play-23 play-24 play-25 play-26 play-27 clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 run-market-info play-22 run-onboarding play-23 play-24 play-25 play-26 play-27 play-28 mutation format clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -143,6 +143,17 @@ play-27: ## Step 27: enforce architecture — ArchUnit hexagon (notification) + 
 	$(MVNW) -pl services/notification  -Dtest=HexagonalArchitectureTest test
 	$(MVNW) -pl services/demand-account -Dtest=ModularityTest test
 	@echo "Living docs: services/demand-account/target/spring-modulith-docs/ (components.puml + per-module canvases)"
+
+play-28: ## Step 28: mutation testing (PITest) + property tests (jqwik) + custom starter + quality gates; NO Docker
+	$(MVNW) -pl services/notification -Pmutation test-compile org.pitest:pitest-maven:mutationCoverage
+	$(MVNW) -pl libs/common,services/hello -am test
+	@echo "Mutation report: services/notification/target/pit-reports/index.html — 100% on the hexagon core. Gates run in 'make verify'."
+
+mutation: ## Run PITest mutation coverage on the notification hexagon core (Phase-E capstone; NO Docker)
+	$(MVNW) -pl services/notification -Pmutation test-compile org.pitest:pitest-maven:mutationCoverage
+
+format: ## Auto-fix formatting with Spotless (then 'make verify' enforces it)
+	$(MVNW) -B spotless:apply
 
 clean: ## Remove all build output
 	$(MVNW) -B clean

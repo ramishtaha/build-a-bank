@@ -36,11 +36,25 @@
         <testcontainers.version>2.0.5</testcontainers.version>
         <archunit.version>1.4.2</archunit.version>
         <spring-modulith.version>2.0.6</spring-modulith.version>
+        <!-- Step 28 — testing & quality mastery. PITest 1.25.4 reads JDK-25 bytecode (major v69); 1.19.1's
+             bundled ASM did not (the Maven Central search API was stale — verified via GitHub releases). -->
+        <jqwik.version>1.9.3</jqwik.version>
+        <pitest.version>1.25.4</pitest.version>
+        <pitest-junit5.version>1.2.2</pitest-junit5.version>
+        <!-- Step 28 — code-quality gates. Run as Maven plugins (not javac plugins), so JDK-25-safe. -->
+        <spotless.version>3.6.0</spotless.version>
+        <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
+        <checkstyle.version>13.5.0</checkstyle.version>
+        <!-- Error Prone / NullAway are javac PLUGINS (hook into compiler internals) — JDK-support lags. Pinned
+             here for the off-by-default `errorprone` profile; JDK-25 status verified empirically (lesson §F). -->
+        <error-prone.version>2.49.0</error-prone.version>
+        <nullaway.version>0.13.6</nullaway.version>
     </properties>
 
     <!-- Modules are added step-by-step. The hello-service is the Step 1 deliverable
          (added at step-01-end). Real banking microservices begin at Step 8 (CIF). -->
     <modules>
+        <module>libs/common</module>
         <module>services/hello</module>
         <module>services/cif</module>
         <module>services/demand-account</module>
@@ -83,4 +97,125 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <!--
+      Code-quality gates (Step 28) — inherited by EVERY module. Both bind to `verify`, so `./mvnw verify` fails
+      on a formatting or style violation (proven by the §12.3 mutation in steps/step-28/lesson.md). Kept lean on
+      purpose (see config/checkstyle/checkstyle.xml). Run `./mvnw spotless:apply` to auto-fix formatting.
+      NOTE: Error Prone / NullAway are javac plugins and do NOT yet support JDK 25 — see the `errorprone`
+      profile below and steps/step-28/lesson.md §"Then vs Now" for the honest status.
+    -->
+    <build>
+        <plugins>
+            <!-- Spotless — formatting hygiene. Lean by design (whitespace, EOF newline, dead imports, import
+                 order) rather than a full reformatter, so it doesn't churn the course's hand-laid-out code. -->
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <!-- PRESERVE: keep each file's existing line endings (the repo has no .gitattributes and
+                         was authored on Windows/CRLF). Without this, Spotless rewrites CRLF→LF on every line of
+                         every file — a 200-file phantom diff. Formatting hygiene shouldn't churn line endings. -->
+                    <lineEndings>PRESERVE</lineEndings>
+                    <java>
+                        <removeUnusedImports/>
+                        <trimTrailingWhitespace/>
+                        <endWithNewline/>
+                    </java>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotless-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Checkstyle — a lean ruleset of real bug-or-smell checks (config/checkstyle/checkstyle.xml).
+                 violationSeverity=warning means any warning fails the build. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>${maven-checkstyle-plugin.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>${checkstyle.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <configLocation>${maven.multiModuleProjectDirectory}/config/checkstyle/checkstyle.xml</configLocation>
+                    <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                    <consoleOutput>true</consoleOutput>
+                    <failsOnError>true</failsOnError>
+                    <violationSeverity>warning</violationSeverity>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>checkstyle-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!--
+          Error Prone + NullAway (Step 28) — OFF by default; enable with `./mvnw -Perrorprone compile`.
+          These are javac plugins (NullAway = compile-time null-safety: no @Nullable dereference). They hook
+          deep into compiler internals, so each JDK release needs the add-exports/add-opens below AND an
+          Error Prone version that supports that JDK. We keep this profile ready and verify its JDK-25 status
+          honestly in steps/step-28/lesson.md (§F). Spotless + Checkstyle remain the always-on gates.
+        -->
+        <profile>
+            <id>errorprone</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <fork>true</fork>
+                            <compilerArgs>
+                                <arg>-XDcompilePolicy=simple</arg>
+                                <arg>--should-stop=ifError=FLOW</arg>
+                                <arg>-Xplugin:ErrorProne -XepDisableAllChecks -Xep:NullAway:WARN -XepOpt:NullAway:AnnotatedPackages=com.buildabank</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
+                                <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
+                                <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
+                            </compilerArgs>
+                            <annotationProcessorPaths>
+                                <path>
+                                    <groupId>com.google.errorprone</groupId>
+                                    <artifactId>error_prone_core</artifactId>
+                                    <version>${error-prone.version}</version>
+                                </path>
+                                <path>
+                                    <groupId>com.uber.nullaway</groupId>
+                                    <artifactId>nullaway</artifactId>
+                                    <version>${nullaway.version}</version>
+                                </path>
+                            </annotationProcessorPaths>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
