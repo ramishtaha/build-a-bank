@@ -16,6 +16,13 @@ spring:
         format_sql: true
   flyway:
     enabled: true            # runs db/migration/V*.sql on startup, before Hibernate validates.
+  # Step 24 — Spring Batch. Don't auto-run jobs at startup (launched explicitly / by an EOD trigger); Flyway
+  # owns the JobRepository schema (V4), so Batch must not also try to initialize it.
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: never
   security:
     oauth2:
       resourceserver:

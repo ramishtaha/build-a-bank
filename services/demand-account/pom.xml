@@ -87,6 +87,13 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- Spring Batch (Step 24): chunk-oriented EOD jobs (interest accrual) with restart/retry/skip. The
+             JobRepository metadata tables are created by Flyway (V4), NOT Batch's initialize-schema. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-batch</artifactId>
+        </dependency>
+
         <!-- ── Test ── -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
