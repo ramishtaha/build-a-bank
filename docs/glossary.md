@@ -58,3 +58,30 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 - **bulk `@Modifying` update** — a JPQL `UPDATE`/`DELETE` that runs directly against the table, bypassing the persistence context and `@Version` (no dirty-checking, no optimistic check) — which is why `applyBalanceUnsafe` can demonstrate a true lost update.
 - **`@ServiceConnection`** — a Spring Boot 3.1+ test annotation that wires the app's `DataSource` to a running Testcontainers container automatically (no JDBC URL/credentials in test config).
 - **`@Enumerated(EnumType.STRING)`** — persists an enum as its stable text name (e.g. `"DEBIT"`) rather than its ordinal, so reordering the enum can't corrupt stored rows.
+
+---
+
+## Step 13 — Spring MVC / REST Deep (Problem Details, OpenAPI, Filters & Interceptors)
+
+- **`DispatcherServlet`** — the Spring MVC **front controller**: the single servlet (mapped to `/`) that receives every request and orchestrates handler mapping, argument binding, invocation, return-value handling, and exception resolution.
+- **`HandlerMapping`** — the component that matches a request (path + method + headers + content type) to a handler. `RequestMappingHandlerMapping` matches `@RequestMapping`/`@GetMapping`/… and returns a `HandlerExecutionChain` (handler + interceptors).
+- **`HandlerAdapter`** — the component that actually invokes the matched handler. `RequestMappingHandlerAdapter` resolves method arguments (`@PathVariable`, `@RequestParam`, `@RequestBody`, …), runs `@Valid`, calls your method, and processes the return value.
+- **`HttpMessageConverter`** — converts between HTTP bodies and Java objects. The Jackson converter deserializes `@RequestBody` JSON into your record and serializes the returned DTO back to JSON.
+- **content negotiation** — choosing the response representation/converter from the request's `Accept` header (and the handler's producible types). JSON by default here; errors negotiate to `application/problem+json`.
+- **`@RestController`** — `@Controller` + `@ResponseBody`: a web controller whose return values are written straight to the response body (serialized by a message converter), not resolved to a view.
+- **`@ControllerAdvice` / `@RestControllerAdvice`** — a global, cross-controller bean of `@ExceptionHandler` (and other) methods. `@RestControllerAdvice` adds `@ResponseBody` so handlers' return values become the response body. Spring's `ExceptionHandlerExceptionResolver` picks the most specific handler for a thrown exception.
+- **`ResponseEntityExceptionHandler`** — the Spring base class for a `@ControllerAdvice` that already turns the framework's **built-in** MVC exceptions (validation, unreadable body, 404/405) into `ProblemDetail`. Extend it and override hooks (e.g. `handleMethodArgumentNotValid`) to enrich them.
+- **`ProblemDetail`** — `org.springframework.http.ProblemDetail` (Spring 6+): the object representing an RFC 9457 error. Returning it from an `@ExceptionHandler` sets the HTTP status from it and serializes `application/problem+json`.
+- **RFC 9457 / `application/problem+json`** — the standard "Problem Details for HTTP APIs" media type and body shape: `type` (problem-kind URI), `title`, `status`, `detail`, `instance`, plus arbitrary **extension members** (we add `errors`). Successor to RFC 7807.
+- **extension member** — a custom field added to a Problem Detail beyond the five standard ones, via `problem.setProperty("errors", map)`; RFC 9457 explicitly allows them.
+- **`MethodArgumentNotValidException`** — the exception thrown when `@Valid @RequestBody` binding fails Bean Validation; `ResponseEntityExceptionHandler` routes it to `handleMethodArgumentNotValid`, where we attach the per-field `errors` map.
+- **422 Unprocessable Entity** — the status for a **well-formed** request that can't be fulfilled (here, an overdraw), as opposed to **400 Bad Request** for a malformed/invalid request.
+- **`Filter` (`jakarta.servlet.Filter`)** — a **servlet-container-level** interceptor that wraps the entire `DispatcherServlet`; sees every request (even 404s with no handler) and has no handler context. A `Filter` bean is **auto-registered** by Boot.
+- **`OncePerRequestFilter`** — Spring's base `Filter` guaranteeing the body runs **exactly once per request** (dedupes async dispatches/forwards); you implement `doFilterInternal`.
+- **`HandlerInterceptor`** — a **Spring-MVC-level** interceptor that runs *around the matched handler* with three hooks: `preHandle` (before; `false` short-circuits), `postHandle` (after the handler, before commit), `afterCompletion` (always, even on exception). Must be **registered** via `WebMvcConfigurer.addInterceptors(...)`.
+- **`WebMvcConfigurer`** — the callback interface for customizing Spring MVC (e.g. `addInterceptors`, CORS, formatters); all methods are `default`, so you override only what you need.
+- **correlation id (`X-Request-Id`)** — a per-request identifier stamped on the response (reused from inbound or minted) so one request can be traced across logs/services; set by the `RequestIdFilter` and wired into tracing in Step 36.
+- **request attribute** — per-request state stored on the `HttpServletRequest` (`setAttribute`/`getAttribute`) rather than on a shared singleton component — the thread-safe place for an interceptor's start time.
+- **OpenAPI / Swagger UI** — OpenAPI is the machine-readable API spec; **Swagger UI** is a browsable HTML client rendered from it. springdoc serves the spec at `/v3/api-docs` (OpenAPI 3.1) and the UI at `/swagger-ui.html`.
+- **springdoc-openapi** — the maintained library that generates the OpenAPI spec + Swagger UI from your controllers/DTOs/validation annotations. The `-webmvc-ui` starter targets the servlet stack; **3.0.x** supports Boot 4 (2.8.x targets Boot 3). Replaces the dead **springfox**.
+- **`MockMvc` / `@WebMvcTest`** — a web-layer **slice** test: loads only the controller + advice + MVC infra (filters, interceptors, Jackson) with the service mocked (`@MockitoBean`); fast, no DB. Contrast with `@SpringBootTest(RANDOM_PORT)`, which boots the whole app and sends real HTTP.
