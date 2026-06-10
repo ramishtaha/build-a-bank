@@ -75,6 +75,9 @@ The SPA is a separate Node/npm project (not a Maven module). `package.json` carr
 | @testing-library/react | 16.3.2 | component/route tests |
 | jsdom | 25.0.1 | DOM for tests (note: localStorage shim in src/test/setup.ts) |
 | eslint / typescript-eslint | 9.39.4 / 8.61.0 | the SPA's quality gate (flat config) |
+| @tanstack/react-query | 5.101.0 | server state — cache, loading/error, invalidation (Step 30) |
+| react-hook-form | 7.78.0 | form state + submission (Step 30) |
+| zod / @hookform/resolvers | 3.25.76 / 3.10.0 | schema validation + the RHF resolver (Step 30; zod 3 line) |
 
 ## Reproducibility
 `./mvnw verify` twice yields the same result; `npm ci` in `frontend/` reproduces the locked SPA tree.

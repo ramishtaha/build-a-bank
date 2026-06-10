@@ -21,6 +21,19 @@ if (typeof globalThis.localStorage === 'undefined') {
   } as Storage;
 }
 
+// jsdom doesn't implement EventSource (Step 30 SSE). Install a no-op stub so components that mount the SSE hook
+// don't crash; tests that exercise streaming install their own controllable EventSource via vi.stubGlobal.
+if (typeof globalThis.EventSource === 'undefined') {
+  class NoopEventSource {
+    onopen: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    addEventListener(): void {}
+    removeEventListener(): void {}
+    close(): void {}
+  }
+  globalThis.EventSource = NoopEventSource as unknown as typeof EventSource;
+}
+
 afterEach(() => {
   cleanup();
   localStorage.clear();

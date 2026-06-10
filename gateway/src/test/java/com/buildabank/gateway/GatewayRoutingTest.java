@@ -57,6 +57,7 @@ class GatewayRoutingTest {
         registry.add("services.cif.uri", () -> stubUri);
         registry.add("services.demand-account.uri", () -> stubUri);
         registry.add("services.auth.uri", () -> stubUri);                                  // Step 29: auth route target
+        registry.add("services.notification.uri", () -> stubUri);                          // Step 30: notification (SSE) target
         registry.add("app.security.cors.allowed-origins", () -> "http://localhost:5173");  // Step 29: allowed dev origin
     }
 
@@ -91,6 +92,21 @@ class GatewayRoutingTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(receivedPath.get()).isEqualTo("/api/auth/me");                   // NOT stripped
+        assertThat(response.headers().firstValue("X-Gateway")).hasValue("build-a-bank");
+    }
+
+    @Test
+    void routesNotificationStreamStrippingPrefix() throws Exception {
+        // Step 30: the SPA's SSE client subscribes through the gateway; /notifications is stripped so the
+        // notification service receives its own /api/notifications/stream path.
+        HttpResponse<String> response = http.send(
+                HttpRequest.newBuilder(
+                                URI.create("http://localhost:" + gatewayPort + "/notifications/api/notifications/stream"))
+                        .GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(receivedPath.get()).isEqualTo("/api/notifications/stream");       // StripPrefix removed "/notifications"
         assertThat(response.headers().firstValue("X-Gateway")).hasValue("build-a-bank");
     }
 

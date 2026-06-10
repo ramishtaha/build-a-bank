@@ -33,6 +33,16 @@ spring:
                 - Path=/api/auth/**
               filters:
                 - AddResponseHeader=X-Gateway, build-a-bank
+            # Step 30: front the notification service too, so the SPA's SSE stream uses the same single origin
+            # (the gateway's CORS then covers it). /notifications/api/notifications/stream → notification's
+            # /api/notifications/stream. (SSE through a servlet gateway may buffer — noted in the lesson.)
+            - id: notification
+              uri: ${services.notification.uri:http://localhost:8084}
+              predicates:
+                - Path=/notifications/**
+              filters:
+                - StripPrefix=1                          # /notifications/api/notifications → /api/notifications
+                - AddResponseHeader=X-Gateway, build-a-bank
 
 server:
   port: 8080                                             # the gateway is the front door

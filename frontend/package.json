@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Build-a-Bank — React + TypeScript SPA (Phase F, Step 29). Talks to the gateway (single front door).",
+  "description": "Build-a-Bank — React + TypeScript SPA (Phase F). Talks to the gateway (single front door).",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -12,9 +12,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@hookform/resolvers": "^3.10.0",
+    "@tanstack/react-query": "^5.62.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-router-dom": "^7.6.0"
+    "react-hook-form": "^7.54.0",
+    "react-router-dom": "^7.6.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

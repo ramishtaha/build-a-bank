@@ -6,7 +6,7 @@
 MVNW ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 run-market-info play-22 run-onboarding play-23 play-24 play-25 play-26 play-27 play-28 mutation format play-29 frontend-install frontend-dev frontend-test frontend-build clean
+.PHONY: help doctor verify build test run-hello play-01 play-10 play-11 run-demand-account play-12 play-13 play-14 run-gateway play-15 run-auth play-16 play-17 play-18 play-19 run-notification play-20 play-21 run-market-info play-22 run-onboarding play-23 play-24 play-25 play-26 play-27 play-28 mutation format play-29 play-30 frontend-install frontend-dev frontend-test frontend-build clean
 
 help: ## Show this help
 	@echo "Build-a-Bank targets:"
@@ -159,6 +159,11 @@ play-29: ## Step 29: build, lint & test the React+TS SPA + gateway auth-route/CO
 	cd frontend && npm ci && npm run build && npm run lint && npm test
 	$(MVNW) -pl gateway -Dtest=GatewayRoutingTest test
 	@echo "Live: 'make frontend-dev' (SPA :5173) + run gateway:8080 & auth:8083 (APP_CORS_ALLOWED_ORIGINS=http://localhost:5173)"
+
+play-30: ## Step 30: SPA data/forms/SSE (TanStack Query + RHF/Zod + EventSource) + gateway notification route; NO Docker
+	cd frontend && npm ci && npm run build && npm run lint && npm test
+	$(MVNW) -pl gateway -Dtest=GatewayRoutingTest test
+	@echo "Live: run gateway+auth+demand-account(+Postgres/Redis)+notification(+Redpanda), 'make frontend-dev', sign in, transfer ACC-A->ACC-B"
 
 frontend-install: ## Install the SPA's dependencies from the lockfile (npm ci)
 	cd frontend && npm ci
