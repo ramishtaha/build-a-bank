@@ -1,34 +1,42 @@
 // frontend/src/pages/DashboardPage.tsx
-// Step 30 · the protected dashboard, now composing real features: pick an account, see its balance + recent
-// activity (TanStack Query), make a transfer (React Hook Form + Zod → mutation), and watch live notifications
-// (SSE). The account selector is a plain text input (default ACC-A) — there's no user↔account mapping yet.
+// Step 30 · the protected dashboard: pick an account, see balance + recent activity (TanStack Query), make a
+// transfer (RHF + Zod → mutation), and watch live notifications (SSE).
+// Step 31 · localized labels (react-i18next) + a language switcher; the account selector has an explicit label.
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { AccountPanel } from '../accounts/AccountPanel';
 import { TransferForm } from '../accounts/TransferForm';
 import { useAuth } from '../auth/AuthContext';
+import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
 import { LiveNotifications } from '../notifications/LiveNotifications';
 
 export function DashboardPage() {
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
   const [accountNumber, setAccountNumber] = useState('ACC-A');
 
   return (
     <main>
       <header>
-        <h1>Build-a-Bank 🏦</h1>
+        <h1>{t('dashboard.title')}</h1>
         <p>
-          Signed in as <strong>{user?.username ?? '…'}</strong>
+          {t('dashboard.signedInAs')} <strong>{user?.username ?? '…'}</strong>
           {user !== null && user.roles.length > 0 ? ` (${user.roles.join(', ')})` : ''}
         </p>
+        <LanguageSwitcher />
         <button type="button" onClick={logout}>
-          Sign out
+          {t('dashboard.signOut')}
         </button>
       </header>
 
       <label>
-        View account
-        <input value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} />
+        {t('dashboard.viewAccount')}
+        <input
+          aria-label={t('dashboard.viewAccount')}
+          value={accountNumber}
+          onChange={(event) => setAccountNumber(event.target.value)}
+        />
       </label>
 
       <AccountPanel accountNumber={accountNumber} />

@@ -1,13 +1,14 @@
 // frontend/src/accounts/AccountPanel.tsx
 // Step 30 · reads server state via TanStack Query and renders the three states every data view needs:
 // loading, error, and data. The balance and the ledger are independent queries (they load/refresh on their own).
+// Step 31 · the balance is formatted with Intl per the active locale (multi-currency, i18n-aware).
+import { useTranslation } from 'react-i18next';
+
+import { formatMoney } from '../i18n/format';
 import { useAccount, useEntries } from './queries';
 
-function money(amount: number, currency: string): string {
-  return `${currency} ${amount.toFixed(2)}`;
-}
-
 export function AccountPanel({ accountNumber }: { accountNumber: string }) {
+  const { i18n } = useTranslation();
   const account = useAccount(accountNumber);
   const entries = useEntries(accountNumber);
 
@@ -19,7 +20,7 @@ export function AccountPanel({ accountNumber }: { accountNumber: string }) {
       {account.isError && <p role="alert">Couldn’t load the account: {account.error?.message}</p>}
       {account.data && (
         <p>
-          Balance: <strong>{money(account.data.balance, account.data.currency)}</strong>
+          Balance: <strong>{formatMoney(account.data.balance, account.data.currency, i18n.language)}</strong>
         </p>
       )}
 

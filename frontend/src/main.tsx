@@ -8,6 +8,7 @@ import { BrowserRouter } from 'react-router-dom';
 
 import { App } from './App';
 import { AuthProvider } from './auth/AuthContext';
+import './i18n/i18n'; // Step 31 · initialize i18n before the app renders
 import './index.css';
 
 const rootElement = document.getElementById('root');

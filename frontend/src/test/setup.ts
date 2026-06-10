@@ -5,6 +5,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
+import i18n from '../i18n/i18n'; // Step 31 · the shared i18n instance (initialized on import; synchronous resources)
+
 // jsdom's localStorage getter throws for an opaque origin, so Vitest leaves the global `undefined`. The app
 // uses localStorage (AuthContext), so install a tiny in-memory Storage for tests — deterministic and isolated.
 if (typeof globalThis.localStorage === 'undefined') {
@@ -37,4 +39,5 @@ if (typeof globalThis.EventSource === 'undefined') {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  void i18n.changeLanguage('en'); // reset locale so a language-switch test doesn't leak into the next
 });

@@ -27,7 +27,7 @@ describe('AccountPanel', () => {
   it('renders the balance and recent activity once loaded', async () => {
     renderWithProviders(<AccountPanel accountNumber="ACC-A" />);
 
-    expect(await screen.findByText(/USD 200\.00/)).toBeInTheDocument();
+    expect(await screen.findByText(/\$200\.00/)).toBeInTheDocument(); // Intl en-US currency formatting
     expect(await screen.findByText(/pay/)).toBeInTheDocument();
     expect(api.getAccount).toHaveBeenCalledWith('jwt-123', 'ACC-A');
   });
