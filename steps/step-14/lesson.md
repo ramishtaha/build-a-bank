@@ -33,8 +33,8 @@
 | **Title** | API design — URI versioning & deprecation, public-API idempotency, pagination, and signed outbound webhooks |
 | **Step** | 14 of 67 · **Phase C — Web, APIs & Application Security** 🔵 |
 | **Effort** | ≈ 20 hours focused. Idempotency and webhook signing are the parts of "design a payments API" interviews that separate seniors from juniors — and you'll have built and tested both. Experienced API designers can skim to ~4h. |
-| **What you'll run this step** | **JVM + Maven** for build & tests; **🐳 Docker** for the Testcontainers Postgres. One command: `./mvnw -pl services/demand-account -am verify`. (Webhook delivery is tested with an in-process HTTP receiver — no external service needed.) |
-| **Buildable artifact** | `services/demand-account` gains a **`/api/v1`** namespace: an **idempotent** `POST /api/v1/transfers` (`Idempotency-Key` header + a key store) that emits a **signed webhook**, a **paginated** `GET /api/v1/accounts/{n}/entries`, and `Deprecation`/`Sunset`/`Link` headers on the old transfer. New: `IdempotencyRecord`, `IdempotentTransferService`, `WebhookSigner`/`WebhookSender`/`WebhookPublisher`, `PageResponse`. 13 → **25** tests. `step-14-start == step-13-end`. |
+| **What you'll run this step** | **JVM + Maven** for build & tests; **🐳 Docker** for the Testcontainers Postgres. One command: `./mvnw -pl services/demand-account -am verify`. (Webhook delivery is tested with an in-process HTTP receiver — no external service needed; the signing tests are pure JUnit and need no Docker at all.) |
+| **Buildable artifact** | `services/demand-account` gains a **`/api/v1`** namespace: an **idempotent** `POST /api/v1/transfers` (`Idempotency-Key` header + a key store) that emits a **signed webhook**, a **paginated** `GET /api/v1/accounts/{n}/entries`, and `Deprecation`/`Sunset`/`Link` headers on the old transfer. New: `IdempotencyRecord`, `IdempotentTransferService`, `WebhookSigner`/`WebhookSender`/`WebhookPublisher`, `PageResponse`, `LedgerEntryResponse`. 13 → **25** tests. `step-14-start == step-13-end`. |
 | **Verification tier** | 🔴 **Full** — changes a service *and* the idempotency/security path. `./mvnw verify` green + all **25** tests + idempotent retry proven (money moves once) + signed webhook delivered & verified + replay rejected + the **§12.3 mutation** (remove replay protection → test fails → revert) + clean-room + `smoke.sh`. |
 | **Depends on** | **[Step 13](../step-13/lesson.md)** (the MVC layer + ProblemDetail), **[Step 12](../step-12/lesson.md)** (transfers), **[Step 10](../step-10/lesson.md)** (unique constraints for the idempotency guard). **+ Docker.** |
 
@@ -65,6 +65,9 @@ If you can confidently do **all** of this, skim the 🧩 Pattern Spotlight and j
 
 # Just the idempotency / webhook proofs:
 ./mvnw -pl services/demand-account test -Dtest=IdempotencyTest,WebhookSignerTest,WebhookDeliveryTest
+
+# The webhook signing/delivery tests need NO Docker (pure JUnit + an in-process receiver):
+./mvnw -pl services/demand-account test -Dtest=WebhookSignerTest,WebhookDeliveryTest
 
 # One-shot proof your build matches the lesson (needs Docker):
 bash steps/step-14/smoke.sh
@@ -201,11 +204,55 @@ Two shared-state hazards here, both already in your toolkit. (1) **Concurrent du
 
 ## 📦 Your Starting Point
 
-You're at **`step-14-start`** (== `step-13-end`). demand-account has the transfer + ledger (Step 12) and ProblemDetail/OpenAPI (Step 13). We add a `/api/v1` namespace with idempotency, pagination, deprecation, and signed webhooks — **no new dependencies**.
+You're at **`step-14-start`** (== `step-13-end`). demand-account already has, from Steps 12–13:
+
+- **`TransferService`** — the safe (pessimistic-lock) `transfer(...)` and the double-entry ledger.
+- **`TransferController`** — `POST /api/accounts`, `GET /api/accounts/{n}`, `POST /api/transfers`.
+- The MVC layer from Step 13 — `GlobalExceptionHandler` (Problem Details), `RequestIdFilter` (the `X-Request-Id` header), `TimingInterceptor` (the `X-Timing-Enabled` header), and springdoc/Swagger UI.
+- **DTOs** `TransferRequest`, `TransferResponse`, `OpenAccountRequest`, `AccountResponse`.
+
+For reference, here are the two DTOs the v1 transfer reuses unchanged — note `@Positive`, which still rejects a negative amount with a 400 Problem Detail:
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/web/TransferRequest.java
+package com.buildabank.account.web;
+
+import java.math.BigDecimal;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+
+/** Request body for a money transfer. The amount must be strictly positive. */
+public record TransferRequest(
+        @NotBlank String from,
+        @NotBlank String to,
+        @NotNull @Positive BigDecimal amount,
+        String description) {
+}
+```
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/web/TransferResponse.java
+package com.buildabank.account.web;
+
+import java.util.UUID;
+
+/** Returned after a successful transfer — the shared transaction id of the two ledger legs. */
+public record TransferResponse(UUID transactionId) {
+}
+```
+
+What's green vs. what you'll build: the start tag **builds and passes 13 tests**, but there is **no versioning, no idempotency, no pagination, and no webhooks**. We add a `/api/v1` namespace with all four — **no new dependencies**.
 
 Confirm the start builds:
 ```bash
 ./mvnw -q -pl services/demand-account -am verify   # green, 13 tests, from Step 13
+```
+✅ **Expected output (tail):**
+```
+[INFO] Tests run: 13, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
 ```
 
 ## 🛠️ Let's Build It — Step by Step
@@ -213,86 +260,263 @@ Confirm the start builds:
 ```mermaid
 flowchart TB
     a["0 · V2 migration + IdempotencyRecord (key store)"] --> b["1 · IdempotentTransferService (lookup-or-execute)"]
-    b --> c["2 · pagination: Pageable repo + PageResponse envelope"]
-    c --> d["3 · WebhookSigner (HMAC + replay window)"]
-    d --> e["4 · WebhookSender (retry) + WebhookPublisher (config-gated)"]
-    e --> f["5 · controller: /api/v1 (idempotent + paginated) + deprecate old"]
-    f --> g["6 · tests (idempotency, signing, delivery, pagination, deprecation)"]
+    b --> c["2 · pagination plumbing: paged repo finder + TransferService.entriesOf"]
+    c --> d["3 · PageResponse + LedgerEntryResponse (the envelope we own)"]
+    d --> e["4 · WebhookSigner (HMAC + replay window) + its unit test"]
+    e --> f["5 · WebhookSender (bounded retries)"]
+    f --> g["6 · WebhookPublisher (builds the event, config-gated)"]
+    g --> h["7 · controller: /api/v1 (idempotent + paginated) + deprecate old"]
+    h --> i["8 · tests (idempotency, delivery, slice & live-HTTP) + ADR"]
 ```
 
 🌳 **Files we'll touch** (under `services/demand-account/`):
 ```
-src/main/resources/db/migration/V2__idempotency_keys.sql
+src/main/resources/db/migration/V2__idempotency_keys.sql              (new)
 src/main/java/com/buildabank/account/
-├── domain/{IdempotencyRecord, IdempotencyRecordRepository}.java   + LedgerEntryRepository (paged finder)
-├── service/IdempotentTransferService.java                         + TransferService.entriesOf(...)
-├── webhook/{WebhookSigner, WebhookSender, WebhookPublisher}.java
-└── web/{TransferController (v1 + deprecation), PageResponse, LedgerEntryResponse}.java
-src/test/java/com/buildabank/account/  (IdempotencyTest, WebhookSignerTest, WebhookDeliveryTest, + updates)
+├── domain/IdempotencyRecord.java                                     (new)
+├── domain/IdempotencyRecordRepository.java                           (new)
+├── domain/LedgerEntryRepository.java                                 (edit — paged finder)
+├── service/IdempotentTransferService.java                            (new)
+├── service/TransferService.java                                      (edit — entriesOf)
+├── webhook/WebhookSigner.java                                        (new)
+├── webhook/WebhookSender.java                                        (new)
+├── webhook/WebhookPublisher.java                                     (new)
+├── web/PageResponse.java                                             (new)
+├── web/LedgerEntryResponse.java                                      (new)
+└── web/TransferController.java                                       (edit — v1 + deprecation)
+src/test/java/com/buildabank/account/
+├── service/IdempotencyTest.java                                      (new)
+├── webhook/WebhookSignerTest.java                                    (new)
+├── webhook/WebhookDeliveryTest.java                                  (new)
+├── web/TransferControllerTest.java                                   (edit — mocks + 2 tests)
+└── DemandAccountIntegrationTest.java                                 (edit — v1 over HTTP)
 steps/step-14/{requests.http, smoke.sh} · adr/0006-api-versioning-and-idempotency.md
 ```
 
+> 🧭 **You are here:** we move outward from the database (the key store) through the service and webhook layers and finish at the controller and tests — so each layer is green before the one that depends on it.
+
 ---
 
-### Sub-step 0 of 6 — Idempotency key store 🧭 *(you are here: **key store** → idempotent service → pagination → signer → sender → controller → tests)*
+### Sub-step 0 of 8 — The idempotency key store 🧭 *(you are here: **key store** → idempotent service → pagination plumbing → envelopes → signer → sender → publisher → controller → tests)*
 
-🎯 **Goal:** a table + entity to remember `Idempotency-Key → transactionId`.
+🎯 **Goal:** give the database a place to remember `Idempotency-Key → transactionId`, so a retry can return the original result instead of moving money again. The PRIMARY KEY on the key is what makes this concurrency-safe.
 
-📁 **Location:** `V2__idempotency_keys.sql` + `domain/IdempotencyRecord.java` + its repository.
+📁 **Location:** new file → `services/demand-account/src/main/resources/db/migration/V2__idempotency_keys.sql`
 
-⌨️ **Code** (migration):
+⌨️ **Code:**
 ```sql
--- V2__idempotency_keys.sql
+-- services/demand-account/src/main/resources/db/migration/V2__idempotency_keys.sql
+-- Public-API idempotency (Step 14): a store of Idempotency-Key -> the result it produced, so a retried
+-- request returns the original result instead of moving money twice. The PRIMARY KEY on the key gives us
+-- the concurrency guard: two racing requests with the same key can't both insert, so only one transfer commits.
+
 create table idempotency_key (
-    idempotency_key varchar(200) primary key,        -- the PK is the concurrency guard
+    idempotency_key varchar(200) primary key,
     transaction_id  uuid        not null,
     created_at      timestamp(6) with time zone not null
 );
 ```
-and the entity (key as the natural `@Id`):
-```java
-@Entity @Table(name = "idempotency_key")
-public class IdempotencyRecord {
-    @Id @Column(name = "idempotency_key", updatable = false) private String key;
-    @Column(name = "transaction_id", nullable = false, updatable = false) private UUID transactionId;
-    @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
-    // + no-arg ctor, all-args ctor, getters
-}
+
+🔍 **Line-by-line:**
+- `V2__` — Flyway's naming convention: `V<version>__<description>.sql`. The **double underscore** separates the version from the description; Flyway runs `V1` then `V2` in order and records each in its `flyway_schema_history` table so it never re-runs them.
+- `idempotency_key varchar(200) primary key` — the **client-supplied key string** is the table's primary key. A PK is both an index (fast lookup) **and** a uniqueness constraint (no two rows share a key). That dual role is the whole trick: the uniqueness is our concurrency guard.
+- `transaction_id uuid not null` — the result we're remembering: the `transactionId` the first request produced. `uuid` is Postgres's native 128-bit UUID type. `not null` because there's no meaningful record without a result.
+- `created_at timestamp(6) with time zone not null` — when the key was first stored, microsecond precision (`(6)`), **with time zone** so it round-trips as an instant in UTC (the money-and-time-correctness rule from Step 12). Production uses this for a TTL/cleanup.
+
+💭 **Under the hood:** the module runs `ddl-auto=validate`, meaning **Flyway owns the schema** and Hibernate only *checks* that its entity mappings match the existing tables — it never creates or alters them. So this migration is the single source of truth for the table's shape; the entity (next) must line up with it exactly or the context fails to start with a schema-validation error.
+
+🔮 **Predict:** after this migration is added, how many migrations will Flyway report applying on a fresh database? <details><summary>answer</summary>Two — `V1` (the accounts + ledger tables from Step 12) then `V2` (this one). The Verification Log's Testcontainers run shows "Flyway applies V1 + V2".</details>
+
+▶️ **Run & See:** the migration is exercised when the module's `@SpringBootTest` boots against a Testcontainers Postgres (sub-step 8). At Flyway-migrate time you'll see lines like:
+```
+Migrating schema "public" to version "1 - accounts ledger"
+Migrating schema "public" to version "2 - idempotency keys"
+Successfully applied 2 migrations to schema "public"
 ```
 
-🔍 **Line-by-line:** the **`primary key`** on `idempotency_key` is doing double duty — it's the lookup key *and* the uniqueness constraint that lets only one of two racing duplicates commit. The entity uses the client-supplied string as its `@Id` (a natural key, not generated).
+✋ **Checkpoint:** the file exists under `db/migration/`. Nothing to compile yet — the entity in the next sub-step references it.
 
-💭 **Under the hood:** `ddl-auto=validate` means Flyway owns the table; Hibernate just checks the mapping matches. Flyway runs `V1` then `V2` on startup.
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/resources/db/migration/V2__idempotency_keys.sql
+git commit -m "feat(demand-account): idempotency key store (V2 migration)"
+```
 
-✋ **Checkpoint:** `./mvnw -q -pl services/demand-account compile` succeeds; `flyway` will report 2 migrations.
-
-💾 **Commit:** `git add services/demand-account/src/main/resources/db/migration/V2__idempotency_keys.sql services/demand-account/src/main/java/com/buildabank/account/domain/Idempotency* && git commit -m "feat(demand-account): idempotency key store (V2 + entity)"`
-
-⚠️ **Pitfall:** keys grow forever — production needs a TTL/cleanup. Noted in ADR-0006.
+⚠️ **Pitfall:** idempotency keys grow forever — a busy API accumulates millions. Production needs a **TTL/cleanup job** (delete keys older than ~24h). We deliberately omit it here and note it in ADR-0006; the 🏋️ challenges add it.
 
 ---
 
-### Sub-step 1 of 6 — `IdempotentTransferService` 🧭 *(key store ✅ → **idempotent service** → …)*
+Now the JPA entity that maps to that table.
 
-🎯 **Goal:** lookup-or-execute-and-store, in one transaction.
-
-📁 **Location:** `service/IdempotentTransferService.java`
+📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/domain/IdempotencyRecord.java`
 
 ⌨️ **Code:**
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/domain/IdempotencyRecord.java
+package com.buildabank.account.domain;
+
+import java.time.Instant;
+import java.util.UUID;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+/**
+ * Remembers that a given {@code Idempotency-Key} already produced a transfer, and which one. A retried
+ * request with the same key returns the stored {@code transactionId} instead of moving money again. The key
+ * is the natural {@code @Id} (a client-supplied string), and its PRIMARY KEY uniqueness is the concurrency
+ * guard — two racing requests with the same key can't both insert, so only one transfer commits.
+ */
+@Entity
+@Table(name = "idempotency_key")
+public class IdempotencyRecord {
+
+    @Id
+    @Column(name = "idempotency_key", updatable = false)
+    private String key;
+
+    @Column(name = "transaction_id", nullable = false, updatable = false)
+    private UUID transactionId;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    protected IdempotencyRecord() {
+    }
+
+    public IdempotencyRecord(String key, UUID transactionId, Instant createdAt) {
+        this.key = key;
+        this.transactionId = transactionId;
+        this.createdAt = createdAt;
+    }
+
+    public String getKey() {
+        return key;
+    }
+
+    public UUID getTransactionId() {
+        return transactionId;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+}
+```
+
+🔍 **Line-by-line:**
+- `@Entity` — marks this class a JPA-managed entity; Hibernate maps instances to rows. `@Table(name = "idempotency_key")` points it at our migration's table (the class name differs from the table name, so we're explicit).
+- `@Id` on `key` — declares the **identifier**. Crucially, this is a **natural key** (a meaningful, client-supplied value) rather than a generated surrogate (`@GeneratedValue`). The client owns the key; we don't mint one.
+- `@Column(name = "idempotency_key", updatable = false)` — maps the field to the column and tells Hibernate to **never** include it in `UPDATE` statements (a key, once set, is immutable). `updatable = false` appears on all three fields for the same reason: an idempotency record is write-once.
+- `private UUID transactionId;` — the stored result. Hibernate maps `java.util.UUID` ↔ the Postgres `uuid` column directly.
+- `private Instant createdAt;` — `java.time.Instant` is a point on the UTC timeline; it maps to `timestamp with time zone`. (Money in `BigDecimal`, time in `Instant` — the Step-12 correctness rules.)
+- `protected IdempotencyRecord()` — the **no-arg constructor JPA requires** to instantiate the entity via reflection when loading a row. It's `protected` (not `public`) so application code is nudged toward the real constructor; JPA can still reach it.
+- `public IdempotencyRecord(String, UUID, Instant)` — the constructor *we* call when storing a new record. Three plain getters expose the fields read-only (no setters → the entity is effectively immutable after construction).
+
+💭 **Under the hood:** because `@Id` is assigned by us (not generated), Hibernate uses the presence of the id to decide insert-vs-update on `save(...)`. For a brand-new key the row doesn't exist, so `save` issues an `INSERT`; if that key already exists, the `INSERT` hits the PRIMARY KEY and throws a constraint violation — which is exactly the behavior we *want* under a concurrent duplicate (one inserts, the other's transaction rolls back).
+
+🔮 **Predict:** if the entity declared `created_at` as a column but the migration forgot it, what happens at startup? <details><summary>answer</summary>The context fails to start: `ddl-auto=validate` compares the mapping to the live schema and throws a `SchemaManagementException` ("missing column"). Validate catches drift early.</details>
+
+✋ **Checkpoint:** `./mvnw -q -pl services/demand-account compile` succeeds (the entity compiles; the repository comes next).
+
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/java/com/buildabank/account/domain/IdempotencyRecord.java
+git commit -m "feat(demand-account): IdempotencyRecord entity (natural key = idempotency key)"
+```
+
+⚠️ **Pitfall:** if you used `@GeneratedValue` here out of habit, Hibernate would try to generate the id and ignore the client's key — defeating the whole point. The key **is** the id; assign it yourself.
+
+---
+
+Finally, the repository — one line.
+
+📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/domain/IdempotencyRecordRepository.java`
+
+⌨️ **Code:**
+```java
+// services/demand-account/src/main/java/com/buildabank/account/domain/IdempotencyRecordRepository.java
+package com.buildabank.account.domain;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRecord, String> {
+}
+```
+
+🔍 **Line-by-line:**
+- `extends JpaRepository<IdempotencyRecord, String>` — Spring Data generates the implementation at runtime. The two type parameters are **`<EntityType, IdType>`**: the entity is `IdempotencyRecord`, and its `@Id` is a `String` (the key). That gives us `findById(String)`, `save(...)`, `deleteAll()`, etc. for free — no method bodies to write.
+
+💭 **Under the hood:** at startup Spring Data scans for `Repository` sub-interfaces and creates a **dynamic proxy** backed by `SimpleJpaRepository`. `findById` becomes `EntityManager.find(...)` (a primary-key lookup hitting the 1st-level cache or a `SELECT … WHERE idempotency_key = ?`); `save` becomes `persist`/`merge`.
+
+✋ **Checkpoint:** compiles. You now have a key store: a table, an entity, and a repository.
+
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/java/com/buildabank/account/domain/IdempotencyRecordRepository.java
+git commit -m "feat(demand-account): IdempotencyRecord repository"
+```
+
+⚠️ **Pitfall:** the id type parameter must match the `@Id` field's type exactly — `JpaRepository<IdempotencyRecord, Long>` here would compile but fail at runtime the moment you call `findById("KEY-1")`. It's `String`.
+
+---
+
+### Sub-step 1 of 8 — `IdempotentTransferService` 🧭 *(key store ✅ → **idempotent service** → pagination plumbing → …)*
+
+🎯 **Goal:** wrap the existing `TransferService.transfer` in a *lookup-or-execute-and-store* that runs in one transaction — the heart of "safe to retry".
+
+📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/service/IdempotentTransferService.java`
+
+⌨️ **Code:**
+```java
+// services/demand-account/src/main/java/com/buildabank/account/service/IdempotentTransferService.java
+package com.buildabank.account.service;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.buildabank.account.domain.IdempotencyRecord;
+import com.buildabank.account.domain.IdempotencyRecordRepository;
+
+/**
+ * Public-API <strong>idempotency</strong> for transfers. A client retrying a transfer (e.g. after a network
+ * timeout) sends the same {@code Idempotency-Key}; this service returns the original result instead of
+ * moving money a second time — the property that makes money-moving APIs safe to retry.
+ *
+ * <p>The whole thing runs in one transaction with {@link TransferService#transfer} (REQUIRED propagation),
+ * so the key row and the transfer commit atomically. The key's PRIMARY-KEY uniqueness is the concurrency
+ * guard: if two racing requests with the same key both miss the lookup and both transfer, only one can
+ * commit the key row — the other's commit fails the unique constraint and the whole transaction (including
+ * its transfer) rolls back. For the common case — a <em>sequential</em> retry — the second request finds the
+ * stored record and returns its {@code transactionId} without re-executing.
+ */
 @Service
 public class IdempotentTransferService {
+
     private final TransferService transfers;
     private final IdempotencyRecordRepository keys;
-    // ctor injection
+
+    public IdempotentTransferService(TransferService transfers, IdempotencyRecordRepository keys) {
+        this.transfers = transfers;
+        this.keys = keys;
+    }
 
     @Transactional
     public UUID transfer(String idempotencyKey, String from, String to, BigDecimal amount, String description) {
-        if (idempotencyKey == null || idempotencyKey.isBlank())
-            return transfers.transfer(from, to, amount, description);          // no idempotency requested
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return transfers.transfer(from, to, amount, description);   // no idempotency requested
+        }
         Optional<IdempotencyRecord> existing = keys.findById(idempotencyKey);
-        if (existing.isPresent())
-            return existing.get().getTransactionId();                          // idempotent hit — do NOT re-execute
+        if (existing.isPresent()) {
+            return existing.get().getTransactionId();                  // idempotent hit — do NOT re-execute
+        }
         UUID transactionId = transfers.transfer(from, to, amount, description);
         keys.save(new IdempotencyRecord(idempotencyKey, transactionId, Instant.now()));
         return transactionId;
@@ -300,233 +524,1013 @@ public class IdempotentTransferService {
 }
 ```
 
-🔍 **Line-by-line:** `@Transactional` joins the transfer's transaction (REQUIRED), so the key row + the transfer commit together. A present key → return the stored `transactionId` (no second transfer). A new key → transfer, then store the mapping. A blank/absent key → plain transfer (idempotency is opt-in per request).
+🔍 **Line-by-line:**
+- `@Service` — a stereotype that registers this class as a Spring-managed singleton bean; it's a `@Component` with semantic intent ("a service-layer collaborator").
+- **constructor injection** of `TransferService` and `IdempotencyRecordRepository` — Spring sees the single constructor and supplies both beans. Holding them in `final` fields makes the service immutable and safe to share across request threads (the thread-safety rule).
+- `@Transactional` on `transfer(...)` — opens a database transaction (default propagation `REQUIRED`). Because the inner `transfers.transfer(...)` is also `@Transactional(REQUIRED)`, it **joins this same transaction** — so the key-insert and the two ledger legs all commit or all roll back together.
+- `if (idempotencyKey == null || idempotencyKey.isBlank())` — idempotency is **opt-in per request**. No key → fall straight through to a plain transfer (no dedup). `isBlank()` (Java 11+) treats `""` and whitespace-only as "no key".
+- `Optional<IdempotencyRecord> existing = keys.findById(idempotencyKey)` — the **lookup**. `findById` returns an `Optional` (present if the key was seen before).
+- `if (existing.isPresent()) return existing.get().getTransactionId();` — the **idempotent hit**: a retry. Return the stored `transactionId` and — critically — **do not call `transfers.transfer` again**. This is the line that makes the retry move money zero additional times.
+- `UUID transactionId = transfers.transfer(...)` then `keys.save(new IdempotencyRecord(...))` — the **first time**: execute the transfer, then store `key → transactionId` with `Instant.now()` as the timestamp. Both happen inside the one transaction.
 
-💭 **Under the hood:** for a **sequential** retry the lookup hits and short-circuits. For a **concurrent** duplicate, both miss and transfer, but the PK lets only one commit the key — the other rolls back (no double-spend). The DB is the arbiter (Step 12).
+💭 **Under the hood — two paths:**
+- **Sequential retry** (the 99% case): client times out, retries. The second request's `findById` hits the row the first committed → returns the stored id, no re-execution. One transfer total.
+- **Concurrent duplicate** (two requests with the same key arrive at once): both `findById` miss (neither has committed yet), both call `transfers.transfer`, both try to `save` the key. They're in **separate** transactions, so the database serializes the commits: the first to commit the key row wins; the second's `INSERT` violates the PRIMARY KEY → `DataIntegrityViolationException` → its **whole transaction rolls back**, undoing its transfer too. Exactly one transfer commits. The DB is the arbiter — same principle as Step 12's `SELECT … FOR UPDATE`.
 
-🔮 **Predict:** two POSTs of $50 with the same key on a $200 account — final balance? <details><summary>answer</summary>$150 — the money moves once; the retry returns the stored transactionId. (`IdempotencyTest` proves it.)</details>
+🔮 **Predict:** two POSTs of $50 with the **same** key against a $200 account — what's the final balance of the sender, and do the two calls return the same `transactionId`? <details><summary>answer</summary>$150, and **yes**, the same id. The money moves once; the retry returns the stored id. `IdempotencyTest.sameKeyReturnsTheSameResult_andMovesMoneyOnce` proves both.</details>
 
-✋ **Checkpoint:** compiles.
+✋ **Checkpoint:** `./mvnw -q -pl services/demand-account compile` succeeds.
 
-💾 **Commit:** `git add services/demand-account/src/main/java/com/buildabank/account/service/IdempotentTransferService.java && git commit -m "feat(demand-account): idempotent transfer (Idempotency-Key)"`
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/java/com/buildabank/account/service/IdempotentTransferService.java
+git commit -m "feat(demand-account): idempotent transfer (Idempotency-Key lookup-or-execute)"
+```
 
-⚠️ **Pitfall:** re-emitting the webhook on an idempotent *hit* is fine (at-least-once → receivers dedupe), but executing the *transfer* twice is not — the lookup must short-circuit before `transfers.transfer`.
+⚠️ **Pitfall:** the short-circuit must happen **before** `transfers.transfer` is called. If you reorder it (execute, then check the key), the retry executes a second transfer before the lookup ever runs — a double-spend. The `return existing.get()…` line is load-bearing.
 
 ---
 
-### Sub-step 2 of 6 — Pagination 🧭 *(… → **pagination** → …)*
+### Sub-step 2 of 8 — Pagination plumbing 🧭 *(idempotent service ✅ → **pagination plumbing** → envelopes → …)*
 
-🎯 **Goal:** page an account's ledger entries with a stable envelope.
+🎯 **Goal:** add a *paged* finder to the ledger repository and a service method that maps an account number to its paged entries — so we can return one page of a long ledger instead of the whole thing.
 
-📁 **Location:** `LedgerEntryRepository` (paged finder), `TransferService.entriesOf(...)`, `web/PageResponse.java`, `web/LedgerEntryResponse.java`.
+📁 **Location:** edit → `services/demand-account/src/main/java/com/buildabank/account/domain/LedgerEntryRepository.java`
 
-⌨️ **Code** (the key pieces):
+⌨️ **Code (before → after diff):**
+```diff
+  import java.math.BigDecimal;
+  import java.util.List;
+  import java.util.UUID;
+
++ import org.springframework.data.domain.Page;
++ import org.springframework.data.domain.Pageable;
+  import org.springframework.data.jpa.repository.JpaRepository;
+  import org.springframework.data.jpa.repository.Query;
+
+  public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> {
+
+      List<LedgerEntry> findByAccountIdOrderByCreatedAtAsc(Long accountId);
+
++     /** A page of an account's entries — Spring Data applies the {@link Pageable}'s page/size/sort to the SQL. */
++     Page<LedgerEntry> findByAccountId(Long accountId, Pageable pageable);
++
+      List<LedgerEntry> findByTransactionId(UUID transactionId);
+```
+
+🔍 **Line-by-line:**
+- `import org.springframework.data.domain.Page;` / `Pageable;` — Spring Data's two pagination types. **`Pageable`** is the *request* (which page, how big, what sort); **`Page<T>`** is the *result* (the slice + metadata: total elements, total pages, current number).
+- `Page<LedgerEntry> findByAccountId(Long accountId, Pageable pageable)` — a **derived query method**: Spring Data parses the name `findByAccountId` into `WHERE account_id = ?`, and because the return type is `Page<>` and the method takes a `Pageable`, it appends the page's `LIMIT`/`OFFSET`/`ORDER BY` **and** runs a second `COUNT(*)` query so the `Page` can report `totalElements`.
+
+💭 **Under the hood:** one logical call issues **two** SQL statements — the windowed `SELECT … LIMIT ? OFFSET ?` for the rows, and `SELECT COUNT(*) … WHERE account_id = ?` for the total. That count is what lets the client know there are, say, "47 entries across 3 pages" without fetching all 47. (For very large tables the count itself gets expensive — that's the cursor-pagination trade-off in 🚀 Go Deeper.)
+
+🔮 **Predict:** with `size=2` against an account that has 4 entries, what will `Page.getTotalPages()` return? <details><summary>answer</summary>2 (`ceil(4 / 2)`). `getTotalElements()` is 4, `getContent().size()` is 2.</details>
+
+✋ **Checkpoint:** compiles (the method has no body — Spring Data implements it).
+
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/java/com/buildabank/account/domain/LedgerEntryRepository.java
+git commit -m "feat(demand-account): paged ledger-entry finder (Page + Pageable)"
+```
+
+⚠️ **Pitfall:** a derived `Page<>` method **must** take a `Pageable` parameter; declaring `Page<LedgerEntry> findByAccountId(Long)` (no `Pageable`) fails at startup — Spring Data can't build a page without a page request.
+
+---
+
+Now the service method that exposes it.
+
+📁 **Location:** edit → `services/demand-account/src/main/java/com/buildabank/account/service/TransferService.java`
+
+⌨️ **Code (before → after diff):**
+```diff
+  import java.math.BigDecimal;
+  import java.time.Instant;
+  import java.util.UUID;
+
++ import org.springframework.data.domain.Page;
++ import org.springframework.data.domain.Pageable;
+  import org.springframework.stereotype.Service;
+  import org.springframework.transaction.annotation.Transactional;
+```
+```diff
++     /** A page of an account's ledger entries (Step 14 — pagination/sorting via the {@link Pageable}). */
++     @Transactional(readOnly = true)
++     public Page<LedgerEntry> entriesOf(String accountNumber, Pageable pageable) {
++         Account account = accounts.findByAccountNumber(accountNumber)
++                 .orElseThrow(() -> new IllegalArgumentException("no such account: " + accountNumber));
++         return ledger.findByAccountId(account.getId(), pageable);
++     }
++
+      @Transactional(readOnly = true)
+      public BigDecimal balanceOf(String accountNumber) {
+```
+
+🔍 **Line-by-line:**
+- `@Transactional(readOnly = true)` — a read-only transaction. `readOnly` is a hint: Hibernate skips dirty-checking (no flush, no `UPDATE` detection) and the JDBC driver/DB may optimize, since we promise not to write. Right for a query.
+- `accounts.findByAccountNumber(accountNumber).orElseThrow(...)` — the API addresses accounts by their **business number** (`"ACC-A"`), but the ledger is keyed by the account's **database id** (`Long`). So we resolve number → account first, throwing `IllegalArgumentException` (which the Step-13 advice maps to a clean error) if it doesn't exist.
+- `return ledger.findByAccountId(account.getId(), pageable)` — hand the resolved id and the caller's `Pageable` to the repository; return the `Page<LedgerEntry>` straight up. The controller (sub-step 7) maps it into the DTO envelope.
+
+💭 **Under the hood:** the `Pageable` arrives already built by Spring MVC's argument resolver (sub-step 7) — this method is agnostic to *how* the page was requested; it just threads it through to the query. Separating "resolve the account" (service) from "shape the response" (controller) keeps the service reusable.
+
+✋ **Checkpoint:** `./mvnw -q -pl services/demand-account compile` succeeds.
+
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/java/com/buildabank/account/service/TransferService.java
+git commit -m "feat(demand-account): TransferService.entriesOf paged by account number"
+```
+
+⚠️ **Pitfall:** returning the `Page<LedgerEntry>` (entities) all the way out to JSON would leak the JPA shape and risk lazy-loading errors. We stop the entity at the service boundary and map to a DTO in the controller — next.
+
+---
+
+### Sub-step 3 of 8 — The envelopes we own: `PageResponse` + `LedgerEntryResponse` 🧭 *(pagination plumbing ✅ → **envelopes** → signer → …)*
+
+🎯 **Goal:** define a **stable pagination envelope** the API owns (never Spring's `Page` JSON), plus the per-entry DTO it carries.
+
+📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/web/PageResponse.java`
+
+⌨️ **Code:**
 ```java
-// repository
-Page<LedgerEntry> findByAccountId(Long accountId, Pageable pageable);
+// services/demand-account/src/main/java/com/buildabank/account/web/PageResponse.java
+package com.buildabank.account.web;
 
-// PageResponse — a stable envelope we own (never serialize Spring's Page)
-public record PageResponse<T>(List<T> content, int page, int size, long totalElements, int totalPages) {
-    public static <E, T> PageResponse<T> of(Page<E> page, Function<E, T> mapper) {
-        return new PageResponse<>(page.getContent().stream().map(mapper).toList(),
+import java.util.List;
+
+import org.springframework.data.domain.Page;
+
+/**
+ * A stable, explicit pagination envelope. We do NOT serialize Spring Data's {@code Page} directly: its JSON
+ * shape is an internal implementation detail (Spring even warns against exposing it), and a public API
+ * should own its contract. This record is that contract: the items plus the page metadata clients need.
+ */
+public record PageResponse<T>(
+        List<T> content, int page, int size, long totalElements, int totalPages) {
+
+    /** Map a Spring Data {@link Page} of entities into a DTO page via {@code mapper}. */
+    public static <E, T> PageResponse<T> of(Page<E> page, java.util.function.Function<E, T> mapper) {
+        return new PageResponse<>(
+                page.getContent().stream().map(mapper).toList(),
                 page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 }
 ```
 
-🔍 **Line-by-line:** `Page<LedgerEntry> findByAccountId(Long, Pageable)` — Spring Data runs a `LIMIT/OFFSET` + `COUNT`. `PageResponse.of(page, mapper)` maps entities → DTOs and copies the page metadata. We **never** return the raw `Page` (its JSON shape is an unstable internal detail).
+🔍 **Line-by-line:**
+- `public record PageResponse<T>(...)` — a **generic record**. A `record` auto-generates the constructor, accessors (`content()`, `page()`, …), `equals`/`hashCode`/`toString`. The five components *are* the JSON contract: `content` (the page's items), `page` (zero-based page number), `size`, `totalElements` (across all pages), `totalPages`. Stable, documented, ours.
+- `<T>` — the element type is generic, so this one envelope works for any DTO (`PageResponse<LedgerEntryResponse>` here, `PageResponse<CustomerResponse>` elsewhere).
+- `public static <E, T> PageResponse<T> of(Page<E> page, Function<E, T> mapper)` — a **factory** with **two** type parameters: `E` the entity type in the incoming `Page`, `T` the DTO type out. It takes the Spring `Page` and a mapping function.
+- `page.getContent().stream().map(mapper).toList()` — convert each entity to its DTO via the `mapper` (e.g. `LedgerEntryResponse::from`), collecting to an immutable `List` (`Stream.toList()`, Java 16+).
+- `page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages()` — copy the metadata off the Spring `Page` into our fields. We read from `Page` internally but never *expose* it.
 
-💭 **Under the hood:** the controller takes a `Pageable` parameter bound from `?page=&size=&sort=field,dir` by Spring Data's resolver (auto-configured in the full app context).
+💭 **Under the hood:** Spring Data's `PageImpl` is serializable, so returning it "works" — but its JSON shape has changed across Spring versions (and Boot 3.3+ logs a warning when you serialize a `Page` from a controller, precisely to discourage it). By mapping into our own record, the wire contract is decoupled from the library version. This is the same DTO discipline as Step 13's `CustomerResponse`/`AccountResponse`.
 
-✋ **Checkpoint:** compiles; the entries endpoint (sub-step 5) will return a `PageResponse`.
+🔮 **Predict:** if we returned the raw `Page<LedgerEntry>` instead, what's the risk beyond the version-warning? <details><summary>answer</summary>It serializes the **JPA entities** too — leaking DB columns and risking lazy-loading serialization errors — and exposes `pageable`/`sort` internals clients shouldn't depend on.</details>
 
-💾 **Commit:** `git add services/demand-account/src/main/java/com/buildabank/account/web/PageResponse.java services/demand-account/src/main/java/com/buildabank/account/web/LedgerEntryResponse.java && git commit -m "feat(demand-account): pagination envelope + paged ledger finder"`
+✋ **Checkpoint:** compiles. (The per-entry DTO is next.)
 
-⚠️ **Pitfall:** exposing `Page` directly works but its JSON can change between Spring versions (Spring even logs a warning). Own your envelope.
-
----
-
-### Sub-step 3 of 6 — `WebhookSigner` (HMAC + replay window) 🧭 *(… → **signer** → …)*
-
-🎯 **Goal:** sign and verify webhooks; reject tampering and replays.
-
-📁 **Location:** `webhook/WebhookSigner.java`
-
-⌨️ **Code** (the heart):
-```java
-public String sign(String secret, long timestampEpochSeconds, String body) {
-    Mac mac = Mac.getInstance("HmacSHA256");
-    mac.init(new SecretKeySpec(secret.getBytes(UTF_8), "HmacSHA256"));
-    return toHex(mac.doFinal((timestampEpochSeconds + "." + body).getBytes(UTF_8)));
-}
-
-public boolean verify(String secret, long ts, String body, String providedSignature, long now, long toleranceSeconds) {
-    if (Math.abs(now - ts) > toleranceSeconds) return false;        // replay protection
-    return MessageDigest.isEqual(                                    // constant-time compare
-            sign(secret, ts, body).getBytes(UTF_8), providedSignature.getBytes(UTF_8));
-}
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/java/com/buildabank/account/web/PageResponse.java
+git commit -m "feat(demand-account): stable PageResponse envelope (never expose Spring Page)"
 ```
 
-🔍 **Line-by-line:** `Mac.getInstance("HmacSHA256")` + a `SecretKeySpec` keyed by the secret → an HMAC over `"<ts>.<body>"`. `verify` first checks the timestamp is within tolerance (**replay protection**), then recomputes and compares in **constant time** (`MessageDigest.isEqual`) — never `String.equals`, which short-circuits and leaks timing.
-
-💭 **Under the hood:** HMAC is a keyed hash — without the secret you can't produce a matching signature for a chosen `(ts, body)`. Binding the timestamp into the signed material means an attacker can't reuse an old signature with a new time, and can't change the time without breaking the signature.
-
-🔮 **Predict:** a captured valid request replayed an hour later (tolerance 300s) — verify result? <details><summary>answer</summary>false — the timestamp is outside the window. (`WebhookSignerTest.aStaleTimestampIsRejected` proves it; the §12.3 mutation removes this check and the test fails.)</details>
-
-✋ **Checkpoint:** `./mvnw -pl services/demand-account test -Dtest=WebhookSignerTest` is green (sign/verify, tamper, wrong-secret, replay all covered).
-
-💾 **Commit:** `git add services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookSigner.java services/demand-account/src/test/java/com/buildabank/account/webhook/WebhookSignerTest.java && git commit -m "feat(demand-account): HMAC webhook signing + replay protection"`
-
-⚠️ **Pitfall:** comparing signatures with `equals`/`==` is a timing-attack vector — use `MessageDigest.isEqual`.
+⚠️ **Pitfall:** don't reach for `org.springframework.data.web.PagedModel` or serialize `Page` "just this once" — once a client depends on that shape, a Spring upgrade can break them. Own the envelope from day one.
 
 ---
 
-### Sub-step 4 of 6 — `WebhookSender` (retry) + `WebhookPublisher` (config-gated) 🧭 *(… → **sender/publisher** → …)*
+Now the DTO each page item maps to.
 
-🎯 **Goal:** deliver the signed event over HTTP with bounded retries; build the event JSON.
+📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/web/LedgerEntryResponse.java`
 
-📁 **Location:** `webhook/WebhookSender.java`, `webhook/WebhookPublisher.java`
-
-⌨️ **Code** (sender core):
+⌨️ **Code:**
 ```java
-public boolean send(String url, String secret, String body) {
-    long timestamp = Instant.now().getEpochSecond();
-    String signature = signer.sign(secret, timestamp, body);
-    HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-            .header("Content-Type", "application/json")
-            .header("X-Webhook-Timestamp", Long.toString(timestamp))
-            .header("X-Webhook-Signature", signature)
-            .POST(HttpRequest.BodyPublishers.ofString(body)).build();
-    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        try {
-            if (http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode() / 100 == 2) return true;
-        } catch (Exception ignored) { /* retry */ }
-        sleepBackoff(attempt);
+// services/demand-account/src/main/java/com/buildabank/account/web/LedgerEntryResponse.java
+package com.buildabank.account.web;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+import com.buildabank.account.domain.EntryDirection;
+import com.buildabank.account.domain.LedgerEntry;
+
+/** API view of a ledger entry — a DTO, so we never serialize the JPA entity directly. */
+public record LedgerEntryResponse(
+        UUID transactionId, EntryDirection direction, BigDecimal amount, String description, Instant createdAt) {
+
+    public static LedgerEntryResponse from(LedgerEntry entry) {
+        return new LedgerEntryResponse(entry.getTransactionId(), entry.getDirection(),
+                entry.getAmount(), entry.getDescription(), entry.getCreatedAt());
     }
-    return false;   // exhausted retries
-}
-```
-and the publisher owns a Jackson mapper (Boot-4 gotcha — see 🩺) and is **config-gated**:
-```java
-private final ObjectMapper objectMapper = new ObjectMapper();   // Boot 4 web defaults to Jackson 3 → no bean to inject
-public void transferCompleted(UUID txId, String from, String to, BigDecimal amount) {
-    if (url == null || url.isBlank()) return;                   // not configured → no-op
-    sender.send(url, secret, objectMapper.writeValueAsString(Map.of(
-        "event","transfer.completed","transactionId",txId.toString(),"from",from,"to",to,"amount",amount)));
 }
 ```
 
-🔍 **Line-by-line:** the sender attaches `X-Webhook-Timestamp` + `X-Webhook-Signature` and POSTs; on a non-2xx or exception it **retries** with backoff (at-least-once). The publisher is a **no-op unless `bank.webhook.url` is set**, so local runs/tests that don't care aren't affected, and owns its own `ObjectMapper` (Boot 4's web stack is Jackson 3, so there's no Jackson-2 mapper bean to inject).
+🔍 **Line-by-line:**
+- `public record LedgerEntryResponse(...)` — the wire shape of one ledger entry: its `transactionId`, `direction` (`DEBIT`/`CREDIT`), `amount` (`BigDecimal`, exact money), `description`, and `createdAt` (`Instant`, UTC). Note we deliberately **omit** the internal DB `id` and `accountId` — the client doesn't need them.
+- `EntryDirection` — the domain enum from Step 12; Jackson serializes it as its name (`"DEBIT"`/`"CREDIT"`).
+- `public static LedgerEntryResponse from(LedgerEntry entry)` — the mapping factory, used as a method reference `LedgerEntryResponse::from` in `PageResponse.of(...)`. It reads only getters off the entity — no entity escapes the web layer.
 
-💭 **Under the hood:** because delivery retries, the partner may receive the event twice → **receivers must be idempotent**. We send *after* the transfer commits (the controller isn't `@Transactional`), which is the **dual-write** seam the Outbox pattern (Step 20) closes.
+💭 **Under the hood:** Jackson serializes a `record` by its components (the accessor names become JSON keys). `BigDecimal` serializes as a JSON number with its exact scale (e.g. `50.00`), and `Instant` as an ISO-8601 string (e.g. `"2026-06-10T22:43:34.760Z"`) thanks to the JSR-310 module Boot auto-registers.
 
-✋ **Checkpoint:** `./mvnw -pl services/demand-account test -Dtest=WebhookDeliveryTest` green (an in-test receiver verifies our signature; a transient 500 triggers a retry).
+🔮 **Predict:** what JSON key will the `direction` field produce for a debit leg? <details><summary>answer</summary>`"direction":"DEBIT"` — Jackson serializes the enum by its constant name.</details>
 
-💾 **Commit:** `git add services/demand-account/src/main/java/com/buildabank/account/webhook && git commit -m "feat(demand-account): webhook sender (retry) + config-gated publisher"`
+✋ **Checkpoint:** compiles. The pagination half of the step is now complete end-to-end (repo → service → envelope + DTO); the controller wires it in sub-step 7.
 
-⚠️ **Pitfall:** injecting `com.fasterxml…ObjectMapper` fails on Boot 4 (no such bean — Jackson 3 default). Own the mapper, or use Jackson 3. (🩺)
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/java/com/buildabank/account/web/LedgerEntryResponse.java
+git commit -m "feat(demand-account): LedgerEntryResponse DTO for paged entries"
+```
+
+⚠️ **Pitfall:** if you map the entity but accidentally include a lazy association, Jackson triggers a fetch outside the (now-closed) session → `LazyInitializationException`. Keeping the DTO to scalar fields (as here) sidesteps it entirely.
 
 ---
 
-### Sub-step 5 of 6 — Controller: `/api/v1` + deprecate the old 🧭 *(… → **controller** → tests)*
+### Sub-step 4 of 8 — `WebhookSigner` (HMAC + replay window) 🧭 *(envelopes ✅ → **signer** → sender → …)*
 
-🎯 **Goal:** wire the versioned, idempotent transfer (with webhook) and the paginated entries; deprecate the old transfer.
+🎯 **Goal:** the cryptographic core — sign a payload with HMAC-SHA256 so a partner can verify it, and reject tampered, wrong-secret, or **replayed** deliveries. This is the security-critical piece of the step.
 
-📁 **Location:** `web/TransferController.java`
+📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookSigner.java`
 
-⌨️ **Code** (the new endpoints + deprecation):
+⌨️ **Code:**
 ```java
-@PostMapping("/api/transfers")   // DEPRECATED alias
-public ResponseEntity<TransferResponse> transfer(@Valid @RequestBody TransferRequest r) {
-    UUID txId = transfers.transfer(r.from(), r.to(), r.amount(), r.description());
-    return ResponseEntity.ok()
-            .header("Deprecation", "true")
-            .header("Sunset", "Sat, 31 Oct 2026 23:59:59 GMT")
-            .header("Link", "</api/v1/transfers>; rel=\"successor-version\"")
-            .body(new TransferResponse(txId));
-}
+// services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookSigner.java
+package com.buildabank.account.webhook;
 
-@PostMapping("/api/v1/transfers")
-public ResponseEntity<TransferResponse> transferV1(
-        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-        @Valid @RequestBody TransferRequest r) {
-    UUID txId = idempotentTransfers.transfer(idempotencyKey, r.from(), r.to(), r.amount(), r.description());
-    webhookPublisher.transferCompleted(txId, r.from(), r.to(), r.amount());   // after commit; at-least-once
-    return ResponseEntity.ok(new TransferResponse(txId));
-}
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
-@GetMapping("/api/v1/accounts/{accountNumber}/entries")
-public PageResponse<LedgerEntryResponse> entries(@PathVariable String accountNumber,
-        @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return PageResponse.of(transfers.entriesOf(accountNumber, pageable), LedgerEntryResponse::from);
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.springframework.stereotype.Component;
+
+/**
+ * Signs and verifies outbound webhooks with <strong>HMAC-SHA256</strong>. The signature is computed over
+ * {@code "<timestamp>.<body>"} with a shared secret, so a receiver can prove (a) the payload wasn't tampered
+ * with and (b) it really came from us. Including the timestamp in the signed material — and rejecting old
+ * timestamps on verify — gives <strong>replay protection</strong>: an attacker can't re-send a captured,
+ * still-valid request hours later.
+ *
+ * <p>This is the same scheme Stripe/GitHub-style webhooks use. We compare signatures in
+ * <strong>constant time</strong> to avoid leaking, via timing, how much of a guessed signature was correct.
+ */
+@Component
+public class WebhookSigner {
+
+    private static final String HMAC_SHA256 = "HmacSHA256";
+
+    /** Hex HMAC-SHA256 of {@code timestamp + "." + body} keyed by {@code secret}. */
+    public String sign(String secret, long timestampEpochSeconds, String body) {
+        try {
+            Mac mac = Mac.getInstance(HMAC_SHA256);
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_SHA256));
+            byte[] raw = mac.doFinal((timestampEpochSeconds + "." + body).getBytes(StandardCharsets.UTF_8));
+            return toHex(raw);
+        } catch (Exception e) {
+            throw new IllegalStateException("failed to sign webhook", e);
+        }
+    }
+
+    /**
+     * Verify a received signature: recompute and compare in constant time, AND reject timestamps outside the
+     * tolerance window (replay protection). {@code nowEpochSeconds} is passed in so it's testable.
+     */
+    public boolean verify(String secret, long timestampEpochSeconds, String body, String providedSignature,
+                          long nowEpochSeconds, long toleranceSeconds) {
+        if (Math.abs(nowEpochSeconds - timestampEpochSeconds) > toleranceSeconds) {
+            return false;   // too old (or too far in the future) → likely a replay
+        }
+        String expected = sign(secret, timestampEpochSeconds, body);
+        return constantTimeEquals(expected, providedSignature);
+    }
+
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String toHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+        }
+        return sb.toString();
+    }
 }
 ```
 
-🔍 **Line-by-line:** the old `/api/transfers` still works but advertises its successor via headers. `/api/v1/transfers` reads the optional `Idempotency-Key`, runs the idempotent transfer, and (after the transaction commits) emits the webhook. `/api/v1/accounts/{n}/entries` binds a `Pageable` (with sane defaults) and returns a `PageResponse`.
+🔍 **Line-by-line:**
+- `import javax.crypto.Mac;` / `SecretKeySpec;` — the JDK's **M**essage **A**uthentication **C**ode API. No dependency added — HMAC ships with the JVM.
+- `@Component` — registers the signer as a singleton bean (it has no mutable state, so sharing it is safe).
+- `private static final String HMAC_SHA256 = "HmacSHA256";` — the JCA algorithm name. (`Mac.getInstance` takes a string; a constant avoids typos in two places.)
+- `Mac mac = Mac.getInstance(HMAC_SHA256)` — obtain an HMAC-SHA256 engine. A `Mac` instance is **not** thread-safe and holds state between `init` and `doFinal`, which is exactly why we create a fresh one per `sign(...)` call (a local, never a field).
+- `mac.init(new SecretKeySpec(secret.getBytes(UTF_8), HMAC_SHA256))` — key the engine with the shared secret. `SecretKeySpec` wraps the secret's raw bytes as a key; we fix the charset to **UTF-8** so both signer and verifier hash identical bytes regardless of platform default.
+- `mac.doFinal((timestamp + "." + body).getBytes(UTF_8))` — compute the MAC over the **signed material** `"<timestamp>.<body>"`. Binding the timestamp *into* the hash is what makes replay protection tamper-proof: change the time and the signature no longer matches.
+- `return toHex(raw)` — hex-encode the raw bytes so the signature travels as an ASCII header value.
+- `catch (Exception e) { throw new IllegalStateException(...) }` — `getInstance`/`init` declare checked exceptions that can't happen for a built-in algorithm; we convert to an unchecked one so callers aren't littered with `try/catch`.
+- **`verify(...)`** — `if (Math.abs(now - timestamp) > tolerance) return false;` is the **replay window**: reject anything older (or newer) than the tolerance, even with a perfect signature. **This single line is the §12.3 mutation target** — delete it and replays are accepted. Then recompute `expected` and compare.
+- `constantTimeEquals` → `MessageDigest.isEqual(...)` — a **constant-time** byte comparison: it always examines all bytes, so the time it takes doesn't reveal how many leading bytes matched. `String.equals`/`==` short-circuit on the first mismatch and leak that timing.
+- `nowEpochSeconds` is a **parameter**, not `Instant.now()` inside — so tests can pass a fixed "now" and a "much later now" deterministically (no clock flakiness).
+- `toHex(...)` — `(b >> 4) & 0xF` is the high nibble, `b & 0xF` the low nibble; `Character.forDigit(n, 16)` turns each 0–15 into a hex char. Two chars per byte.
 
-💭 **Under the hood:** the webhook fires **after** `idempotentTransfers.transfer` returns — the controller has no `@Transactional`, so the transfer's transaction has committed. (Dual-write caveat → Outbox, Step 20.)
+💭 **Under the hood:** HMAC is `H((key ⊕ opad) ∥ H((key ⊕ ipad) ∥ message))` — a hash keyed so that without the secret you can't forge a MAC for a chosen message, and (unlike a naive `hash(secret ∥ message)`) it's immune to length-extension attacks. The receiver runs the **same** computation with the **same** secret over the **same** bytes; equality proves both authenticity (it came from a secret-holder) and integrity (the body wasn't altered).
 
-▶️ **Run & See** (live, optional):
+🔮 **Predict:** a captured *valid* request is replayed an hour later with `toleranceSeconds = 300` — does `verify` return true or false, and *why* (the signature is still cryptographically correct)? <details><summary>answer</summary>**false** — the signature is correct, but `|now − timestamp| = 3600 > 300`, so the replay-window check rejects it before the signature is even compared. `WebhookSignerTest.aStaleTimestampIsRejected_replayProtection` proves it.</details>
+
+▶️ **Run & See** (pure JUnit — **no Docker**):
+```bash
+./mvnw -pl services/demand-account test -Dtest=WebhookSignerTest
+```
+✅ **Expected output** (real, from a run on the frozen tree):
+```
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.012 s -- in com.buildabank.account.webhook.WebhookSignerTest
+[INFO] BUILD SUCCESS
+```
+The four cases: a fresh signature **verifies**; a **tampered body** is rejected; the **wrong secret** is rejected; a **stale timestamp** is rejected (replay protection).
+
+✋ **Checkpoint:** `WebhookSignerTest` is green (4 tests).
+
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookSigner.java
+git commit -m "feat(demand-account): HMAC-SHA256 webhook signing + replay-window verify"
+```
+
+⚠️ **Pitfall:** comparing signatures with `equals`/`==` is a real **timing-attack** vector — an attacker measures response time to brute-force the signature one byte at a time. Always `MessageDigest.isEqual`. (And never sign the body *without* the timestamp — you'd lose replay protection.)
+
+---
+
+### Sub-step 5 of 8 — `WebhookSender` (bounded retries) 🧭 *(signer ✅ → **sender** → publisher → …)*
+
+🎯 **Goal:** actually deliver the signed payload over HTTP, retrying a few times on failure — making delivery **at-least-once**.
+
+📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookSender.java`
+
+⌨️ **Code:**
+```java
+// services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookSender.java
+package com.buildabank.account.webhook;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.time.Instant;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+/**
+ * Delivers a signed webhook over HTTP with <strong>bounded retries</strong>. Webhook delivery is
+ * <em>at-least-once</em>: networks fail, receivers hiccup, so we retry a few times with backoff — which is
+ * exactly why receivers must be <strong>idempotent</strong> (they may see the same event twice). Each attempt
+ * carries the HMAC signature and timestamp ({@link WebhookSigner}) so the receiver can verify authenticity
+ * and reject replays.
+ *
+ * <p>(This sends directly for teaching clarity. In production the <em>dual-write problem</em> — the DB
+ * transaction commits but the webhook send fails, or vice-versa — is solved by the <strong>Outbox
+ * pattern</strong> in Step 20; we flag that explicitly rather than pretend this is complete.)
+ */
+@Component
+public class WebhookSender {
+
+    private static final Logger log = LoggerFactory.getLogger(WebhookSender.class);
+    private static final int MAX_ATTEMPTS = 3;
+
+    private final WebhookSigner signer;
+    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+
+    public WebhookSender(WebhookSigner signer) {
+        this.signer = signer;
+    }
+
+    /** POST the signed body to {@code url}; retry up to 3 times on failure. Returns true if a 2xx was received. */
+    public boolean send(String url, String secret, String body) {
+        long timestamp = Instant.now().getEpochSecond();
+        String signature = signer.sign(secret, timestamp, body);
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(3))
+                .header("Content-Type", "application/json")
+                .header("X-Webhook-Timestamp", Long.toString(timestamp))
+                .header("X-Webhook-Signature", signature)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                HttpResponse<Void> response = http.send(request, HttpResponse.BodyHandlers.discarding());
+                if (response.statusCode() / 100 == 2) {
+                    log.info("webhook delivered to {} on attempt {} ({})", url, attempt, response.statusCode());
+                    return true;
+                }
+                log.warn("webhook to {} got {} on attempt {}", url, response.statusCode(), attempt);
+            } catch (Exception e) {
+                log.warn("webhook to {} failed on attempt {}: {}", url, attempt, e.toString());
+            }
+            sleepBackoff(attempt);
+        }
+        log.error("webhook to {} FAILED after {} attempts", url, MAX_ATTEMPTS);
+        return false;
+    }
+
+    private static void sleepBackoff(int attempt) {
+        try {
+            Thread.sleep(50L * attempt);   // simple linear backoff (small, so tests stay fast)
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}
+```
+
+🔍 **Line-by-line:**
+- `import java.net.http.HttpClient;` (+ `HttpRequest`/`HttpResponse`) — the JDK's built-in HTTP client (Java 11+). No third-party HTTP library needed.
+- `private static final Logger log = LoggerFactory.getLogger(...)` — SLF4J logger; the delivery/retry lines are real operational signal (you'll see them in the Run & See below).
+- `private static final int MAX_ATTEMPTS = 3;` — the retry budget. Bounded — we never retry forever.
+- `private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();` — **one** client, created once, with a 2s connect timeout. `HttpClient` is **immutable and thread-safe**, so a single instance is shared across all request threads (the singleton-with-no-mutable-state rule).
+- constructor injects the `WebhookSigner` — the sender signs every attempt.
+- `long timestamp = Instant.now().getEpochSecond()` — the delivery timestamp (epoch seconds), signed and also sent as a header so the receiver can run the replay check.
+- `String signature = signer.sign(secret, timestamp, body)` — sign **once** before the loop; every retry re-sends the *same* signed request (same timestamp), which is correct — it's literally the same event.
+- `HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(3))` — a per-request 3s read timeout (separate from the 2s connect timeout) so a hung receiver can't block us.
+- `.header("X-Webhook-Timestamp", ...)` / `.header("X-Webhook-Signature", ...)` — the two headers a receiver needs to verify: the timestamp and the hex HMAC. (`Content-Type: application/json` for the body.)
+- `.POST(HttpRequest.BodyPublishers.ofString(body))` — POST the JSON string body.
+- `for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)` — the retry loop.
+- `http.send(request, HttpResponse.BodyHandlers.discarding())` — send **synchronously**; we don't care about the response body (`discarding()`), only the status.
+- `if (response.statusCode() / 100 == 2) { … return true; }` — integer division turns `200`–`299` into `2`: any **2xx** is success → return immediately.
+- `catch (Exception e) { … }` — a connection refused / timeout / IO error is caught and **retried** (not propagated): the partner being briefly down shouldn't crash our request thread.
+- `sleepBackoff(attempt)` between attempts — `Thread.sleep(50L * attempt)`: 50ms, then 100ms (linear backoff). Small on purpose so tests stay fast; production would use exponential backoff + jitter.
+- `Thread.currentThread().interrupt()` in the catch — **restore the interrupt flag** after catching `InterruptedException` (the correct concurrency etiquette from Step 11), rather than swallowing it.
+- `return false` after the loop — all attempts exhausted; the caller learns delivery failed (and we logged it at `error`).
+
+💭 **Under the hood:** because we retry on non-2xx and on exceptions, the receiver can be hit **more than once** for one event → delivery is **at-least-once**, and receivers must dedupe (be idempotent). The send happens *after* the DB transaction commits (the controller isn't `@Transactional`), so a crash between commit and a successful send means the partner never hears — the **dual-write** seam the Outbox pattern (Step 20) closes.
+
+🔮 **Predict:** the receiver returns `500` on the first attempt, then `200` on the second. Does `send` return `true`, and how many times was the receiver called? <details><summary>answer</summary>`true`, called **2** times — the 500 triggers a retry, the 200 succeeds. `WebhookDeliveryTest.retriesOnTransientFailure` asserts exactly this (`calls ≥ 2`).</details>
+
+▶️ **Run & See** (pure JUnit + an in-process `com.sun.net.httpserver.HttpServer` receiver — **no Docker**):
+```bash
+./mvnw -pl services/demand-account test -Dtest=WebhookDeliveryTest
+```
+✅ **Expected output** (real log lines from a run on the frozen tree — note the **random high ports** and the genuine retry):
+```
+INFO  c.b.account.webhook.WebhookSender -- webhook delivered to http://localhost:58129/webhooks on attempt 1 (200)
+WARN  c.b.account.webhook.WebhookSender -- webhook to http://localhost:58131/webhooks got 500 on attempt 1
+INFO  c.b.account.webhook.WebhookSender -- webhook delivered to http://localhost:58131/webhooks on attempt 2 (200)
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.523 s -- in com.buildabank.account.webhook.WebhookDeliveryTest
+[INFO] BUILD SUCCESS
+```
+The first test delivers on attempt 1; the second test gets a `500`, retries, and succeeds on attempt 2 — visible delivery semantics, not a claim.
+
+✋ **Checkpoint:** `WebhookDeliveryTest` is green (2 tests). Combined with the signer: `Tests run: 6, BUILD SUCCESS`.
+
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookSender.java
+git commit -m "feat(demand-account): webhook sender with bounded retries (at-least-once)"
+```
+
+⚠️ **Pitfall:** retrying inside the request thread (as here, for simplicity) blocks the caller for up to ~3 attempts × timeouts. Fine for the lesson; in production push delivery off the request path (async/Outbox) so a slow partner never slows your API.
+
+---
+
+### Sub-step 6 of 8 — `WebhookPublisher` (builds the event, config-gated) 🧭 *(sender ✅ → **publisher** → controller → tests)*
+
+🎯 **Goal:** turn a "transfer completed" into the event JSON and hand it to the sender — but **only if a webhook URL is configured**, so local runs and tests aren't affected.
+
+📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookPublisher.java`
+
+⌨️ **Code:**
+```java
+// services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookPublisher.java
+package com.buildabank.account.webhook;
+
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * Builds the {@code transfer.completed} event JSON and hands it to the {@link WebhookSender}. Gated by
+ * config: if {@code bank.webhook.url} is unset (the default), publishing is a no-op — so local runs and
+ * tests that don't care about webhooks aren't affected. The secret comes from config too (never hard-coded
+ * in real life — Vault/secrets in Phase H).
+ */
+@Component
+public class WebhookPublisher {
+
+    private final WebhookSender sender;
+    // Own a Jackson mapper rather than inject one: Spring Boot 4 defaults the web stack to Jackson 3, so a
+    // Jackson-2 com.fasterxml ObjectMapper bean isn't auto-created. A self-owned mapper keeps this independent.
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final String url;
+    private final String secret;
+
+    public WebhookPublisher(WebhookSender sender,
+                            @Value("${bank.webhook.url:}") String url,
+                            @Value("${bank.webhook.secret:demo-secret}") String secret) {
+        this.sender = sender;
+        this.url = url;
+        this.secret = secret;
+    }
+
+    /** Emit a signed {@code transfer.completed} webhook (no-op if no URL is configured). */
+    public void transferCompleted(UUID transactionId, String from, String to, BigDecimal amount) {
+        if (url == null || url.isBlank()) {
+            return;   // webhooks not configured → skip
+        }
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("event", "transfer.completed");
+        event.put("transactionId", transactionId.toString());
+        event.put("from", from);
+        event.put("to", to);
+        event.put("amount", amount);
+        try {
+            sender.send(url, secret, objectMapper.writeValueAsString(event));
+        } catch (Exception e) {
+            throw new IllegalStateException("failed to publish webhook", e);
+        }
+    }
+}
+```
+
+🔍 **Line-by-line:**
+- `@Component` — singleton bean; injected into the controller.
+- `private final ObjectMapper objectMapper = new ObjectMapper();` — we **construct** the Jackson-2 mapper instead of injecting it. The comment says why: **Boot 4's web stack defaults to Jackson 3** (`tools.jackson`), so there's no auto-created Jackson-2 (`com.fasterxml`) `ObjectMapper` *bean* to inject — injecting one fails at context startup. Owning it keeps the publisher self-contained. (See 🩺.)
+- `@Value("${bank.webhook.url:}") String url` — inject the config property `bank.webhook.url`; the `:` with **nothing after it** is an **empty-string default**, so when the property is unset, `url` is `""` (not a startup failure for a missing property).
+- `@Value("${bank.webhook.secret:demo-secret}") String secret` — same pattern, defaulting to `demo-secret` for local/test. In production the secret comes from Vault (Phase H), never a default.
+- `transferCompleted(UUID, String, String, BigDecimal)` — called by the controller after a transfer.
+- `if (url == null || url.isBlank()) return;` — the **config gate**: no URL → do nothing. This is why running the service or the integration tests without `BANK_WEBHOOK_URL` doesn't try (and fail) to deliver anywhere.
+- `Map<String,Object> event = new LinkedHashMap<>()` — build the event payload. **`LinkedHashMap`** preserves insertion order, so the JSON keys come out in a stable, readable order (`event`, `transactionId`, `from`, `to`, `amount`).
+- `objectMapper.writeValueAsString(event)` — serialize the map to a JSON string, then `sender.send(url, secret, json)` signs and delivers it.
+- `catch (Exception e) { throw new IllegalStateException(...) }` — `writeValueAsString` declares a checked `JsonProcessingException`; we wrap it unchecked.
+
+💭 **Under the hood:** the event is a flat map rather than a typed DTO because it's a *message*, not part of our API contract — order and shape are ours to choose, and a `Map` is the lightest way to assemble it. The publisher knows *what* a `transfer.completed` event looks like; the sender knows *how* to deliver it; the signer knows *how* to sign it — three single-responsibility collaborators (a preview of the SOLID work in Step 25).
+
+🔮 **Predict:** in the module's tests (no `bank.webhook.url` set), how many HTTP deliveries does `transferCompleted` make? <details><summary>answer</summary>Zero — the config gate returns early. That's why `IdempotencyTest`/`DemandAccountIntegrationTest` don't need a live receiver; `WebhookDeliveryTest` exercises the sender directly instead.</details>
+
+✋ **Checkpoint:** `./mvnw -q -pl services/demand-account compile` succeeds; the webhook trio (`Signer`/`Sender`/`Publisher`) is complete.
+
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookPublisher.java
+git commit -m "feat(demand-account): config-gated transfer.completed webhook publisher"
+```
+
+⚠️ **Pitfall:** if you `@Autowired`/inject `com.fasterxml.jackson.databind.ObjectMapper` here, the app compiles (the class is on the classpath) but the **context fails to start** on Boot 4: `No qualifying bean of type 'ObjectMapper'`. Own the mapper, or use the Jackson-3 (`tools.jackson`) mapper bean. (🩺)
+
+---
+
+### Sub-step 7 of 8 — Controller: `/api/v1` + deprecate the old 🧭 *(publisher ✅ → **controller** → tests)*
+
+🎯 **Goal:** wire it all together at the web layer — the versioned idempotent transfer (with webhook), the paginated entries, and the graceful deprecation of the old transfer.
+
+📁 **Location:** edit → `services/demand-account/src/main/java/com/buildabank/account/web/TransferController.java`
+
+⌨️ **Code (the key parts of the diff):**
+```diff
++ import org.springframework.data.domain.Pageable;
++ import org.springframework.data.web.PageableDefault;
+  import org.springframework.http.ResponseEntity;
+  ...
++ import org.springframework.web.bind.annotation.RequestHeader;
+  import org.springframework.web.bind.annotation.RestController;
+
+  import com.buildabank.account.domain.Account;
++ import com.buildabank.account.service.IdempotentTransferService;
+  import com.buildabank.account.service.TransferService;
++ import com.buildabank.account.webhook.WebhookPublisher;
+
+  @RestController
+  public class TransferController {
+
+      private final TransferService transfers;
++     private final IdempotentTransferService idempotentTransfers;
++     private final WebhookPublisher webhookPublisher;
+
+-     public TransferController(TransferService transfers) {
++     public TransferController(TransferService transfers, IdempotentTransferService idempotentTransfers,
++                               WebhookPublisher webhookPublisher) {
+          this.transfers = transfers;
++         this.idempotentTransfers = idempotentTransfers;
++         this.webhookPublisher = webhookPublisher;
+      }
+```
+```diff
+      @PostMapping("/api/transfers")
+      public ResponseEntity<TransferResponse> transfer(@Valid @RequestBody TransferRequest request) {
+          UUID transactionId = transfers.transfer(
+                  request.from(), request.to(), request.amount(), request.description());
+-         return ResponseEntity.ok(new TransferResponse(transactionId));
++         return ResponseEntity.ok()
++                 .header("Deprecation", "true")                                       // RFC 8594
++                 .header("Sunset", "Sat, 31 Oct 2026 23:59:59 GMT")                   // when it will be removed
++                 .header("Link", "</api/v1/transfers>; rel=\"successor-version\"")     // where to go instead
++                 .body(new TransferResponse(transactionId));
+      }
++
++     @PostMapping("/api/v1/transfers")
++     public ResponseEntity<TransferResponse> transferV1(
++             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
++             @Valid @RequestBody TransferRequest request) {
++         UUID transactionId = idempotentTransfers.transfer(
++                 idempotencyKey, request.from(), request.to(), request.amount(), request.description());
++         webhookPublisher.transferCompleted(transactionId, request.from(), request.to(), request.amount());
++         return ResponseEntity.ok(new TransferResponse(transactionId));
++     }
++
++     @GetMapping("/api/v1/accounts/{accountNumber}/entries")
++     public PageResponse<LedgerEntryResponse> entries(
++             @PathVariable String accountNumber,
++             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
++         return PageResponse.of(transfers.entriesOf(accountNumber, pageable), LedgerEntryResponse::from);
++     }
+```
+
+✅ **Whole file** (for confirmation — `services/demand-account/src/main/java/com/buildabank/account/web/TransferController.java` at `step-14-end`):
+```java
+// services/demand-account/src/main/java/com/buildabank/account/web/TransferController.java
+package com.buildabank.account.web;
+
+import java.net.URI;
+import java.util.UUID;
+
+import jakarta.validation.Valid;
+
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.buildabank.account.domain.Account;
+import com.buildabank.account.service.IdempotentTransferService;
+import com.buildabank.account.service.TransferService;
+import com.buildabank.account.webhook.WebhookPublisher;
+
+/**
+ * REST API for accounts and transfers. Step 14 adds <strong>versioned</strong> endpoints under
+ * {@code /api/v1}: an <strong>idempotent</strong> transfer ({@code Idempotency-Key} header) that also emits a
+ * signed <strong>webhook</strong>, and a <strong>paginated</strong> ledger-entries listing. The original
+ * {@code POST /api/transfers} stays for compatibility but is marked <strong>deprecated</strong> (it returns
+ * {@code Deprecation}/{@code Sunset}/{@code Link} headers pointing at its successor).
+ */
+@RestController
+public class TransferController {
+
+    private final TransferService transfers;
+    private final IdempotentTransferService idempotentTransfers;
+    private final WebhookPublisher webhookPublisher;
+
+    public TransferController(TransferService transfers, IdempotentTransferService idempotentTransfers,
+                              WebhookPublisher webhookPublisher) {
+        this.transfers = transfers;
+        this.idempotentTransfers = idempotentTransfers;
+        this.webhookPublisher = webhookPublisher;
+    }
+
+    /** Open an account → 201 Created. */
+    @PostMapping("/api/accounts")
+    public ResponseEntity<AccountResponse> open(@Valid @RequestBody OpenAccountRequest request) {
+        Account account = transfers.openAccount(
+                request.accountNumber(), request.currency(), request.openingBalance());
+        return ResponseEntity
+                .created(URI.create("/api/accounts/" + account.getAccountNumber()))
+                .body(AccountResponse.from(account));
+    }
+
+    /** Read an account's balance → 200, or 404 if it doesn't exist. */
+    @GetMapping("/api/accounts/{accountNumber}")
+    public ResponseEntity<AccountResponse> balance(@PathVariable String accountNumber) {
+        try {
+            return ResponseEntity.ok(new AccountResponse(
+                    accountNumber, null, transfers.balanceOf(accountNumber)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * DEPRECATED transfer (the Step-12 endpoint). Still works, but advertises its replacement via standard
+     * deprecation headers so clients can migrate. New integrations should use {@code POST /api/v1/transfers}.
+     */
+    @PostMapping("/api/transfers")
+    public ResponseEntity<TransferResponse> transfer(@Valid @RequestBody TransferRequest request) {
+        UUID transactionId = transfers.transfer(
+                request.from(), request.to(), request.amount(), request.description());
+        return ResponseEntity.ok()
+                .header("Deprecation", "true")                                       // RFC 8594
+                .header("Sunset", "Sat, 31 Oct 2026 23:59:59 GMT")                   // when it will be removed
+                .header("Link", "</api/v1/transfers>; rel=\"successor-version\"")     // where to go instead
+                .body(new TransferResponse(transactionId));
+    }
+
+    /**
+     * v1 transfer — <strong>idempotent</strong> (optional {@code Idempotency-Key} header) and emits a signed
+     * {@code transfer.completed} webhook after the money moves.
+     */
+    @PostMapping("/api/v1/transfers")
+    public ResponseEntity<TransferResponse> transferV1(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody TransferRequest request) {
+        UUID transactionId = idempotentTransfers.transfer(
+                idempotencyKey, request.from(), request.to(), request.amount(), request.description());
+        // After the transfer's transaction has committed (this controller is not @Transactional).
+        // Webhooks are at-least-once, so a retried request may re-emit — receivers must be idempotent.
+        webhookPublisher.transferCompleted(transactionId, request.from(), request.to(), request.amount());
+        return ResponseEntity.ok(new TransferResponse(transactionId));
+    }
+
+    /** v1 paginated ledger entries for an account → 200 with a {@link PageResponse} envelope. */
+    @GetMapping("/api/v1/accounts/{accountNumber}/entries")
+    public PageResponse<LedgerEntryResponse> entries(
+            @PathVariable String accountNumber,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
+        return PageResponse.of(transfers.entriesOf(accountNumber, pageable), LedgerEntryResponse::from);
+    }
+}
+```
+
+🔍 **Line-by-line (the new parts):**
+- **Constructor** now takes three collaborators — `TransferService` (the original), `IdempotentTransferService` (v1's transfer), and `WebhookPublisher`. All `final`, all constructor-injected.
+- **Deprecated `/api/transfers`** — unchanged behavior (still does a real transfer), but now returns via `ResponseEntity.ok().header(...).body(...)` with three RFC 8594 headers: `Deprecation: true` (it's deprecated), `Sunset: <HTTP-date>` (a fixed removal date in RFC 1123 format), and `Link: </api/v1/transfers>; rel="successor-version"` (the standard link relation pointing at the replacement). Note the escaped quotes `\"` inside the Java string.
+- **`@PostMapping("/api/v1/transfers")`** — the versioned endpoint, mapped purely by the URL prefix.
+- `@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey` — bind the request header into a parameter. **`required = false`** means a request without the header is fine (`idempotencyKey` is `null` → the service falls through to a plain transfer). Idempotency is opt-in.
+- `@Valid @RequestBody TransferRequest request` — same validated body as the old endpoint (so `@Positive` etc. still apply, returning a 400 Problem Detail on a bad amount).
+- `idempotentTransfers.transfer(idempotencyKey, …)` — delegate to the idempotent service.
+- `webhookPublisher.transferCompleted(...)` — fire the webhook **after** the transfer call returns. The controller is **not** `@Transactional`, so by this line the transfer's transaction has committed (the dual-write caveat is documented inline → Outbox, Step 20).
+- **`@GetMapping("/api/v1/accounts/{accountNumber}/entries")`** — the paginated listing. It returns `PageResponse<LedgerEntryResponse>` **directly** (not wrapped in `ResponseEntity`) → Spring serializes it as `200` + JSON.
+- `@PageableDefault(size = 20, sort = "createdAt") Pageable pageable` — bind a `Pageable` from `?page=&size=&sort=`; **`@PageableDefault`** supplies sane defaults (page 0, **size 20**, sorted by `createdAt`) when the client omits them — which also **caps the unbounded-response risk** for the common case.
+- `PageResponse.of(transfers.entriesOf(accountNumber, pageable), LedgerEntryResponse::from)` — fetch the page, map each entity to its DTO, wrap in the stable envelope.
+
+💭 **Under the hood:** the `Pageable` parameter is materialized by Spring Data's `PageableHandlerMethodArgumentResolver`, which Boot auto-registers when Spring Data web support is on the classpath. It reads `page`/`size`/`sort` from the query string (defaults from `@PageableDefault`), builds a `PageRequest`, and injects it. That resolver lives in the **full** application context — a point that matters for the slice test (sub-step 8).
+
+🔮 **Predict:** before you run it — `POST /api/v1/transfers` *without* an `Idempotency-Key`: does it succeed, and does it dedupe? <details><summary>answer</summary>It **succeeds** (header is optional) and does **not** dedupe — `idempotencyKey` is `null`, so `IdempotentTransferService` does a plain transfer. `IdempotencyTest.noKeyMeansNoDeduplication` proves two no-key calls both apply.</details>
+
+▶️ **Run & See** (live, optional — needs Docker + the service running):
 ```bash
 docker compose -f services/demand-account/compose.yaml up -d
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run
-# POST the same Idempotency-Key twice → money moves once; GET .../entries → a PageResponse; old endpoint → Deprecation header
+# then, in another terminal — the same key twice moves money once:
+curl -s -XPOST localhost:8082/api/accounts -H 'Content-Type: application/json' -d '{"accountNumber":"ACC-A","currency":"USD","openingBalance":200.00}'
+curl -s -XPOST localhost:8082/api/accounts -H 'Content-Type: application/json' -d '{"accountNumber":"ACC-B","currency":"USD","openingBalance":0.00}'
+curl -s -XPOST localhost:8082/api/v1/transfers -H 'Idempotency-Key: K1' -H 'Content-Type: application/json' -d '{"from":"ACC-A","to":"ACC-B","amount":50.00}'
+curl -s -XPOST localhost:8082/api/v1/transfers -H 'Idempotency-Key: K1' -H 'Content-Type: application/json' -d '{"from":"ACC-A","to":"ACC-B","amount":50.00}'
+curl -s localhost:8082/api/accounts/ACC-A     # → balance 150.00 (moved once)
+curl -i -XPOST localhost:8082/api/transfers -H 'Content-Type: application/json' -d '{"from":"ACC-A","to":"ACC-B","amount":1.00}'  # → Deprecation: true header
 ```
-(All proven over real HTTP in `DemandAccountIntegrationTest` — see 🔬.)
+✅ **Expected shape:** the two v1 POSTs return the **same** `transactionId`; `GET ACC-A` shows `150`; the old endpoint's response carries `Deprecation: true`, `Sunset`, and `Link` headers. *(All of this is asserted over real HTTP in `DemandAccountIntegrationTest` — see 🔬. The live curl run above is **verify-adjacent**: shown for the learner; the recorded proof is the integration test.)*
 
-✋ **Checkpoint:** the service exposes `/api/v1/transfers`, `/api/v1/accounts/{n}/entries`, and a deprecated `/api/transfers`.
+✋ **Checkpoint:** the service exposes `POST /api/v1/transfers`, `GET /api/v1/accounts/{n}/entries`, and the deprecated `POST /api/transfers`.
 
-💾 **Commit:** `git add services/demand-account/src/main/java/com/buildabank/account/web/TransferController.java && git commit -m "feat(demand-account): /api/v1 idempotent transfer + paginated entries + deprecate old"`
+💾 **Commit:**
+```bash
+git add services/demand-account/src/main/java/com/buildabank/account/web/TransferController.java
+git commit -m "feat(demand-account): /api/v1 idempotent transfer + paginated entries + deprecate old"
+```
 
-⚠️ **Pitfall:** the slice `@WebMvcTest` now needs the new collaborators mocked (`IdempotentTransferService`, `WebhookPublisher`) or the context won't load.
+⚠️ **Pitfall:** adding two new constructor collaborators **breaks the `@WebMvcTest` slice** until you mock them — the slice only instantiates the controller, so `IdempotentTransferService` and `WebhookPublisher` must be `@MockitoBean`s or the context won't load (next sub-step).
 
 ---
 
-### Sub-step 6 of 6 — Tests 🧭 *(… → **tests**)*
+### Sub-step 8 of 8 — Tests + ADR 🧭 *(controller ✅ → **tests**)*
 
-🎯 **Goal:** prove idempotency, signing, delivery+retry, pagination, and deprecation.
+🎯 **Goal:** prove idempotency (money moves once), webhook signing/delivery/retry (done in sub-steps 4–5), pagination/versioning/deprecation over real HTTP, and the slice with mocked collaborators — then record the design in an ADR.
 
-📁 **Location:** `IdempotencyTest`, `WebhookSignerTest`, `WebhookDeliveryTest`, and updates to `TransferControllerTest` + `DemandAccountIntegrationTest`.
+📁 **Location:** new → `service/IdempotencyTest.java`; edits → `web/TransferControllerTest.java`, `DemandAccountIntegrationTest.java`. (`WebhookSignerTest`/`WebhookDeliveryTest` were added in sub-steps 4–5.)
 
-⌨️ **Code** (the idempotency proof + the webhook delivery proof):
+⌨️ **Code — `IdempotencyTest` (the money-moves-once proof, full file):**
 ```java
-// IdempotencyTest — a retry moves money once
-UUID first = idempotentTransfers.transfer("KEY-1", "ACC-A", "ACC-B", new BigDecimal("50.00"), "rent");
-UUID retry = idempotentTransfers.transfer("KEY-1", "ACC-A", "ACC-B", new BigDecimal("50.00"), "rent");
-assertThat(retry).isEqualTo(first);
-assertThat(transfers.balanceOf("ACC-A")).isEqualByComparingTo("150.00");   // moved ONCE
-```
-```java
-// WebhookDeliveryTest — a real in-test HTTP receiver verifies our signature
-server.createContext("/webhooks", exchange -> {
-    String body = new String(exchange.getRequestBody().readAllBytes(), UTF_8);
-    long ts = Long.parseLong(exchange.getRequestHeaders().getFirst("X-Webhook-Timestamp"));
-    String sig = exchange.getRequestHeaders().getFirst("X-Webhook-Signature");
-    signatureValid.set(signer.verify(SECRET, ts, body, sig, Instant.now().getEpochSecond(), 300));
-    exchange.sendResponseHeaders(signatureValid.get() ? 200 : 400, -1); exchange.close();
-});
-boolean delivered = sender.send(url, SECRET, "{\"event\":\"transfer.completed\"}");
-assertThat(delivered).isTrue();
-assertThat(signatureValid).isTrue();   // the receiver validated our HMAC
+// services/demand-account/src/test/java/com/buildabank/account/service/IdempotencyTest.java
+package com.buildabank.account.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+
+import com.buildabank.account.ContainersConfig;
+import com.buildabank.account.domain.AccountRepository;
+import com.buildabank.account.domain.IdempotencyRecordRepository;
+import com.buildabank.account.domain.LedgerEntryRepository;
+
+/**
+ * Public-API idempotency: a retried transfer (same {@code Idempotency-Key}) returns the original result and
+ * moves money <strong>once</strong> — the property that makes a money API safe to retry after a timeout.
+ */
+@SpringBootTest
+@Import(ContainersConfig.class)
+class IdempotencyTest {
+
+    @Autowired
+    IdempotentTransferService idempotentTransfers;
+
+    @Autowired
+    TransferService transfers;
+
+    @Autowired
+    AccountRepository accounts;
+
+    @Autowired
+    LedgerEntryRepository ledger;
+
+    @Autowired
+    IdempotencyRecordRepository keys;
+
+    @BeforeEach
+    void clean() {
+        keys.deleteAll();
+        ledger.deleteAll();
+        accounts.deleteAll();
+        transfers.openAccount("ACC-A", "USD", new BigDecimal("200.00"));
+        transfers.openAccount("ACC-B", "USD", new BigDecimal("0.00"));
+    }
+
+    @Test
+    void sameKeyReturnsTheSameResult_andMovesMoneyOnce() {
+        UUID first = idempotentTransfers.transfer("KEY-1", "ACC-A", "ACC-B", new BigDecimal("50.00"), "rent");
+        UUID retry = idempotentTransfers.transfer("KEY-1", "ACC-A", "ACC-B", new BigDecimal("50.00"), "rent");
+
+        assertThat(retry).isEqualTo(first);                              // same transaction id returned
+        assertThat(transfers.balanceOf("ACC-A")).isEqualByComparingTo("150.00");   // moved ONCE, not twice
+        assertThat(transfers.balanceOf("ACC-B")).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    void aDifferentKeyMovesMoneyAgain() {
+        idempotentTransfers.transfer("KEY-1", "ACC-A", "ACC-B", new BigDecimal("50.00"), "first");
+        idempotentTransfers.transfer("KEY-2", "ACC-A", "ACC-B", new BigDecimal("50.00"), "second");
+
+        assertThat(transfers.balanceOf("ACC-A")).isEqualByComparingTo("100.00");   // two distinct transfers
+    }
+
+    @Test
+    void noKeyMeansNoDeduplication() {
+        idempotentTransfers.transfer(null, "ACC-A", "ACC-B", new BigDecimal("10.00"), "a");
+        idempotentTransfers.transfer(null, "ACC-A", "ACC-B", new BigDecimal("10.00"), "b");
+
+        assertThat(transfers.balanceOf("ACC-A")).isEqualByComparingTo("180.00");   // both applied
+    }
+}
 ```
 
-▶️ **Run & See:**
+🔍 **Line-by-line:**
+- `@SpringBootTest` + `@Import(ContainersConfig.class)` — boot the **full** application context against a **real Postgres** via Testcontainers (the `ContainersConfig` from Step 12 supplies the `@ServiceConnection`-wired container). We test the real idempotency path, not a mock.
+- `@Autowired` the five collaborators — the idempotent service under test, plus `TransferService` (to read balances) and the three repositories (to reset state).
+- `@BeforeEach clean()` — wipe `keys`, then `ledger`, then `accounts` (in **FK order** — ledger references account), and re-open ACC-A ($200) and ACC-B ($0). Without wiping `keys`, a leftover `KEY-1` from a prior test would turn the first call into an idempotent *hit* and skew balances.
+- `sameKeyReturnsTheSameResult_andMovesMoneyOnce` — the headline: two `KEY-1` transfers of $50. `assertThat(retry).isEqualTo(first)` (same id) and `balanceOf("ACC-A")` is **`150.00`** (moved once). `isEqualByComparingTo` compares `BigDecimal` by **value** (so `150.00` == `150.0000`), the correct money comparison from Step 12.
+- `aDifferentKeyMovesMoneyAgain` — `KEY-1` then `KEY-2` → two real transfers → ACC-A drops to `100.00`. Different keys are different operations.
+- `noKeyMeansNoDeduplication` — two `null`-key transfers of $10 → both apply → `180.00`. Confirms idempotency is opt-in.
+
+💭 **Under the hood:** because `IdempotentTransferService.transfer` is `@Transactional` and joins the inner transfer's transaction, the key row and the ledger legs commit atomically — so after the first call the `KEY-1` row is durably visible to the second call's `findById`. This is why a sequential retry deterministically returns the stored id.
+
+🔮 **Predict:** if `@BeforeEach` forgot `keys.deleteAll()`, which test would flake first and how? <details><summary>answer</summary>`sameKeyReturnsTheSameResult` — a stale `KEY-1` makes the *first* transfer an idempotent hit (no money moves), so ACC-A stays at `200.00` and the `150.00` assertion fails.</details>
+
+⌨️ **Code — `TransferControllerTest` (the slice, edited; new mocks + 2 tests):**
+```diff
+  import com.buildabank.account.domain.Account;
+  import com.buildabank.account.domain.InsufficientFundsException;
++ import com.buildabank.account.service.IdempotentTransferService;
+  import com.buildabank.account.service.TransferService;
++ import com.buildabank.account.webhook.WebhookPublisher;
+
+  @WebMvcTest(TransferController.class)
+  class TransferControllerTest {
+
+      @Autowired
+      MockMvc mvc;
+
+      @MockitoBean
+      TransferService transfers;
++
++     @MockitoBean
++     IdempotentTransferService idempotentTransfers;
++
++     @MockitoBean
++     WebhookPublisher webhookPublisher;
+```
+The two new slice tests (added to the existing five):
+```java
+    @Test
+    void deprecatedTransferAdvertisesSuccessor() throws Exception {
+        given(transfers.transfer(any(), any(), any(), any())).willReturn(UUID.randomUUID());
+
+        mvc.perform(post("/api/transfers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":25.00}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Deprecation", "true"))
+                .andExpect(header().exists("Sunset"))
+                .andExpect(header().string("Link", "</api/v1/transfers>; rel=\"successor-version\""));
+    }
+
+    @Test
+    void v1TransferPassesTheIdempotencyKey() throws Exception {
+        UUID txId = UUID.fromString("00000000-0000-0000-0000-0000000000cc");
+        given(idempotentTransfers.transfer(eq("KEY-1"), eq("ACC-A"), eq("ACC-B"), any(), any()))
+                .willReturn(txId);
+
+        mvc.perform(post("/api/v1/transfers")
+                        .header("Idempotency-Key", "KEY-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":25.00}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.transactionId").value(txId.toString()));
+    }
+```
+
+🔍 **Line-by-line:**
+- `@MockitoBean IdempotentTransferService` / `WebhookPublisher` — the slice only instantiates the controller + MVC infra, so its new collaborators must be **mock beans** or the context fails to load (the sub-step-7 pitfall, now fixed). `@MockitoBean` is the Spring Boot 3.4+ replacement for `@MockBean`.
+- `deprecatedTransferAdvertisesSuccessor` — POSTs the old endpoint and asserts the three deprecation **headers** (`header().string(...)`, `header().exists("Sunset")`). The `Link` value's quotes are escaped to match exactly.
+- `v1TransferPassesTheIdempotencyKey` — stubs `idempotentTransfers.transfer(eq("KEY-1"), …)` and asserts the controller passes the `Idempotency-Key` header through and returns the stubbed `transactionId`.
+
+⌨️ **Code — `DemandAccountIntegrationTest` (the live-HTTP v1 proof, the new test method):**
+```java
+    @Test
+    void v1Idempotency_pagination_andDeprecation_overHttp() throws Exception {
+        post("/api/accounts", "{\"accountNumber\":\"ACC-A\",\"currency\":\"USD\",\"openingBalance\":200.00}");
+        post("/api/accounts", "{\"accountNumber\":\"ACC-B\",\"currency\":\"USD\",\"openingBalance\":0.00}");
+
+        // Idempotency: two POSTs with the same key move money ONCE.
+        String body = "{\"from\":\"ACC-A\",\"to\":\"ACC-B\",\"amount\":50.00,\"description\":\"rent\"}";
+        assertThat(postWithHeader("/api/v1/transfers", body, "Idempotency-Key", "K1").statusCode()).isEqualTo(200);
+        assertThat(postWithHeader("/api/v1/transfers", body, "Idempotency-Key", "K1").statusCode()).isEqualTo(200);
+        assertThat(get("/api/accounts/ACC-A").body()).contains("150");   // moved once (200 − 50), not 100
+
+        // A couple more (distinct) transfers to build up ledger entries for ACC-A.
+        postWithHeader("/api/v1/transfers", body, "Idempotency-Key", "K2");
+        postWithHeader("/api/v1/transfers", body, "Idempotency-Key", "K3");
+
+        // Pagination: page of ACC-A's entries → a PageResponse envelope.
+        HttpResponse<String> page = get("/api/v1/accounts/ACC-A/entries?page=0&size=2&sort=createdAt,desc");
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body())
+                .contains("\"content\":").contains("\"totalElements\":").contains("\"size\":2");
+
+        // Deprecation: the old transfer endpoint advertises its successor.
+        HttpResponse<String> deprecated = post("/api/transfers",
+                "{\"from\":\"ACC-A\",\"to\":\"ACC-B\",\"amount\":1.00}");
+        assertThat(deprecated.statusCode()).isEqualTo(200);
+        assertThat(deprecated.headers().firstValue("Deprecation")).hasValue("true");
+    }
+```
+
+🔍 **Line-by-line:**
+- This boots the whole app on a **random port** (`@SpringBootTest(webEnvironment = RANDOM_PORT)`) against a real Postgres, and drives it with the JDK `HttpClient` — exactly what `curl` would see.
+- `postWithHeader(..., "Idempotency-Key", "K1")` twice + `get("/api/accounts/ACC-A").body()` contains `"150"` — **idempotency over the wire**: same key, money moved once.
+- `get("/api/v1/accounts/ACC-A/entries?page=0&size=2&sort=createdAt,desc")` then `contains("\"content\":")`, `"totalElements"`, `"size":2` — **pagination over the wire**: the JSON is our `PageResponse` envelope, size honored.
+- `post("/api/transfers", ...)` then `headers().firstValue("Deprecation")).hasValue("true")` — **deprecation over the wire**.
+- The `@BeforeEach` in this class also `deleteAll()`s `idempotencyKeys`, `ledger`, `accounts` (added this step) so the shared DB starts clean.
+
+💭 **Under the hood:** the `?sort=createdAt,desc` query param is parsed by the same `PageableHandlerMethodArgumentResolver` discussed in sub-step 7 — only present in the **full** context, which is why pagination is asserted here (integration) rather than in the `@WebMvcTest` slice.
+
+▶️ **Run & See** (the whole module — **needs Docker** for Testcontainers):
 ```bash
 ./mvnw -pl services/demand-account -am verify
 ```
-✅ **Expected output:**
+✅ **Expected output** (from the Verification Log's recorded run):
 ```
 [INFO] Tests run: 25, Failures: 0, Errors: 0, Skipped: 0
 [INFO] BUILD SUCCESS
 ```
 
-🔬 **Break-it (the §12.3 mutation):** delete the replay-protection line in `WebhookSigner.verify` and rerun `WebhookSignerTest` — `aStaleTimestampIsRejected` fails (`Expecting value to be false but was true`). Put it back. (See 🔬 §5.)
+🔬 **Break-it (the §12.3 mutation):** delete the replay-protection line in `WebhookSigner.verify` (the `if (Math.abs(now - timestamp) > tolerance) return false;`) and rerun `WebhookSignerTest` — `aStaleTimestampIsRejected_replayProtection` fails (`Expecting value to be false but was true`). Put it back. (Recorded in 🔬 §5.)
 
-✋ **Checkpoint:** 25 green tests.
+📁 **Finally, record the decision** → new file `adr/0006-api-versioning-and-idempotency.md` (chose URI versioning, `Idempotency-Key`, HMAC+timestamp+retries — see the full ADR committed at `step-14-end`).
 
-💾 **Commit:** `git add services/demand-account/src/test && git commit -m "test(demand-account): idempotency, webhook signing/delivery, pagination, deprecation"`
+✋ **Checkpoint:** **25** green tests; the ADR is committed.
 
-⚠️ **Pitfall:** `@SpringBootTest` shares one DB — clean `idempotency_key` (and ledger before account, FK) in `@BeforeEach`, or a stale key turns the first request into an idempotent hit and your balance assertions drift.
+💾 **Commit:**
+```bash
+git add services/demand-account/src/test adr/0006-api-versioning-and-idempotency.md
+git commit -m "test(demand-account): idempotency, webhook signing/delivery, pagination, deprecation + ADR-0006"
+```
+
+⚠️ **Pitfall:** `@SpringBootTest` shares one DB across test methods — always clean `idempotency_key` (and `ledger` before `account`, for the FK) in `@BeforeEach`, or a stale key turns the first request into an idempotent hit and your balance assertions drift.
 
 ---
 
@@ -562,7 +1566,11 @@ sequenceDiagram
 2. **Pagination:** `GET /api/v1/accounts/ACC-A/entries?page=0&size=2&sort=createdAt,desc` → a `PageResponse` with `content`, `totalElements`, `size`.
 3. **Deprecation:** `POST /api/transfers` and inspect the response headers — `Deprecation`, `Sunset`, `Link`.
 4. **Webhooks (optional, live):** set `BANK_WEBHOOK_URL` to a [webhook.site](https://webhook.site) URL + `BANK_WEBHOOK_SECRET`, do a v1 transfer, and watch the signed `transfer.completed` arrive (with `X-Webhook-Signature`/`X-Webhook-Timestamp`). Verify it with `hmac_sha256(secret, ts + "." + body)`.
-5. 🧪 **Little experiments:** change the amount on a same-key retry → still returns the original result (the key, not the body, decides); send `Idempotency-Key: a` then `b` → two transfers.
+5. 🧪 **Little experiments:**
+   - change the **amount** on a same-key retry → still returns the original result (the key, not the body, decides);
+   - send `Idempotency-Key: a` then `b` → two transfers;
+   - request `?size=1` then `?size=2` and watch `totalPages` change while `totalElements` stays fixed;
+   - `make play-14` prints the one-command guided tour.
 
 ## 🏁 The Finished Result
 
@@ -598,6 +1606,14 @@ Per class: `DemandAccountIntegrationTest` 3 · `ConcurrentTransferTest` 2 · `Id
 ### 3 · Webhook signing + delivery (WebhookSignerTest + WebhookDeliveryTest)
 - `sign`/`verify` round-trips; a **tampered body**, **wrong secret**, and **stale timestamp** are all rejected.
 - An in-test HTTP receiver **verified our HMAC signature** on a real delivery; a transient `500` triggered a **retry** and the second attempt succeeded (`calls ≥ 2`).
+- Re-run on the frozen tree (pure JUnit, no Docker) — real output incl. the random high ports and the retry:
+```
+INFO  c.b.account.webhook.WebhookSender -- webhook delivered to http://localhost:58129/webhooks on attempt 1 (200)
+WARN  c.b.account.webhook.WebhookSender -- webhook to http://localhost:58131/webhooks got 500 on attempt 1
+INFO  c.b.account.webhook.WebhookSender -- webhook delivered to http://localhost:58131/webhooks on attempt 2 (200)
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+```
 
 ### 4 · Pagination, versioning & deprecation over real HTTP (DemandAccountIntegrationTest)
 - `POST /api/v1/transfers` twice with the same `Idempotency-Key` → `ACC-A` shows `150` (moved once).
@@ -648,11 +1664,17 @@ What if the *same key* arrives with a *different body* (a client bug)? Stripe re
 `page`/`size` (offset) is simple but degrades on deep pages (`OFFSET 1000000` scans and discards a million rows) and can skip/duplicate rows if data changes between pages. **Cursor** (keyset) pagination — "give me 20 after id X / createdAt T" — is stable and fast at any depth, at the cost of no random page access. For high-volume ledgers, prefer cursors.
 </details>
 
+<details>
+<summary>④ Why HMAC and not just HTTPS, or a plain hash, or an asymmetric signature?</summary>
+
+HTTPS protects the channel in transit, but the receiver still can't prove *who* sent the body once it arrives — HMAC authenticates the **payload** end-to-end (and survives a proxy that re-terminates TLS). A *plain* `hash(secret ∥ body)` is vulnerable to **length-extension** attacks; HMAC's nested construction isn't. An **asymmetric** signature (RSA/Ed25519) lets the receiver verify without holding a shared secret (better for many untrusted partners) but is heavier and overkill for a per-partner shared secret — which is why Stripe/GitHub use HMAC. We match the industry default.
+</details>
+
 ## 💼 Interview Prep: Questions You'll Be Asked
 
-1. **"How do you make a payment API safe to retry?"** *(the fintech classic)* → An `Idempotency-Key` header + a server-side store of `key → result`. A retry with the same key returns the stored result without re-executing; the key's unique constraint guards concurrent duplicates (only one commits). Keys get a TTL.
+1. 🌟 **"How do you make a payment API safe to retry?"** *(the fintech classic)* → An `Idempotency-Key` header + a server-side store of `key → result`. A retry with the same key returns the stored result without re-executing; the key's unique constraint guards concurrent duplicates (only one commits). Keys get a TTL.
 
-2. **"How would you secure an outbound webhook?"** *(security)* → Sign each delivery with HMAC-SHA256 over `timestamp + "." + body` using a per-partner secret; the receiver verifies in constant time and rejects timestamps outside a window (replay protection). Deliver over HTTPS; rotate secrets.
+2. 🌟 **"How would you secure an outbound webhook?"** *(security)* → Sign each delivery with HMAC-SHA256 over `timestamp + "." + body` using a per-partner secret; the receiver verifies in constant time and rejects timestamps outside a window (replay protection). Deliver over HTTPS; rotate secrets.
 
 3. **"Webhook delivery semantics?"** *(gotcha)* → At-least-once (you retry on failure), so receivers **must be idempotent** (dedupe by event id). Exactly-once delivery is impossible in general; you get exactly-once *effect* via idempotent receivers (+ Outbox to avoid lost/dual writes).
 
@@ -660,7 +1682,9 @@ What if the *same key* arrives with a *different body* (a client bug)? Stripe re
 
 5. **"Offset vs cursor pagination?"** → Offset (`page`/`size`) is simple but slow at depth and unstable under concurrent writes; cursor (keyset) is stable and fast at any depth but no random access. Return a stable envelope you own, not the ORM's `Page`.
 
-6. **"Concurrency: two retries of the same idempotent transfer race — what happens?"** *(concurrency)* → Both may miss the lookup and transfer, but the idempotency key's PRIMARY KEY lets only one commit; the other's transaction rolls back on the unique violation — so exactly one transfer commits. The DB is the coordination point (as with the pessimistic lock in Step 12).
+6. 🌟 **"Concurrency: two retries of the same idempotent transfer race — what happens?"** *(concurrency)* → Both may miss the lookup and transfer, but the idempotency key's PRIMARY KEY lets only one commit; the other's transaction rolls back on the unique violation — so exactly one transfer commits. The DB is the coordination point (as with the pessimistic lock in Step 12).
+
+7. **"Why constant-time signature comparison?"** *(gotcha)* → A normal `equals`/`==` returns as soon as it finds a mismatched byte, so the response time leaks how many leading bytes matched — an attacker brute-forces the signature byte by byte. `MessageDigest.isEqual` examines all bytes regardless, removing the timing signal.
 
 > **Behavioral/STAR seed:** *"Tell me about preventing a costly bug."* → Added idempotency keys to the transfer API (S/T) after noticing retries could double-charge (A); proved with a test that a same-key retry moves money once, and signed the webhooks so partners couldn't be spoofed (R).
 
@@ -683,19 +1707,24 @@ What if the *same key* arrives with a *different body* (a client bug)? Stripe re
 | Symptom | Cause | Fix |
 |---|---|---|
 | Context fails: `No qualifying bean of type ...ObjectMapper` | Boot 4 web defaults to **Jackson 3** → no Jackson-2 `ObjectMapper` bean | own one: `new com.fasterxml.jackson.databind.ObjectMapper()` (or use the Jackson 3 mapper). |
+| `@WebMvcTest` context fails: missing `IdempotentTransferService`/`WebhookPublisher` | the slice instantiates only the controller; its new collaborators have no bean | add `@MockitoBean IdempotentTransferService` and `@MockitoBean WebhookPublisher`. |
 | Same-key retry still moves money twice | lookup not short-circuiting before the transfer | return the stored `transactionId` *before* calling `transfers.transfer`. |
 | Idempotency test flaky / wrong balance | stale keys from another test (shared DB) | clean `idempotency_key` in `@BeforeEach` (and ledger before account, FK). |
-| Webhook signature never verifies | signing different bytes than the receiver hashes | both sides must hash exactly `timestamp + "." + body` (same encoding); compare in constant time. |
+| Webhook signature never verifies | signing different bytes than the receiver hashes | both sides must hash exactly `timestamp + "." + body` (same UTF-8 encoding); compare in constant time. |
 | `Pageable` not bound from query params | testing in a slice without Spring Data web config | bind it in the full `@SpringBootTest` context (the resolver is auto-configured there). |
+| Startup fails: `Schema-validation: missing column [created_at]` | entity ↔ migration mismatch under `ddl-auto=validate` | make `IdempotencyRecord`'s columns match `V2__idempotency_keys.sql` exactly. |
 | Reset to known-good | — | `git checkout step-14-end && ./mvnw -pl services/demand-account -am verify`. |
+
+> Run **`make doctor`** if anything in the toolchain looks off (Docker not running is the #1 cause of a red `verify` this step).
 
 ## 📚 Learn More: Resources & Glossary
 
 - **RFC 8594** (Deprecation/Sunset), **RFC 9457** (ProblemDetail, Step 13).
 - Stripe's API docs — the reference for idempotency keys and webhook signatures (the schemes we built).
 - Spring Data — `Pageable`/`Page`; the "don't expose `Page`" guidance.
+- `javax.crypto.Mac` / `MessageDigest.isEqual` — the JDK HMAC + constant-time-compare APIs.
 
-**Glossary:** **URI/header/media-type versioning** · **`Deprecation`/`Sunset`/`Link`** (RFC 8594) · **idempotency / `Idempotency-Key`** · **HMAC-SHA256** · **replay protection** · **constant-time compare** · **at-least-once / idempotent receiver** · **dual-write / Outbox** · **`Pageable` / `PageResponse`** · **offset vs cursor pagination**.
+**Glossary:** **URI/header/media-type versioning** · **`Deprecation`/`Sunset`/`Link`** (RFC 8594) · **idempotency / `Idempotency-Key`** · **HMAC-SHA256** · **replay protection** · **constant-time compare** · **at-least-once / idempotent receiver** · **dual-write / Outbox** · **`Pageable` / `PageResponse`** · **offset vs cursor pagination**. *(Full definitions in `docs/glossary.md`.)*
 
 ## 🏆 Recap & Study Notes
 
@@ -714,6 +1743,7 @@ What if the *same key* arrives with a *different body* (a client bug)? Stripe re
 3. Why must webhook receivers be idempotent? <details><summary>answer</summary>Delivery is at-least-once (retries) — they may see the same event twice.</details>
 4. Why not serialize Spring Data's `Page`? <details><summary>answer</summary>Its JSON shape is an unstable internal detail; own a `PageResponse` envelope.</details>
 5. Two concurrent retries with the same key — how is a double-transfer prevented? <details><summary>answer</summary>The idempotency key's PRIMARY KEY lets only one commit; the other rolls back on the unique violation.</details>
+6. Why does the v1 transfer fire the webhook *after* the transfer call returns, not inside a `@Transactional` block? <details><summary>answer</summary>So it sends only after the transfer has committed (no lying about a rolled-back transfer) — at the cost of the dual-write gap that the Outbox pattern (Step 20) closes.</details>
 
 **(d) 🔗 How this connects**
 - **Back to Step 13** (the MVC/ProblemDetail layer), **Step 12** (the transfer), **Step 10** (unique constraint), **Step 11** (concurrency).
