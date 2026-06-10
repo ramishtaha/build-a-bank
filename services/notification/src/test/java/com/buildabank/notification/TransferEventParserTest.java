@@ -6,6 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
+import com.buildabank.notification.adapter.in.messaging.TransferEventParser;
+import com.buildabank.notification.domain.TransferEvent;
+
 import tools.jackson.databind.json.JsonMapper;
 
 /**

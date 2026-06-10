@@ -1,11 +1,12 @@
-// services/notification/src/main/java/com/buildabank/notification/Notification.java
-package com.buildabank.notification;
+// services/notification/src/main/java/com/buildabank/notification/domain/Notification.java
+package com.buildabank.notification.domain;
 
 import java.math.BigDecimal;
 
 /**
- * A customer-facing notification derived from a {@code transfer.completed} event. {@code eventId} is the
- * end-to-end dedupe key (from the Outbox row id); {@code message} is the human-readable line we push to the UI.
+ * Step 26 (hexagonal) · DOMAIN value object — a customer-facing notification derived from a
+ * {@link TransferEvent}. Pure domain (no framework/transport). The {@link #from} factory keeps the
+ * message-wording in the core, derived from a domain event rather than a JSON payload.
  */
 public record Notification(
         String eventId,
@@ -16,8 +17,7 @@ public record Notification(
         String occurredAt,
         String message) {
 
-    /** Build a customer-facing notification from a domain {@link TransferEvent} (Step 25: keeps the
-     *  message-wording in one place, derived from the event — not from a JSON node). */
+    /** Build a notification from a domain {@link TransferEvent}. */
     public static Notification from(TransferEvent event) {
         String message = "Transfer of " + event.amount()
                 + " from " + event.fromAccount() + " to " + event.toAccount() + " completed.";

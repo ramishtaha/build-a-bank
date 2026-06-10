@@ -19,6 +19,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.testcontainers.redpanda.RedpandaContainer;
 
+import com.buildabank.notification.adapter.in.messaging.TransferEventConsumer;
+import com.buildabank.notification.adapter.out.push.SseHub;
+import com.buildabank.notification.domain.Notification;
+
 /**
  * Step 20 · proves the notification consumer is <strong>idempotent</strong> against a REAL Kafka broker
  * (Redpanda, Testcontainers): three deliveries carrying only two distinct {@code eventId}s (one is a duplicate)

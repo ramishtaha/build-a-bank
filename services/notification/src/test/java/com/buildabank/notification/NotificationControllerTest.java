@@ -19,6 +19,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import com.buildabank.notification.adapter.in.web.NotificationController;
+import com.buildabank.notification.adapter.out.push.SseHub;
+import com.buildabank.notification.domain.Notification;
+
 /**
  * Step 20 · web-layer slice for the notification API. Confirms {@code GET /api/notifications} returns the
  * recent buffer and {@code GET /api/notifications/stream} opens an async Server-Sent Events response. The

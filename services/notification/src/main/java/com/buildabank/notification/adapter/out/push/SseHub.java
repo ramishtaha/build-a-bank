@@ -1,5 +1,5 @@
-// services/notification/src/main/java/com/buildabank/notification/SseHub.java
-package com.buildabank.notification;
+// services/notification/src/main/java/com/buildabank/notification/adapter/out/push/SseHub.java
+package com.buildabank.notification.adapter.out.push;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -13,18 +13,19 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import com.buildabank.notification.application.port.out.NotificationPublisher;
+import com.buildabank.notification.domain.Notification;
+
 /**
- * Step 20 · the <strong>real-time push</strong> fan-out. Holds the set of open {@link SseEmitter}s (one per
- * connected browser) and broadcasts each {@link Notification} to all of them, while also keeping the most
- * recent few so a client that just connected (or a test) can read what happened.
- *
- * <p>Server-Sent Events (SSE) is a one-way server→client stream over a long-lived HTTP response
- * ({@code text/event-stream}) — simpler than WebSocket and perfect for "push me notifications." Thread-safe:
- * the emitter list is copy-on-write and the recent buffer is guarded, because Kafka listener threads publish
- * while request threads register/disconnect (the shared-state discipline from Step 11).
+ * Step 26 (hexagonal) · the outbound (driven) PUSH adapter — implements {@link NotificationPublisher} using
+ * <strong>Server-Sent Events</strong>. Holds the open {@link SseEmitter}s (one per connected browser) and a
+ * recent buffer; {@code publish} broadcasts to all. The application core pushes through the port and never
+ * sees an {@code SseEmitter}. Thread-safe (copy-on-write emitters + guarded buffer) — Kafka listener threads
+ * publish while request threads subscribe (Step 11). The web adapter uses {@link #register}/{@link #recent}
+ * to serve the SSE endpoints (the SSE transport is shared between push-out and subscribe-in).
  */
 @Component
-public class SseHub {
+public class SseHub implements NotificationPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(SseHub.class);
     private static final int RECENT_LIMIT = 50;
@@ -42,7 +43,8 @@ public class SseHub {
         return emitter;
     }
 
-    /** Record and broadcast a notification to every connected client. */
+    /** Outbound port: record and broadcast a notification to every connected client. */
+    @Override
     public void publish(Notification notification) {
         synchronized (recent) {
             recent.addFirst(notification);

@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+import com.buildabank.notification.adapter.out.persistence.InMemoryProcessedEventStore;
+import com.buildabank.notification.application.port.out.ProcessedEventStore;
+
 /**
  * Step 25 · the idempotency port's in-memory adapter, tested in isolation (another refactor payoff): the first
  * sighting of an id is new; a repeat is a duplicate. This is the guard behind exactly-once effect.

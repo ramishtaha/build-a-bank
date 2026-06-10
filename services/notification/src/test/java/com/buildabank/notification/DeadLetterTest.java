@@ -26,6 +26,8 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.testcontainers.redpanda.RedpandaContainer;
 
+import com.buildabank.notification.adapter.in.messaging.TransferEventConsumer;
+
 /**
  * Step 21 · proves <strong>retries + the Dead-Letter Topic</strong> on a REAL broker (Redpanda). A poison
  * (un-parseable) message is retried and then routed to {@code transfers.completed.DLT} instead of blocking
