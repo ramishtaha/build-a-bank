@@ -1,0 +1,89 @@
+### Build-a-Bank · Step 26 · Hexagonal architecture — the API is UNCHANGED (that's the point)
+### A behaviour-preserving structural restructure is invisible from outside: same endpoints, same JSON shape,
+### same live SSE push as Steps 20/25 — now produced by the hexagon's ports-and-adapters wiring:
+### Kafka → TransferEventConsumer (driving adapter) → NotifyOnTransfer port → NotificationService (use case)
+### → ProcessedEventStore port → NotificationPublisher port → SseHub (driven adapter) → browser.
+### Use these requests to verify that invisibility with your own eyes.
+###
+### The tell-tale: the dedupe log line is now signed by c.b.n.application.NotificationService
+### instead of c.b.notification.TransferEventConsumer — same log level, same message, new owner.
+###
+### Start the pieces (4 terminals) — identical to Steps 20/25:
+### 0) Broker (Redpanda, Kafka-API):
+###    docker run -d --name bank-redpanda -p 9092:9092 redpandadata/redpanda:v24.2.7 \
+###        redpanda start --mode dev-container --kafka-addr PLAINTEXT://0.0.0.0:9092 \
+###        --advertise-kafka-addr PLAINTEXT://localhost:9092
+### 1) Auth:           ./mvnw -pl services/auth spring-boot:run                                   # 8083
+### 2) Postgres:       docker compose -f services/demand-account/compose.yaml up -d               # 5433
+### 3) demand-account: SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account \
+###                    AUTH_JWKS_URI=http://localhost:8083/oauth2/jwks \
+###                    KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+###                    ./mvnw -pl services/demand-account spring-boot:run                         # 8082
+### 4) notification:   KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+###                    ./mvnw -pl services/notification spring-boot:run                           # 8084
+
+@auth = http://localhost:8083
+@da   = http://localhost:8082
+@note = http://localhost:8084
+
+### A) The recent-notifications buffer (newest first) — same endpoint, same JSON shape as Steps 20/25.
+### Empty [] until an event flows; after request E you'll see "Transfer of … completed."
+### (produced by domain/Notification.from via the application use case through the NotificationPublisher port).
+GET {{note}}/api/notifications
+
+### B) Open a live SSE stream and LEAVE IT RUNNING — watch the hexagon deliver events in real time.
+###    Terminal equivalent:  curl -N http://localhost:8084/api/notifications/stream
+GET {{note}}/api/notifications/stream
+Accept: text/event-stream
+
+### C) Log in for a token (paste the JWT below).
+POST {{auth}}/api/auth/login
+Content-Type: application/json
+
+{"username":"alice","password":"password"}
+
+@token = PASTE_JWT_HERE
+
+### D) Open two accounts (the flow seeds its own data — no separate seed file needed).
+POST {{da}}/api/accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"accountNumber":"ACC-A","currency":"USD","openingBalance":200.00}
+
+###
+POST {{da}}/api/accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"accountNumber":"ACC-B","currency":"USD","openingBalance":0.00}
+
+### E) Transfer → Outbox row → relay → Kafka → TransferEventConsumer (driving adapter)
+###     → notifyOnTransfer.handle(event) [inbound port] → NotificationService.handle
+###     → processedEvents.markIfNew [outbound port] → publisher.publish [outbound port]
+###     → SseHub.publish [driven adapter] → your SSE stream (request B) within ~2s.
+### Same observable flow as Steps 20/25 — dependency arrows just point inward now.
+POST {{da}}/api/v1/transfers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"from":"ACC-A","to":"ACC-B","amount":40.00,"description":"rent"}
+
+### 🧪 Experiment 1 (spot the new log owner): in notification's console, find:
+###   c.b.n.application.NotificationService : notified: Transfer of 40.0 from ACC-A to ACC-B completed.
+###   NOT: c.b.notification.TransferEventConsumer : notified: …   ← that was Steps 20/25
+###   Same policy, new address — the restructure made it visible in ops output.
+
+### 🧪 Experiment 2 (prove domain purity): in another terminal:
+###   grep -h "^import" services/notification/src/main/java/com/buildabank/notification/domain/*.java | sort -u
+###   → import java.math.BigDecimal;    (the whole domain's import surface — one line)
+
+### 🧪 Experiment 3 (bytecode proof of the dependency rule):
+###   ./mvnw -pl services/notification -DskipTests compile
+###   javap -c -p services/notification/target/classes/com/buildabank/notification/application/NotificationService.class \
+###     | grep -c adapter
+###   → 0   (the use case's bytecode contains zero adapter references)
+
+### 🧪 Experiment 4 (restart amnesia — the documented in-memory trade-off): restart notification,
+### replay request E with a NEW transfer, check request A: the in-memory adapter forgot everything.
+### The port is exactly where a Redis adapter would plug in (the durable-store stretch goal in the lesson).
