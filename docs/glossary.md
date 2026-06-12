@@ -6,6 +6,25 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 
 ---
 
+## Step 9 — Hibernate Performance & Correctness
+
+- **persistence context** — Hibernate's 1st-level cache, scoped to the transaction. It holds all entities loaded or saved during that transaction.
+- **dirty checking** — Hibernate's mechanism for detecting changes. At flush time, it compares managed entities against their initial state and automatically issues `UPDATE` statements for any changes.
+- **flush** — The process of synchronizing the persistence context with the underlying database by emitting pending SQL statements. Distinct from *commit*.
+- **lazy loading (LAZY)** — Deferring the initialization of an association (like a collection) until it is explicitly accessed.
+- **proxy** — A lightweight stand-in object created by Hibernate to represent a lazily-loaded entity or collection.
+- **`LazyInitializationException`** — An error thrown when code tries to initialize a proxy after the session (persistence context) has closed.
+- **N+1 problem** — A performance anti-pattern where an application executes 1 query to fetch N parent records, and then N additional queries to fetch their children (1 + N queries).
+- **`@EntityGraph` / `JOIN FETCH`** — Solutions to the N+1 problem that instruct Hibernate to fetch associations eagerly in a single `LEFT JOIN` query.
+- **projection** — A Spring Data feature (via interfaces or DTOs) that allows selecting only a subset of columns from the database, bypassing entity management entirely.
+- **optimistic locking / `@Version`** — A concurrency control mechanism that uses a version number/timestamp to detect conflicts. It prevents lost updates without taking physical database locks.
+- **lost update** — A concurrency anomaly where a write silently overwrites another's changes because both transactions read the original state before either wrote.
+- **pessimistic locking** — A concurrency control mechanism that uses actual database row locks (e.g., `SELECT ... FOR UPDATE`) to block other transactions from reading or writing the locked rows.
+
+
+
+---
+
 ## Step 11 — Concurrency & Thread Safety
 
 - **JMM (Java Memory Model)** — the JLS contract defining what one thread is guaranteed to see of another's actions. It governs three things: atomicity, visibility, and ordering.
@@ -429,3 +448,4 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 - **module canvas** — a per-module `.adoc` document (e.g. `module-service.adoc`) listing the module's base package, its Spring components, its **bean references** (which other modules it touches, by module), and events published/listened-to — the dependency edges spelled out in prose.
 - **C4 component diagram** — the level-3 view in the C4 model (Context → Container → Component → Code). Modulith renders the module graph as a C4 component diagram; isolated modules with no inter-module edges (e.g. `client`) are omitted from it but still counted by `verify()`.
 - **BOM (Bill of Materials), import scope** — a POM imported via `<type>pom</type><scope>import</scope>` into `dependencyManagement` that curates mutually-compatible versions; children then declare artifacts with **no `<version>`**. We import `spring-modulith-bom` so the Modulith deps need no explicit version (ArchUnit, with no BOM here, is pinned via the `archunit.version` property — note the asymmetry).
+

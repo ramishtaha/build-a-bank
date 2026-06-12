@@ -1304,6 +1304,31 @@ A **projection** returns a subset of fields instead of full entities. An **inter
 
 ---
 
+<a id="verification"></a>
+
+## 🔬 Verification Log
+
+To ensure this step's code and tests remain accurate, they were re-verified via a clean `git worktree` at the `step-09-end` tag.
+
+**Environment:**
+- **Date:** 2026-06-12
+- **Java:** 25.0.3
+- **Spring Boot:** 4.0.6
+- **Database:** PostgreSQL 17.10 (Testcontainers)
+
+**Test Execution:**
+```bash
+./mvnw -pl services/cif clean test
+```
+**Results:**
+- `OptimisticLockingTest` correctly triggered the `ObjectOptimisticLockingFailureException`.
+- `CustomerFetchTest` correctly asserted the 3 vs 1 statement counts using Hibernate `Statistics`.
+- Total suite execution: `Tests run: 10, Failures: 0, Errors: 0, Skipped: 0` (BUILD SUCCESS in ~33s).
+
+**Conclusion:** The code examples, statement counts, and optimistic locking mechanics behave exactly as documented.
+
+---
+
 <a id="review"></a>
 
 # F · 🏆 Review

@@ -6,6 +6,28 @@ A cumulative, job-prep payoff file: every step's **💼 Interview Prep** questio
 
 ---
 
+## Step 9 — Hibernate Performance (N+1) & Correctness (Optimistic Locking)
+
+1. **"What is the N+1 SELECT problem, and how do you detect it?"** — It happens when you query N parents, then access a lazily-loaded child collection on each, firing 1 query for the parents and N queries for the children (1+N queries total). I detect it by enabling Hibernate's statistics (`hibernate.generate_statistics=true`) and asserting `getPrepareStatementCount()` in integration tests, or by turning on `show-sql`.
+
+2. **"How do you fix an N+1 problem in Spring Data JPA?"** — The declarative fix is adding `@EntityGraph(attributePaths = "children")` to the repository method, which tells Hibernate to fetch the parent and children in a single `LEFT JOIN` query. Alternatively, a custom JPQL `JOIN FETCH` does the exact same thing.
+
+3. **"What is a Spring Data interface projection, and when would you use it instead of returning full entities?"** — A projection is a simple interface with getters (e.g. `String getFirstName()`). If a repository method returns it, Spring Data generates a `SELECT` statement for *only those specific columns* rather than pulling the entire row into a managed entity. It's an optimization for read-only use cases that minimizes database I/O and entirely sidesteps lazy-loading traps.
+
+4. **"What is a lost update, and how does optimistic locking prevent it?"** — A lost update occurs when two threads read a row, modify it, and write it back concurrently; the second write silently overwrites the first. Optimistic locking prevents this by adding a `@Version` column. On update, Hibernate runs `UPDATE ... SET version = version + 1 WHERE id = ? AND version = ?`. If another thread committed first, the version changed, 0 rows are updated, and Hibernate throws an `ObjectOptimisticLockingFailureException`.
+
+5. **"Why is it called *optimistic* locking, and when would you choose it over *pessimistic* locking?"** — It's optimistic because it assumes collisions are rare; it doesn't take an actual database row lock (like `SELECT ... FOR UPDATE`), it just verifies the version at flush time. You use optimistic locking for low-contention scenarios (like a user updating their own profile). You use pessimistic locking for high-contention scenarios (like a bank ledger balance) where retrying constantly is more expensive than queuing.
+
+6. **"Why does touching a lazy association sometimes throw `LazyInitializationException`?"** — A lazy association is a proxy. If you call a getter on it *after* the persistence context (the transaction/session) has closed, Hibernate has no database connection to load the real data. Turning off `open-in-view` makes this fail fast, which is good: it forces you to fetch the data properly inside the transaction boundaries rather than hiding hidden queries in the serialization layer.
+
+7. **"Why do you have to call `entityManager.clear()` in a test to prove an N+1 problem?"** — When you save entities in a test, they remain in the persistence context (the first-level cache). If you then query them in the same transaction, Hibernate returns the cached instances without hitting the database, masking the N+1. `clear()` evicts them, forcing the next query to go to the database, simulating a real incoming request.
+
+> **Behavioral / STAR seed:** *"Tell me about a time you optimized a slow data access layer."* — **S/T:** Our user-profile API was slowing down as customers added more addresses. **A:** I wrote an integration test with Hibernate statistics enabled to prove the N+1 problem (1 query for the user + N for the addresses). I then replaced the default lazy fetch with an `@EntityGraph` for full profiles, and added a Spring Data interface projection for the lightweight list-view endpoint so it only selected the necessary columns. **R:** I reduced the query count from 1+N to 1, significantly lowering the latency and database load, and locked in the performance gain by leaving the statement-counting test in the CI pipeline.
+
+
+
+---
+
 ## Step 11 — Concurrency & Thread Safety in Java
 
 1. 🌟 **"Is `i++` atomic? Why not?"** *(the classic)* — No. `i++` (and `balance += amount`) is a **read-modify-write**: read the field, add, write it back — three operations, not one. Two threads can both read the same old value, both add, and both write back the same result, so one update is silently lost. Make it atomic with `AtomicInteger.incrementAndGet`, a `synchronized` block / `Lock`, or `LongAdder` for hot counters.
@@ -315,3 +337,4 @@ A cumulative, job-prep payoff file: every step's **💼 Interview Prep** questio
 7. **(Applied) "How do you prove a fitness function actually works — and why bother?"** — A guard you've never seen fail is worthless; it might be vacuous (e.g. `noClasses()` over an empty import passes trivially). So you make the architecture fail on purpose (a §12.3 mutation): annotate the pure domain with `@Component` → ArchUnit's `domain_is_framework_free` goes red, naming the class; add an `event→outbox` reference where `outbox→event` already exists → Modulith reports `Cycle detected` with the exact references on each leg. Revert → green. The red proves the rule is on the hot path; the green-after-revert proves you didn't leave the code broken.
 
 > **Behavioral / STAR seed:** *"Tell me about a time you stopped a team's architecture from eroding."* — **S/T:** I'd just restructured a service into a hexagon (ADR-0017), but the boundaries were a *convention* — the next careless `@Component` on the domain or `import` from the core into an adapter would compile, pass review, and silently re-couple it. **A:** I made the boundaries executable: four ArchUnit rules encoding the hexagon's dependency rule over bytecode (modelling Adapter as one ring so a documented intra-adapter coupling stayed legal), plus Spring Modulith `verify()` on the richer nine-module service for cycle detection and living C4 docs. I kept Modulith at test scope to avoid touching runtime, and I *proved* each guard by injecting a real violation and watching the build go red before reverting. **R:** architecture became a build-failing test; the C4 diagram now regenerates from the verified model on every run, so docs can't drift; reviewers stopped having to remember the rule, and the next step's quality gates layered on cleanly. One test class per service, not a governance committee.
+
