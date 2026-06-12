@@ -476,3 +476,16 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 - **Spring Boot Starter**: A dependency descriptor that bundles a set of transitive dependencies, an `@AutoConfiguration`, and an `AutoConfiguration.imports` file to automatically provide a feature to any consumer placing it on their classpath.
 - **MockMvcTester**: The AssertJ-fluent successor to `MockMvc.perform` in Spring Framework 7.
 - **Code-Quality Gates**: Automated checks (e.g. Spotless, Checkstyle) wired into the build lifecycle (`verify` phase) to enforce formatting and style rules, failing the build on violation.
+
+## Step 29 — React SPA Foundations, Auth & Routing
+
+- **SPA (Single-Page Application)**: A web app that loads a single HTML shell and relies on JavaScript to render content and fetch data via APIs, enabling fast, app-like transitions.
+- **Vite / ESM dev server**: A modern build tool. In dev, it serves native ES modules directly to the browser (no bundling) for near-instant starts and hot-module replacement (HMR).
+- **client-side routing**: Changing the URL and rendering different views using JavaScript (e.g., React Router) without making a full-page request to the server.
+- **route guard**: A component that intercepts navigation to a protected route and redirects the user (e.g., to `/login`) if they lack the required authentication or permissions.
+- **React context**: A built-in dependency injection mechanism in React to share state (like the current user) across the component tree without passing props down manually.
+- **JWT / Bearer**: JSON Web Token, passed in the `Authorization: Bearer <token>` header, used to securely transmit the user's identity and roles to stateless backends.
+- **CORS / preflight**: Cross-Origin Resource Sharing. A browser security feature. A preflight is an `OPTIONS` request the browser sends to check if a cross-origin server allows the upcoming request.
+- **Vitest**: A Vite-native test runner with a Jest-compatible API, designed to test frontend code using the exact same build pipeline as the app.
+- **Testing Library**: A family of testing utilities that encourage querying the DOM as a user would (e.g., by text or role) rather than asserting on component implementation details.
+- **lockfile**: A file (`package-lock.json`) that pins the exact, resolved versions of all direct and transitive dependencies, ensuring reproducible builds across machines.

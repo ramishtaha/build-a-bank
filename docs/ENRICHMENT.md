@@ -36,11 +36,11 @@ A documentation-only pass that brings each step's `lesson.md` up to the full **M
 | 7 | ⬜ pending | |
 | 8 | ⬜ pending | |
 | 28 | ✅ enriched | Phase-E finale: Testing Mastery + Custom Spring Boot Starter. Built the full micro-anatomy lesson for Step 28 covering PITest, jqwik, custom starter, MockMvcTester, Spotless, and Checkstyle. Added Q&As to interview-bank and Key Terms to glossary. |
-| 29 | ⬜ pending | |
+| 29 | ✅ enriched | React SPA Foundations (Vite, React Router, AuthContext). Build rewritten to 6 full-micro-anatomy sub-steps with complete verbatim `step-29-end` code (Vite+TS config, typed API client, AuthContext, route guard, React router pages, and gateway CORS filter). 1,177 lines / 66 fenced blocks. Appended Step 29 Q&As to docs/interview-bank.md and Key Terms to docs/glossary.md. |
 | 30 | ⬜ pending | multiple of 5 → ensure Cumulative Review (steps 1-30) |
 
 **Enrichment queue (do them strictly in this order): 9 → 10 → 28 → 29 → 30 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8**
 
-**Next step to enrich: 29**
+**Next step to enrich: 30**
 
 When every step in the queue above is marked ✅ enriched (no ⬜ pending rows remain), create an empty `STOP` file in the repo root and halt.

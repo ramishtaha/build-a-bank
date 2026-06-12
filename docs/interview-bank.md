@@ -368,3 +368,19 @@ A cumulative, job-prep payoff file: every step's **💼 Interview Prep** questio
 7. **"Why use NullAway, and what's the catch?"** — NullAway is a compile-time check (an Error Prone plugin) that forbids `@Nullable` dereferences, eliminating `NullPointerException`s before runtime. The catch: it hooks deeply into `javac` internals via `--add-exports`, making it tightly coupled to specific JDK versions (which is why we keep it in an opt-in profile on bleeding-edge JDK 25).
 
 > **Behavioral / STAR seed:** *"Tell me about a time you improved a team's test suite."* — **S/T:** Our core business logic had 100% line coverage, but bugs were still slipping through because assertions were weak. **A:** I introduced mutation testing (PITest) scoped specifically to the core domain (avoiding the slow integration tests) to objectively measure assertion strength. I also added jqwik for property-based testing to find edge-cases we hadn't imagined. **R:** PITest immediately exposed three "surviving mutants" (missing assertions), which we patched. We locked the build to a 90% mutation threshold, permanently raising the bar for core logic reliability without slowing down the overall CI cycle.
+
+---
+
+## Step 29 — React SPA Foundations, Auth & Routing
+
+1. **"Walk me through your frontend auth flow."** — *Login posts credentials → JWT; store it (localStorage here, with the XSS caveat); expose auth via context; attach `Bearer` to API calls; a ProtectedRoute redirects unauthenticated users. /me resolves the current user.* **(Common.)**
+
+2. **"How do you protect a route in React Router?"** — *A guard component reads auth state from context and either renders the children or `<Navigate to="/login" replace/>`. `replace` so Back doesn't re-enter the guard.*
+
+3. **"Where do you store a JWT and why?"** — *Trade-off: localStorage (simple, XSS-exposed) vs httpOnly cookie (XSS-safe, CSRF to handle) vs in-memory + refresh token (safest, lost on refresh). State the threat model.*
+
+4. **"What is CORS and why did the gateway need it?"** — *Browsers block cross-origin requests unless the server opts in via `Access-Control-Allow-Origin`. The SPA (:5173) and gateway (:8080) are different origins, so the gateway must allow the SPA's origin (deny-by-default).*
+
+5. **"(Gotcha) Why does Vite commit a lockfile if package.json has versions?"** — *package.json has ranges; the lockfile pins exact resolved versions of the whole tree for reproducible `npm ci`.*
+
+> **Behavioral / STAR seed:** *"Tell me about a time you implemented an auth flow."* — **S/T:** We needed a secure way for a SPA to consume our API gateway. **A:** I implemented a JWT-based flow where the SPA exchanges credentials for a token, stores it, and attaches it via an interceptor, protected by a route guard. **R:** The frontend was successfully authenticated against a single origin, cleanly separating public and protected routes.
