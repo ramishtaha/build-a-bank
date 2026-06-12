@@ -535,4 +535,31 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 - **gitleaks** — A static analysis tool that scans the codebase and Git history for credentials, API keys, and private keys to prevent accidental commits of secrets.
 - **`RestClient`** — Spring's modern synchronous HTTP client designed for executing RESTful requests, replacing the legacy `RestTemplate` and `TestRestTemplate` in Spring Boot 4.
 
+## Step 2 — Java Language Primer
+
+- **record** — An immutable, transparent, value-based data carrier introduced in Java 16. The compiler automatically generates fields, a canonical constructor, accessors, and `equals`/`hashCode`/`toString` methods.
+- **compact constructor** — A parameter-less constructor body in a Java record used to validate or normalize inputs before the fields are assigned.
+- **sealed type** — A class or interface that explicitly restricts which other classes or interfaces may extend or implement it (using `sealed` and `permits`), closing the inheritance hierarchy for compile-time safety.
+- **pattern-matching `switch`** — A modern `switch` construct (finalized in Java 21) that tests-and-binds variables by type, enforcing compile-time exhaustiveness when switching over a sealed type with no `default` branch.
+- **generics** — Type parameters (`<T, ID>`) that enable code reuse with compile-time type-safety, which are checked by the compiler and then erased to their bounds at runtime (type erasure).
+- **type erasure** — The compilation process where generic type parameters are replaced with their bounds (typically `Object`) in the bytecode, ensuring backwards compatibility and zero runtime performance overhead.
+- **stream** — A lazy pipeline of operations (from the Java 8 Stream API) that describes bulk data transformations (intermediate operations like `filter`/`map` followed by a terminal operation like `reduce`/`collect`).
+- **lambda expression** — A compact, anonymous representation of a functional interface instance (e.g., `t -> t.isCredit()`), reducing boilerplates.
+- **method reference** — A compact lambda shorthand referring to an existing method by name (e.g., `BigDecimal::add` or `Transaction::type`).
+- **`Optional<T>`** — A container object that may or may not contain a non-null value, forcing callers to explicitly handle the possibility of absence to prevent `NullPointerException`.
+- **enum** — A special Java class representing a fixed set of named constant instances (like `TransactionType`), which are singletons and can be safely compared using `==`.
+- **checked exception** — An exception (extending `Exception` but not `RuntimeException`) that must be declared in the method signature or handled via a `try-catch` block, checked at compile time.
+- **unchecked exception** — An exception (extending `RuntimeException`) representing programming errors or system failures that does not need to be declared or caught, checked only at runtime.
+- **`BigDecimal`** — The standard Java class for exact arbitrary-precision signed decimal arithmetic, required for representing monetary values exactly to avoid floating-point errors.
+- **`RoundingMode.HALF_EVEN`** — Banker's rounding, which rounds towards the nearest neighbor unless both are equidistant, in which case it rounds toward the nearest even digit; standard for eliminating upward rounding bias in totals.
+- **`Instant`** — A class representing an absolute point on the UTC timeline (nanosecond resolution since the 1970 epoch), used for storing unambiguous transactional timestamps.
+- **`LocalDate`** — A zone-less calendar date (year-month-day) in `java.time`, used for birthdays or dates that represent a calendar day independent of timezone.
+- **`ZonedDateTime`** — A calendar date and time representation combined with a timezone ID and offset (like `America/New_York`), used exclusively at the display boundary.
+- **`Duration`** — A time-based amount of elapsed time (seconds and nanoseconds) between two instants, used for measuring time intervals.
+- **`Period`** — A calendar-date-based amount of time (years, months, and days) between two local dates, used for calculating calendar intervals like age.
+- **`ConcurrentHashMap`** — A thread-safe hash map implementation designed for high concurrency, permitting safe concurrent reads and striped locks for concurrent writes.
+- **`var`** — A local variable type-inference keyword introduced in Java 10, letting the compiler infer the static type from the initializer expression to reduce visual noise.
+- **text block** — A multi-line string literal starting and ending with triple quotes (`"""`), introduced in Java 15 to make structured text blocks highly readable without manual escape sequences.
+
+
 

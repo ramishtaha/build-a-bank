@@ -286,8 +286,9 @@ flowchart LR
 ### 🌳 Files We'll Touch
 
 ```text
+pom.xml                                                  ← sub-step 1 (register module)
 playground/java-basics/
-├── pom.xml                                              ← sub-step 1
+├── pom.xml                                              ← sub-step 1 (new POM)
 └── src/
     ├── main/java/com/buildabank/basics/
     │   ├── money/Money.java                             ← sub-step 2
@@ -311,18 +312,17 @@ playground/java-basics/
         └── analytics/TransactionAnalyticsTest.java      ← sub-step 12
 ```
 
-> [!TIP]
-> **The parent POM already aggregates `playground/*` modules** (set up in Step 1's scaffold per ADR-0003). If your `pom.xml`'s `<modules>` list doesn't yet include `playground/java-basics`, add it — but in the `step-01-end` baseline it's already there. If a build can't find the module, that's the first thing to check (🩺).
-
 ---
 
-### Sub-step 1 of 12 — Create the module `pom.xml` 🧭 *(you are here: **module pom** → Money → Customer → …)*
+### Sub-step 1 of 12 — Create the module `pom.xml` and register it in the root POM 🧭 *(you are here: **module pom** → Money → Customer → …)*
 
-🎯 **Goal:** declare a new Maven module that inherits the pinned Java 25 / Spring Boot 4 parent and pulls in JUnit 5 + AssertJ for tests. This is plain Java — **no Spring dependency at all** — because Step 2 is about the *language*.
+🎯 **Goal:** declare a new Maven module that inherits the pinned Java 25 / Spring Boot 4 parent, register it in the root `pom.xml`'s modules list so Maven builds it, and pull in JUnit 5 + AssertJ for tests. This is plain Java — **no Spring dependency at all** — because Step 2 is about the *language*.
 
-📁 **Location:** new file → `playground/java-basics/pom.xml`
+📁 **Location:**
+1. new file → `playground/java-basics/pom.xml`
+2. edit file → `pom.xml` (root directory)
 
-⌨️ **Code:**
+⌨️ **Code (1/2) — New Module POM:**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -363,6 +363,19 @@ playground/java-basics/
     </dependencies>
 </project>
 ```
+
+⌨️ **Code (2/2) — Root POM Edit:**
+
+```diff
+<!-- pom.xml (root directory) -->
+     <!-- services/hello represents the initial web app target that must compile
+          (added at step-01-end). Real banking microservices begin at Step 8 (CIF). -->
+     <modules>
+         <module>services/hello</module>
++        <module>playground/java-basics</module>
+     </modules>
+```
+
 
 🔍 **Line-by-line:**
 

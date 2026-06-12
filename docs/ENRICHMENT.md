@@ -28,16 +28,17 @@ A documentation-only pass that brings each step's `lesson.md` up to the full **M
 | 9 | ✅ enriched | Hibernate performance & correctness. Rewrote build to 6 full-micro-anatomy sub-steps. Added N+1 statistics proof (3 vs 1) and optimistic version locking proof. Added compile & test Run-and-See blocks for all sub-steps. Appended 6 Interview Q&As to docs/interview-bank.md and 14 Key Terms to docs/glossary.md. |
 | 10 | ✅ enriched | Relational Databases Up Close. Build section expanded to 7 full-micro-anatomy sub-steps containing complete verbatim source files from the `step-10-end` tag. Added execution outputs for index scans, MVCC reads, write skew, and pool timeouts. Added 6 Interview Q&As to docs/interview-bank.md, 22 Key Terms to docs/glossary.md, and a 12-question Cumulative Review (steps 1-10) mixed quiz. |
 | 1 | ✅ enriched | Setup, the Command Line, Linux & Git. Build rewritten to 8 full-micro-anatomy sub-steps. Added step-01-end tag code files verbatim, including parent pom.xml, services/hello module POM, HelloApplication entry point, HelloController, configuration, and integration test class. Added validation run-and-see failures and break-it experiments. Appended 6 Interview Q&As to docs/interview-bank.md and 14 Key Terms to docs/glossary.md. |
-| 2 | ⬜ pending | |
+| 2 | ✅ enriched | Java language primer. Build section verified and matches `step-02-end` tag verbatim (pom, 14 Java classes/tests). Added root `pom.xml` module registration diff context to sub-step 1. Preserve deterministic expected output for 16 tests in the Verification Log, noting that HEAD has since added 6 more tests (UrlAnatomy, RawHttp, JvmLab) for subsequent steps. Appended 6 Interview Q&As to `docs/interview-bank.md` and 23 Key Terms to `docs/glossary.md`. Not a multiple of 5 → no Cumulative Review. |
 | 28 | ✅ enriched | Testing mastery & custom starter. Build rewritten to 6 full-micro-anatomy sub-steps. Added 100% PITest mutation score verification on notification core, jqwik property-based tests, custom autoconfigured MoneyFormatter starter consumed by hello, and Spotless/Checkstyle quality gates. Verified JDK 25 compatibility. Appended 5 Interview Q&As and 13 Key Terms. |
 | 29 | ✅ enriched | React+TS foundations, login & routing. Build rewritten to 6 full-micro-anatomy sub-steps with verbatim client, context, guard, pages, and test files from the step-29-end tag. Added gateway CORS configuration and extended routing tests. Appended 5 Interview Q&As to docs/interview-bank.md and 10 Key Terms to docs/glossary.md. Created requests.http for testing. |
 | 30 | ✅ enriched | Frontend data forms, queries, mutations, SSE, and gateway routing. Build rewritten to 9 full-micro-anatomy sub-steps with verbatim client, queries, panels, validated form, and SSE hook files from the step-30-end tag. Added gateway notification route and routing test. Appended 6 Interview Q&As to docs/interview-bank.md, 12 Key Terms to docs/glossary.md, and a 15-question Cumulative Review (steps 1-30) mixed quiz. |
 
 **Enrichment queue (do them strictly in this order): 9 → 10 → 28 → 29 → 30 → 1 → 2**
 
-**Next step to enrich: 2**
+**Next step to enrich: none**
 
 
 When every step in the queue above is marked ✅ enriched (no ⬜ pending rows remain), create an empty `STOP` file in the repo root and halt.
+
 
 
