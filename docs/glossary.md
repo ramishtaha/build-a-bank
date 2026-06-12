@@ -449,3 +449,30 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 - **C4 component diagram** — the level-3 view in the C4 model (Context → Container → Component → Code). Modulith renders the module graph as a C4 component diagram; isolated modules with no inter-module edges (e.g. `client`) are omitted from it but still counted by `verify()`.
 - **BOM (Bill of Materials), import scope** — a POM imported via `<type>pom</type><scope>import</scope>` into `dependencyManagement` that curates mutually-compatible versions; children then declare artifacts with **no `<version>`**. We import `spring-modulith-bom` so the Modulith deps need no explicit version (ArchUnit, with no BOM here, is pinned via the `archunit.version` property — note the asymmetry).
 
+
+### Step 10
+- Seq Scan (read all rows)
+- Index Scan (B-tree → heap)
+- Bitmap Index Scan (index → page bitmap → ordered heap reads)
+- Index Only Scan (answer from index alone)
+- covering index (`INCLUDE` payload)
+- MVCC (multi-version concurrency control)
+- snapshot (a txn's visible-version set)
+- `xmin`/`xmax` (row-version system columns)
+- VACUUM (reclaim dead versions; set visibility map)
+- dirty/non-repeatable/phantom read
+- write skew
+- SSI (Serializable Snapshot Isolation)
+- SQLSTATE 40001 (serialization failure → retry)
+- partition pruning
+- connection pool
+- `connectionTimeout`
+- `CREATE INDEX CONCURRENTLY`
+- expand-contract.
+
+- **Mutation Testing**: A testing technique that introduces small changes (mutations) to the codebase and checks if the test suite catches them (fails). Measures test strength, not just coverage.
+- **Surviving Mutant**: A mutation that did not cause any tests to fail. Indicates a gap in the test suite's assertions.
+- **Property-based Testing**: A testing approach where properties or invariants of a system are defined, and thousands of randomized inputs are generated to verify that the properties hold for all generated cases.
+- **Spring Boot Starter**: A dependency descriptor that bundles a set of transitive dependencies, an `@AutoConfiguration`, and an `AutoConfiguration.imports` file to automatically provide a feature to any consumer placing it on their classpath.
+- **MockMvcTester**: The AssertJ-fluent successor to `MockMvc.perform` in Spring Framework 7.
+- **Code-Quality Gates**: Automated checks (e.g. Spotless, Checkstyle) wired into the build lifecycle (`verify` phase) to enforce formatting and style rules, failing the build on violation.
