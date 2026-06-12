@@ -518,3 +518,21 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 - **Idempotency-Key (Frontend role)** — A unique request ID (typically a UUID generated in client memory via `crypto.randomUUID()`) attached to an HTTP header on mutating calls. If the request is retried (e.g., due to network disruption), the server detects the key and returns the cached result instead of executing the mutation twice.
 - **Problem Details (RFC 9457)** — A standardized JSON structure for API error responses. It includes fields like `title`, `status`, and `detail` to describe errors in a machine-readable yet human-friendly way. The frontend parses this to display exact failure reasons.
 
+## Step 1 — Setup, the Command Line, Linux & Git — and Your First Running Spring Boot App
+
+- **POM** — Maven's Project Object Model (`pom.xml`) containing project coordinates, settings, and dependencies.
+- **BOM** — Bill of Materials, a specialized POM that version-manages dependencies to ensure compatible libraries are used together without manual version specification in child POMs.
+- **Maven Wrapper (`mvnw`)** — A portable Maven bootstrap script committed to the repository that automatically downloads and runs the exact pinned Maven version.
+- **starter** — A curated set of convenient dependency descriptors provided by Spring Boot to bootstrap specific capabilities (e.g., `spring-boot-starter-web` for web development).
+- **auto-configuration** — Spring Boot's mechanism to automatically configure beans in the application context based on the contents of the classpath and defined properties, avoiding boilerplate setup.
+- **application context** — Spring's IoC container that acts as a registry for creating, configuring, managing, and wiring application beans.
+- **bean** — An object instantiated, configured, and managed by Spring's inversion-of-control container.
+- **embedded Tomcat** — A servlet container packaged directly inside the application's executable jar file and executed in-process, bypassing the need to deploy WAR files to external servers.
+- **Actuator** — A Spring Boot module that provides production-ready management and observation endpoints, such as health status (`/actuator/health`) and application info.
+- **virtual thread** — A JVM-scheduled, lightweight thread introduced in Project Loom / Java 21+ that enables concurrent request processing without pinning dedicated operating system threads.
+- **`Instant`** — A point on the UTC timeline (e.g. `2026-06-09T13:29:14.842392300Z`) used throughout the codebase as the single standard timestamp format to avoid timezone offsets and timezone-shifting bugs.
+- **secrets hygiene** — The security practice of keeping credentials, keys, and passwords out of source control (utilizing gitignored `.env` files and `.env.example` templates with fake placeholders).
+- **gitleaks** — A static analysis tool that scans the codebase and Git history for credentials, API keys, and private keys to prevent accidental commits of secrets.
+- **`RestClient`** — Spring's modern synchronous HTTP client designed for executing RESTful requests, replacing the legacy `RestTemplate` and `TestRestTemplate` in Spring Boot 4.
+
+

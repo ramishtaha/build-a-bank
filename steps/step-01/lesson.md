@@ -324,13 +324,30 @@ Java version: 25.0.3, vendor: Oracle Corporation
 
 ---
 
-### Sub-step 2 of 8 — Understand the parent (aggregator) POM 🧭 *(toolchain ✅ → **parent POM** → …)*
+### Sub-step 2 of 8 — Register the hello-service module in the parent POM 🧭 *(toolchain ✅ → **parent POM** → …)*
 
-🎯 **Goal:** understand the **parent POM** — the single file that pins versions for *every* module. In a build-along folder you'd create this; in the course repo it already exists at `step-01-start`. Read it carefully; it's the spine of the whole monorepo.
+🎯 **Goal:** Register the new `hello-service` module in the parent POM so Maven knows to aggregate, compile, and validate it as part of the project reactor.
 
-📁 **Location:** `build-a-bank/pom.xml` (repo root).
+📁 **Location:** edit file → `pom.xml` (at the repo root).
 
-⌨️ **Code** (the complete file, verbatim):
+⌨️ **Code** (the diff showing the module registration, relative to `step-01-start`):
+
+```diff
+@@ -37,7 +37,8 @@
+         <archunit.version>1.4.2</archunit.version>
+     </properties>
+ 
+-    <!-- Modules are added step-by-step. The hello-service is added during Step 1 (it is the
+-         deliverable at step-01-end). At step-01-start this list is empty and the aggregator
+-         still builds clean ("nothing to compile"). -->
++    <!-- Modules are added step-by-step. The hello-service is the Step 1 deliverable
++         (added at step-01-end). Real banking microservices begin at Step 8 (CIF). -->
+     <modules>
++        <module>services/hello</module>
+     </modules>
+```
+
+And for reference, here is the complete `pom.xml` at the root after your edits:
 
 ```xml
 <!-- pom.xml -->
@@ -373,7 +390,8 @@ Java version: 25.0.3, vendor: Oracle Corporation
         <archunit.version>1.4.2</archunit.version>
     </properties>
 
-    <!-- Modules are added step-by-step. Step 1 ships the first running app. -->
+    <!-- Modules are added step-by-step. The hello-service is the Step 1 deliverable
+         (added at step-01-end). Real banking microservices begin at Step 8 (CIF). -->
     <modules>
         <module>services/hello</module>
     </modules>
@@ -401,31 +419,50 @@ Java version: 25.0.3, vendor: Oracle Corporation
 </project>
 ```
 
-🔍 **Line-by-line** (every term defined inline):
+🔍 **Line-by-line:**
 - **POM** = *Project Object Model* — `pom.xml` is Maven's project descriptor: identity, dependencies, build config.
 - `<parent> … spring-boot-starter-parent … 4.0.6` — our parent inherits *Spring Boot's* parent. That parent is a **BOM** (*Bill of Materials*): a curated list of mutually-compatible versions for hundreds of libraries, so you declare dependencies **without versions** and Boot picks tested-together ones. `4.0.6` is our pinned, GA Spring Boot.
 - `<relativePath/>` (empty) — "don't look for the parent on disk; resolve it from the repository." Standard for the Boot parent.
 - `<groupId>com.buildabank</groupId>` — our organization's namespace (reverse-DNS convention).
 - `<packaging>pom</packaging>` — this project produces **no jar**; it's an *aggregator/parent* that groups modules and shares config. (A normal app uses the default `jar`.)
 - `<java.version>25</java.version>` + `<maven.compiler.release>25</maven.compiler.release>` — compile against the **Java 25** language level and target the Java 25 runtime API. `release` is the modern, single-flag way to set source+target safely.
-- `<modules><module>services/hello</module></modules>` — the only module so far. Building the parent builds every listed module. We add modules step by step.
+- `<modules>` — lists the subdirectories containing child modules. Here, we register `services/hello`. Building the parent will now compile and package this module.
 - `<dependencyManagement>` — declares versions for libraries used *later* (Spring Cloud from Step 15, Testcontainers from Step 8) **without** adding them yet. Pinning here means modules just say "I want testcontainers" and inherit the right version. `<scope>import</scope>` + `<type>pom</type>` = "import another BOM's version list."
 
-💭 **Under the hood:** when Maven builds, it computes an *effective POM* by merging your POM with the Spring Boot parent and any imported BOMs. That merged result is where "no-version" dependency declarations get their actual versions. Run `./mvnw help:effective-pom` later to see the full thing.
+💭 **Under the hood:** When Maven builds, it parses the parent POM's `<modules>` list and constructs the **Reactor** — the list of projects to build, sorted in topological order according to their dependencies. If a parent registers a module, Maven expects to find that directory containing a `pom.xml` at that path.
 
-✋ **Checkpoint:** you understand that this one file pins Java 25 + Spring Boot 4.0.6 for the whole repo, and lists the modules. If you're building by hand in your own folder, this file exists exactly as above.
+🔮 **Predict:** Since you edited the parent POM to include `services/hello`, but the directory `services/hello` does not exist on disk yet, what will happen if you run Maven validation on the project?
 
-⚠️ **Pitfall:** never write `<version>latest</version>` or `LATEST`/`RELEASE` for anything — builds become non-reproducible and can break overnight. We pin everything; the single source of truth is `VERSIONS.md`.
+▶️ **Run & See:**
+```bash
+./mvnw validate      # Windows: .\mvnw.cmd validate
+```
+✅ **Expected output:**
+```text
+[ERROR]   The project com.buildabank:build-a-bank-parent:0.1.0-SNAPSHOT (C:\Users\ramishtaha\Desktop\Claude\build-a-bank - Antigravity\pom.xml) has 1 error
+[ERROR]     Child module C:\Users\ramishtaha\Desktop\Claude\build-a-bank - Antigravity\services\hello of C:\Users\ramishtaha\Desktop\Claude\build-a-bank - Antigravity\pom.xml does not exist
+```
+The reactor validation fails exactly as predicted because the directory does not exist. This is the correct, expected behavior!
+
+✋ **Checkpoint:** Confirm you see the validation error mentioning that the child module `services/hello` does not exist.
+
+💾 **Commit:** Let's commit the parent POM change (even though the build is temporarily broken; we'll fix it in the next sub-step):
+```bash
+git add pom.xml
+git commit -m "build(hello): register hello-service module in parent POM"
+```
+
+⚠️ **Pitfall:** Never register a module in the parent `<modules>` list without creating the corresponding directory containing a `pom.xml` — it will instantly break any Maven build execution from the root.
 
 ---
 
 ### Sub-step 3 of 8 — The hello-service module POM 🧭 *(… parent POM ✅ → **module POM** → …)*
 
-🎯 **Goal:** create the module that *is* your first app: declare the web + actuator + test dependencies and the Spring Boot Maven plugin.
+🎯 **Goal:** Create the module directory and its own `pom.xml` that imports the parent and declares the web, actuator, and test dependencies.
 
 📁 **Location:** new file → `services/hello/pom.xml`
 
-⌨️ **Code** (the complete file, verbatim):
+⌨️ **Code** (the complete file, verbatim from `step-01-end`):
 
 ```xml
 <!-- services/hello/pom.xml -->
@@ -493,43 +530,45 @@ Java version: 25.0.3, vendor: Oracle Corporation
 
 💭 **Under the hood:** "no-version dependencies" feels like magic but isn't — the parent's `dependencyManagement` (via Boot's BOM) maps each `groupId:artifactId` to a tested version. The plugin's `repackage` goal runs during the `package` phase and rewrites the jar with a nested-jar layout and a `Main-Class` that bootstraps Spring's classloader.
 
-🔮 **Predict:** after you add this POM but *before* writing any Java, will `./mvnw -pl services/hello compile` succeed? (Think: is there any source to compile yet?)
+🔮 **Predict:** Now that we've created the directory `services/hello` and the file `pom.xml`, will `./mvnw -pl services/hello validate` succeed when run from the root?
 
 ▶️ **Run & See:**
-
 ```bash
 ./mvnw -B -pl services/hello validate   # Windows: .\mvnw.cmd -B -pl services/hello validate
 ```
-
-✅ **Expected output** (the POM is well-formed and resolves):
-
+✅ **Expected output:**
 ```text
-[INFO] Build-a-Bank :: Hello Service ... 
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Build-a-Bank :: Hello Service
+[INFO] ------------------------------------------------------------------------
+[INFO] 
+[INFO] --- maven-clean-plugin:3.4.0:clean (default-clean) @ hello-service ---
+[INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
 ```
+The build is now green and validates clean because the aggregator can find the child module POM.
 
-> `-pl services/hello` = *"--projects: build only this module."* `-B` = *batch/non-interactive* (clean CI-style logs).
-
-✋ **Checkpoint:** `services/hello/pom.xml` exists and `validate` passes. (Compiling would also succeed with zero sources — there's just nothing to compile yet.)
+✋ **Checkpoint:** Confirm `./mvnw -pl services/hello validate` ends with `BUILD SUCCESS`.
 
 💾 **Commit:**
-
 ```bash
-git add pom.xml services/hello/pom.xml
+git add services/hello/pom.xml
 git commit -m "build(hello): add hello-service module with web + actuator starters"
 ```
 
-⚠️ **Pitfall:** forgetting the `spring-boot-maven-plugin` means `spring-boot:run` and the executable jar won't work — you'd see "no main manifest attribute" from `java -jar`. It's required for a runnable Boot app.
+⚠️ **Pitfall:** Forgetting the `spring-boot-maven-plugin` means `spring-boot:run` and the executable jar won't work — you'd see "no main manifest attribute" from `java -jar`. It's required for a runnable Boot app.
 
 ---
 
 ### Sub-step 4 of 8 — Write `HelloApplication` (the entry point) 🧭 *(… module POM ✅ → **app class** → …)*
 
-🎯 **Goal:** create the `main` class that boots the whole thing — your first piece of Spring Boot code.
+🎯 **Goal:** Create the `main` class that boots the whole thing — your first piece of Spring Boot code.
 
 📁 **Location:** new file → `services/hello/src/main/java/com/buildabank/hello/HelloApplication.java`
 
-⌨️ **Code** (complete, verbatim):
+⌨️ **Code** (complete, verbatim from `step-01-end`):
 
 ```java
 // services/hello/src/main/java/com/buildabank/hello/HelloApplication.java
@@ -570,16 +609,13 @@ public class HelloApplication {
 
 💭 **Under the hood:** `run(...)` returns a `ConfigurableApplicationContext` (we ignore it here). Internally it: creates the context → loads bean definitions → applies auto-configuration → starts lifecycle beans (including the Tomcat `WebServer`) → publishes an `ApplicationReadyEvent`. That's the banner + "Tomcat started on port 8080" you'll see next.
 
-🔮 **Predict:** if you run the app *right now* (no controller yet), will it start? Will `GET /api/hello` work?
+🔮 **Predict:** If you run the app *right now* (no controller yet), will it start? Will `GET /api/hello` work?
 
 ▶️ **Run & See:**
-
 ```bash
 ./mvnw -pl services/hello spring-boot:run    # Windows: .\mvnw.cmd -pl services/hello spring-boot:run
 ```
-
 ✅ **Expected output** (abridged — the app starts and listens):
-
 ```text
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -594,62 +630,91 @@ public class HelloApplication {
 ... Tomcat started on port 8080 (http) with context path '/'
 ... Started HelloApplication in ... seconds
 ```
-
 Now, in a **second terminal**:
-
 ```bash
 curl -i http://localhost:8080/api/hello
 ```
-
-❌ **If you see this instead:**
-
+Predicted it? The app starts successfully, but since you haven't written the endpoint yet, Spring returns a clean 404:
 ```text
 HTTP/1.1 404
 {"timestamp":"...","status":404,"error":"Not Found","path":"/api/hello"}
 ```
+Press `Ctrl+C` in the first terminal to stop the app.
 
-That's **correct for right now** — the app runs, but you haven't written the endpoint yet, so Spring returns a clean 404. (Predicted it? The app starts; `/api/hello` does *not* work until the next sub-step.) Press `Ctrl+C` to stop the app.
-
-✋ **Checkpoint:** the banner prints, "Tomcat started on port 8080" appears, and the app stays running until `Ctrl+C`. You have a running (if empty) web server.
+✋ **Checkpoint:** The banner prints, "Tomcat started on port 8080" appears, and the app stays running until `Ctrl+C`. You have a running (if empty) web server.
 
 💾 **Commit:**
-
 ```bash
 git add services/hello/src/main/java/com/buildabank/hello/HelloApplication.java
 git commit -m "feat(hello): add Spring Boot application entry point"
 ```
 
-⚠️ **Pitfall:** if startup fails with *"Web server failed to start. Port 8080 was already in use,"* another process holds 8080 — stop it or change the port (see 🩺). On Windows you can't `Ctrl+C` cleanly in some shells; close the terminal or use Task Manager to end stray `java` processes.
+⚠️ **Pitfall:** If startup fails with *"Web server failed to start. Port 8080 was already in use,"* another process holds 8080 — stop it or change the port (see 🩺). On Windows you can't `Ctrl+C` cleanly in some shells; close the terminal or use Task Manager to end stray `java` processes.
 
 ---
 
 ### Sub-step 5 of 8 — Break it on purpose (30s), then restore 🧭 *(a tiny experiment to make startup *stick*)*
 
-🎯 **Goal:** prove to yourself that auto-config is real, not magic, by removing a starter and watching the behavior change.
+🎯 **Goal:** Prove to yourself that auto-configuration is classpath-driven (no magic) by temporarily commenting out the web starter and observing how the application's runtime behavior changes.
 
-🔬 **Break-it experiment:** in `services/hello/pom.xml`, temporarily comment out the **web** starter:
+📁 **Location:** edit file → `services/hello/pom.xml`
 
-```xml
-<!-- TEMPORARY EXPERIMENT — comment out, observe, then restore -->
-<!--
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-web</artifactId>
-</dependency>
--->
+⌨️ **Code** (the diff showing the temporary comment out of the web starter):
+
+```diff
+@@ -24,10 +24,12 @@
+     <dependencies>
+         <!-- spring-boot-starter-web: embedded Tomcat + Spring MVC + Jackson JSON. -->
++        <!--
+         <dependency>
+             <groupId>org.springframework.boot</groupId>
+             <artifactId>spring-boot-starter-web</artifactId>
+         </dependency>
++        -->
+         <!-- spring-boot-starter-actuator: production-ready endpoints (/actuator/health, etc.). -->
+         <dependency>
 ```
 
-▶️ Run `./mvnw -pl services/hello spring-boot:run` again.
+🔍 **Line-by-line:**
+- Commenting out `spring-boot-starter-web` removes Tomcat, Spring MVC, and the Jackson libraries from the compilation and execution classpath.
 
-✅ **What you'll see:** the app starts, logs *"Started HelloApplication"* with **no "Tomcat started" line**, then **exits immediately** — there's no web server to keep it alive. That's auto-configuration in action: no servlet classes on the classpath ⇒ no embedded server ⇒ not a long-running web app.
+💭 **Under the hood:** When the application runs, `@EnableAutoConfiguration` scans the classpath for indicator classes. Without the web starter, the servlet server indicator classes are absent. Therefore, Spring Boot configures a headless, non-web application context. Since there is no active server or listener to block execution, the JVM terminates as soon as context initialization completes.
 
-👉 **Now restore** the dependency exactly as it was. Re-run; the "Tomcat started on port 8080" line returns. (This is the "verify, don't guess" mindset in miniature — and exactly why we never trust a claim without a run.)
+🔮 **Predict:** If you run the app *right now* with the web starter commented out, will it start Tomcat? Will the process stay alive or exit immediately?
 
-✋ **Checkpoint:** you saw the app *not* start a server without the web starter, and start one again after restoring it. Your `pom.xml` is back to the version from sub-step 3.
+▶️ **Run & See:**
+```bash
+./mvnw -pl services/hello spring-boot:run    # Windows: .\mvnw.cmd -pl services/hello spring-boot:run
+```
+✅ **Expected output:**
+```text
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.0.6)
+
+... Starting HelloApplication using Java 25.0.3 ...
+... Started HelloApplication in 0.814 seconds (process JVM running for 1.12)
+```
+Notice there is **no** "Tomcat started" log, and the process terminates immediately, returning you to the command prompt.
+
+✋ **Checkpoint:** Verify the app exited immediately and did not listen on port 8080.
+
+💾 **Commit:** We **never** commit a broken/experimental state. Restore the file by uncommenting the web starter:
+```bash
+git checkout services/hello/pom.xml
+```
+
+⚠️ **Pitfall:** Forgetting to restore the web starter will break subsequent steps, causing compile errors in the controller (since Spring Web annotations will not compile) and failures in tests.
 
 ---
 
 ### Sub-step 6 of 8 — Add `HelloController` (your first endpoint) 🧭 *(… app class ✅ → **controller** → …)*
+
 
 🎯 **Goal:** expose `GET /api/hello` returning a small JSON greeting and the server time (UTC) — the first HTTP surface your bank exposes.
 
