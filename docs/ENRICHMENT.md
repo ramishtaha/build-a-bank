@@ -31,11 +31,11 @@ A documentation-only pass that brings each step's `lesson.md` up to the full **M
 | 2 | ⬜ pending | |
 | 28 | ✅ enriched | Testing mastery & custom starter. Build rewritten to 6 full-micro-anatomy sub-steps. Added 100% PITest mutation score verification on notification core, jqwik property-based tests, custom autoconfigured MoneyFormatter starter consumed by hello, and Spotless/Checkstyle quality gates. Verified JDK 25 compatibility. Appended 5 Interview Q&As and 13 Key Terms. |
 | 29 | ✅ enriched | React+TS foundations, login & routing. Build rewritten to 6 full-micro-anatomy sub-steps with verbatim client, context, guard, pages, and test files from the step-29-end tag. Added gateway CORS configuration and extended routing tests. Appended 5 Interview Q&As to docs/interview-bank.md and 10 Key Terms to docs/glossary.md. Created requests.http for testing. |
-| 30 | ⬜ pending | multiple of 5 → ensure Cumulative Review (steps 1-30) |
+| 30 | ✅ enriched | Frontend data forms, queries, mutations, SSE, and gateway routing. Build rewritten to 9 full-micro-anatomy sub-steps with verbatim client, queries, panels, validated form, and SSE hook files from the step-30-end tag. Added gateway notification route and routing test. Appended 6 Interview Q&As to docs/interview-bank.md, 12 Key Terms to docs/glossary.md, and a 15-question Cumulative Review (steps 1-30) mixed quiz. |
 
 **Enrichment queue (do them strictly in this order): 9 → 10 → 28 → 29 → 30 → 1 → 2**
 
-**Next step to enrich: 30**
+**Next step to enrich: 1**
 
 
 When every step in the queue above is marked ✅ enriched (no ⬜ pending rows remain), create an empty `STOP` file in the repo root and halt.
