@@ -350,4 +350,20 @@ A cumulative, job-prep payoff file: every step's **💼 Interview Prep** questio
 
 > **Behavioral / STAR seed:** *"Tell me about a time you had to optimize a slow database query in production."* — **S/T:** A critical reporting query on a transactions table was taking over 1.5 seconds, saturating connection pool threads and degrading API throughput under load. **A:** I ran `EXPLAIN (ANALYZE, BUFFERS)` in a Testcontainers environment simulating production volume. The plan revealed a `Seq Scan` filtering 20,000 rows. I added a B-tree index on the filtered column (`account_id`) and ran `ANALYZE`, which flipped the plan to a `Bitmap Index Scan`. To optimize further, I added a covering index using `INCLUDE (amount)` and ran `VACUUM ANALYZE`, turning the access path into an `Index Only Scan` with `Heap Fetches: 0`. **R:** Query execution time dropped from 1,500ms to under 1ms, reducing page-buffer reads from 148 buffers to 3, restoring connection pool headroom.
 
+---
+
+## Step 28 — Testing & Quality Mastery + Your Own Starter
+
+1. 🌟 **"Mutation testing vs code coverage?"** *(Common)* — Coverage measures which lines a test executed (can be 100% with zero assertions). Mutation testing (PITest) systematically injects bugs into your compiled bytecode (mutants) and re-runs the tests. If a test fails, the mutant is "killed" (good); if all tests pass, it "survived" (a test gap). The mutation score (killed ÷ total) is the only true proof that your tests actually verify behaviour.
+
+2. **"What is a 'surviving mutant' and what should you do?"** — A mutant that passes all tests. It represents a logic change (e.g. changing `<` to `<=`, deleting a method call, or returning `null`) that your test suite did not detect. To resolve it, add or strengthen an assertion to catch that specific behaviour. If the change is functionally equivalent and cannot be observed externally, exclude it in PITest config.
+
+3. 🌟 **"How does a Spring Boot starter auto-configure?"** *(System Design)* — Spring Boot reads `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` from every jar on the classpath. It instantiates the listed `@AutoConfiguration` classes, which define beans conditionally. Polite starters use `@ConditionalOnMissingBean` (backs off if the consumer registers their own) and `@ConditionalOnProperty` (allows disabling the starter via configuration).
+
+4. **"Property-based vs example-based testing?"** — An example-based test checks a single hardcoded input-output mapping (useful for pinning exact messages). A property-based test (e.g., using jqwik) asserts a universal invariant (a property that must hold true for *all* inputs) and the runner generates thousands of randomized inputs, automatically "shrinking" any failing case to the smallest possible counter-example. Use both: examples pin contracts; properties find edge-case bugs.
+
+5. **"You added Spotless formatting and got a 200-file diff — what happened, and how do you fix it?"** *(Gotcha)* — Spotless's default configuration normalizes line endings (e.g., CRLF to LF), which causes massive churn in Windows environments without a `.gitattributes` file. The fix is to add `<lineEndings>PRESERVE</lineEndings>` to the plugin configuration and keep rulesets lean so they only check formatting hygiene without reflowing hand-laid code.
+
+> **Behavioral / STAR seed:** *"Tell me about a time you raised code quality on a team."* — **S/T:** Our tests had high coverage but we had no proof they actually verified correctness, and our shared formatting was a matter of PR comments rather than automated checks. **A:** I introduced PITest mutation testing on the core domain (hitting a 100% mutation score on a hexagon's logic), wrote a jqwik property-based test checking invariants over 1,000 random inputs, and wired Spotless + Checkstyle into the parent Maven build as compile-failing gates, configuring Spotless with `PRESERVE` line-endings to avoid a CRLF phantom diff. **R:** Formatting enforcement became automated, and we proved that a deleted assertion would immediately break the mutation gate and fail the build.
+
 

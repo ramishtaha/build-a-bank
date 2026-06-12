@@ -29,13 +29,13 @@ A documentation-only pass that brings each step's `lesson.md` up to the full **M
 | 10 | ✅ enriched | Relational Databases Up Close. Build section expanded to 7 full-micro-anatomy sub-steps containing complete verbatim source files from the `step-10-end` tag. Added execution outputs for index scans, MVCC reads, write skew, and pool timeouts. Added 6 Interview Q&As to docs/interview-bank.md, 22 Key Terms to docs/glossary.md, and a 12-question Cumulative Review (steps 1-10) mixed quiz. |
 | 1 | ⬜ pending | |
 | 2 | ⬜ pending | |
-| 28 | ⬜ pending | |
+| 28 | ✅ enriched | Testing mastery & custom starter. Build rewritten to 6 full-micro-anatomy sub-steps. Added 100% PITest mutation score verification on notification core, jqwik property-based tests, custom autoconfigured MoneyFormatter starter consumed by hello, and Spotless/Checkstyle quality gates. Verified JDK 25 compatibility. Appended 5 Interview Q&As and 13 Key Terms. |
 | 29 | ⬜ pending | |
 | 30 | ⬜ pending | multiple of 5 → ensure Cumulative Review (steps 1-30) |
 
 **Enrichment queue (do them strictly in this order): 9 → 10 → 28 → 29 → 30 → 1 → 2**
 
-**Next step to enrich: 28**
+**Next step to enrich: 29**
 
 
 When every step in the queue above is marked ✅ enriched (no ⬜ pending rows remain), create an empty `STOP` file in the repo root and halt.

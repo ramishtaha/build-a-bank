@@ -474,3 +474,19 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 - **read replica** — a secondary database instance that continuously replays the write-ahead log (WAL) from the primary database to serve read-only queries at scale.
 - **replication lag** — the delay in bytes or time between a transaction committing on the primary database and being replayed on a read replica, causing potential read-after-write consistency anomalies.
 
+## Step 28 — Testing & Quality Mastery + Your Own Starter
+
+- **mutation testing** — A test-quality analysis technique where a tool makes tiny edits to your compiled bytecode (mutating the logic) and re-runs your tests. If a test fails, the mutation is *killed*; if all tests pass, it *survived*, exposing an untested execution path or missing assertion.
+- **mutant / killed / survived** — In mutation testing, a **mutant** is a single altered version of your compiled code. A mutant is **killed** if the test suite fails when run against it (which is the goal, indicating the tests caught the bug). A mutant **survived** if all tests still pass despite the broken logic.
+- **mutation score** — The percentage of generated mutants that were successfully killed by your test suite (`killed ÷ total`). It measures test *effectiveness*, unlike line coverage which only measures test *execution*.
+- **mutation threshold** — A configured score (e.g. 90%) below which the mutation testing plugin (PITest) will fail the build, serving as a quality gate for tests.
+- **property-based testing** — A testing methodology where instead of asserting a single hand-picked example (e.g. input A gives output B), you define an *invariant* (a property that must hold true for any input within a domain) and the framework generates thousands of randomized test inputs to find failures.
+- **invariant / shrinking** — In property-based testing, an **invariant** is the rule that must always hold true. **Shrinking** is the framework's ability to, upon finding a failing randomized input, systematically reduce the input size to find the simplest, simplest counter-example that still breaks the test.
+- **auto-configuration** — Spring Boot's capability to automatically register beans in the application context based on classpath contents, properties, and conditions, enabling starters to provide instant functionality.
+- **`AutoConfiguration.imports`** — The modern file (located at `META-INF/spring/...`) used in Spring Boot 2.7+ and Boot 3/4 to declare the fully qualified names of auto-configuration classes to be processed at startup, replacing the older `spring.factories`.
+- **`@ConditionalOnMissingBean`** — A Spring condition indicating a bean should only be created if the application context does not already contain a bean of the same type. This allows starters to supply defaults that consumers can easily override.
+- **`ApplicationContextRunner`** — A utility from `spring-boot-test` designed to test auto-configurations in isolation by bootstrapping a micro-context, setting properties, adding mock beans, and asserting context state.
+- **`MockMvcTester`** — An AssertJ-based fluent web-slice test runner introduced in Spring Boot 4 / Spring Framework 7, replacing the legacy fluent chain `MockMvc.perform(...).andExpect(...)`.
+- **Spotless / Checkstyle** — Tools for static code analysis. **Spotless** enforces code formatting (whitespace, unused imports, line endings) and can auto-fix issues. **Checkstyle** checks code style and potential bugs (redundant statements, equals/hashCode contracts, default case positions).
+- **NullAway / Error Prone** — Google's **Error Prone** is a javac plugin that hooks into compile time to flag common bugs. Uber's **NullAway** is a plugin for Error Prone that enforces compile-time null safety, ensuring variables marked `@Nullable` are checked before dereference.
+
