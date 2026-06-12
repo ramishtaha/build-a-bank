@@ -449,3 +449,28 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 - **lost update** — a concurrency anomaly where one transaction silently overwrites the uncommitted or concurrent changes of another transaction without detection.
 - **pessimistic locking** — a concurrency control strategy that takes a database-level lock (e.g., `SELECT … FOR UPDATE`) on read to prevent other transactions from modifying the row until the transaction commits (Step 12).
 
+## Step 10 — Relational Databases Up Close
+
+- **Seq Scan (Sequential Scan)** — a database access path where the engine scans every block of a table in physical order to filter rows matching a query predicate.
+- **Index Scan** — a database access path where the engine traverses a B-tree index to find matching keys, then fetches those specific rows from the table heap using random I/O.
+- **Bitmap Index Scan** — a cost-based hybrid scan where the engine walks an index to build a memory bitmap of matching table pages, then reads those pages in physical order (converting random I/O to sequential).
+- **Index Only Scan** — a high-performance access path where the query is answered entirely from the index page without consulting the table heap, requiring a covering index and an up-to-date visibility map.
+- **covering index** — an index that stores non-key payload columns (via `INCLUDE`) alongside index keys, allowing specific queries to run as Index Only Scans.
+- **MVCC (Multi-Version Concurrency Control)** — a concurrency control method where the database keeps multiple physical versions of rows so transactions can read stable snapshots of data without blocking or waiting on writers.
+- **snapshot (MVCC)** — an in-memory boundary representing the set of active and committed transaction IDs at a specific point in time, deciding which row versions are visible to a transaction.
+- **`xmin` / `xmax`** — hidden system columns in Postgres indicating the transaction IDs that created (`xmin`) and deleted or updated (`xmax`) a specific row version.
+- **VACUUM** — an administrative database process that reclaims storage occupied by dead row versions (garbage-collection) and updates the visibility map to enable Index Only Scans.
+- **dirty read** — an isolation anomaly where a transaction reads uncommitted changes made by another concurrent transaction (impossible in Postgres).
+- **non-repeatable read** — an isolation anomaly where a transaction re-reads a row and sees changed values because another transaction committed an update in between.
+- **phantom read** — an isolation anomaly where a transaction re-runs a range query and sees new rows added by another concurrent transaction that committed in between.
+- **write skew** — a concurrent anomaly surviving REPEATABLE READ snapshot isolation where two transactions read overlapping data, evaluate an invariant, and write to *different* rows, violating a cross-row system rule.
+- **SSI (Serializable Snapshot Isolation)** — the algorithm behind Postgres's SERIALIZABLE isolation that tracks read-write dependency cycles at runtime and aborts one transaction to prevent write skew.
+- **SQLSTATE 40001** (serialization failure) — the standard SQL error code returned by Postgres when a SERIALIZABLE transaction is aborted to prevent a concurrency conflict, indicating that the application must retry the operation.
+- **partition pruning** — an optimizer optimization where the planner discards irrelevant range, list, or hash partitions from a query plan based on the query's filter predicates.
+- **connection pool** — a managed queue of pre-allocated physical database connections (e.g., HikariCP) shared across application threads to bypass the high latency of connection setup.
+- **`connectionTimeout`** — the maximum duration in milliseconds that an application thread will wait to borrow a connection from the pool before throwing a timeout exception.
+- **`CREATE INDEX CONCURRENTLY`** — a Postgres command that builds an index without locking out concurrent writes, requiring autocommit to be active because it manages its own internal commits.
+- **expand-contract** — a multi-step zero-downtime database migration pattern where a new column or table is introduced (expand), writes are duplicated, and the old column or table is eventually removed (contract).
+- **read replica** — a secondary database instance that continuously replays the write-ahead log (WAL) from the primary database to serve read-only queries at scale.
+- **replication lag** — the delay in bytes or time between a transaction committing on the primary database and being replayed on a read replica, causing potential read-after-write consistency anomalies.
+
