@@ -37,8 +37,8 @@ A one-line map of where we're going. Click to jump.
 | **Step** | 9 of 67 · **Phase B — Data, Databases, Concurrency & Transactions** 🔵 |
 | **Effort** | ≈ 20 hours focused. The payoff: you can *prove* an N+1 problem with Hibernate's own statistics and *prove* a lost-update race is rejected — both interview-defining skills. Experienced JPA devs can skip-test and skim to ~4h. |
 | **What you'll run this step** | **JVM + Maven** for the build & tests; **🐳 Docker** for the tests only (Testcontainers Postgres). One command: `./mvnw -pl services/cif -am verify`. **No HTTP endpoints change this step** — the proofs are TESTS — so there's no service to start and no new `requests.http`. |
-| **Buildable artifact** | The **existing** `services/cif` module, extended: a new **`Address`** entity (`@ManyToOne` LAZY); `Customer` gains a `@OneToMany addresses` (LAZY) + an `addAddress(...)` helper + a `@Version version`; a Flyway **`V2__add_address_and_version.sql`** (address table + version column); a repository **`findAllWithAddresses()`** (`@EntityGraph`) + a **`findByKycStatus(...)`** interface projection; a **`CustomerSummary`** projection; and two new tests — `CustomerFetchTest` (3 tests: N+1, fix, projection) and `OptimisticLockingTest`. CIF goes from 6 → **10** tests. `step-09-start == step-08-end`. |
-| **Verification tier** | 🔴 **Full** — this step changes a service *and* the concurrency/correctness path. `./mvnw verify` green + all **10** tests + the **N+1 proven by statistics** (3 vs 1) + the **optimistic-lock conflict proven** + the **§12.3 mutation sanity-check** (remove `@Version`, watch the lost update slip through, revert) + `smoke.sh`. |
+| **Buildable artifact** | The **existing** [cif](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif) module, extended: a new [Address](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/main/java/com/buildabank/cif/domain/Address.java) entity (`@ManyToOne` LAZY); [Customer](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/main/java/com/buildabank/cif/domain/Customer.java) gains a `@OneToMany addresses` (LAZY) + an `addAddress(...)` helper + a `@Version version`; a Flyway [V2__add_address_and_version.sql](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/main/resources/db/migration/V2__add_address_and_version.sql) (address table + version column); a repository `findAllWithAddresses()` (`@EntityGraph`) + a `findByKycStatus(...)` interface projection; a [CustomerSummary](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/main/java/com/buildabank/cif/domain/CustomerSummary.java) projection; and two new tests — [CustomerFetchTest](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/test/java/com/buildabank/cif/domain/CustomerFetchTest.java) (3 tests: N+1, fix, projection) and [OptimisticLockingTest](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/test/java/com/buildabank/cif/domain/OptimisticLockingTest.java). CIF goes from 6 → **10** tests. `step-09-start == step-08-end`. |
+| **Verification tier** | 🔴 **Full** — this step changes a service *and* the concurrency/correctness path. `./mvnw verify` green + all **10** tests + the **N+1 proven by statistics** (3 vs 1) + the **optimistic-lock conflict proven** + the **§12.3 mutation sanity-check** (remove `@Version`, watch the lost update slip through, revert) + [smoke.sh](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/steps/step-09/smoke.sh). |
 | **Depends on** | **[Step 8](../step-08/lesson.md)** (the CIF service: JPA entity, `CustomerRepository`, Flyway, `ddl-auto=validate`, `@DataJpaTest` + Testcontainers `@ServiceConnection`, and crucially **`open-in-view: false`** which we set "for reasons explained in Step 9" — this is that step). **+ Docker.** |
 
 By the end you will be able to explain the **persistence context** (Hibernate's 1st-level cache) and **dirty checking**; say exactly *when* SQL flushes; reproduce a `LazyInitializationException` and explain why it happens *now* that OSIV is off (and why that's good); **demonstrate the N+1 SELECT problem with Hibernate statistics** and **fix it with an `@EntityGraph`**; trim over-fetching with a **DTO interface projection**; and prevent the **lost-update race** with **optimistic `@Version` locking** — proven by a test where two transactions collide and the stale one is rejected.
@@ -196,7 +196,7 @@ Same data, **one** statement instead of `1 + N`. A JPQL `JOIN FETCH` does the sa
 
 **Projections — selecting fewer columns.** A Spring Data **interface projection** (`CustomerSummary` with just three getters) makes Spring Data generate SQL that selects *only those columns* — not the whole row, and not the lazy associations. It returns proxy instances backed by that narrow result. Use it when a screen needs three fields: less data over the wire, no full-entity hydration, no accidental lazy loads.
 
-**Optimistic locking — the affected-row trick.** With `@Version`, every `UPDATE` becomes `UPDATE customer SET …, version = version + 1 WHERE id = ? AND version = ?`. Postgres returns how many rows it changed. If another transaction already bumped the version, the `WHERE` matches nothing → `0 rows` → Hibernate throws `StaleObjectStateException`, which Spring's exception translation surfaces as `ObjectOptimisticLockingFailureException`. The genius is that it needs **no locks** during the read — it detects the conflict purely from the version number at write time.
+**Optimistic locking — the affected-row trick.** With `@Version`, every `UPDATE` becomes `UPDATE customer SET …, version = version + 1 WHERE id = ? AND version = ?`. Postgres returns how many rows it changed. If another transaction already bumped the version, the `WHERE` matches nothing → `0 rows` → Hibernate throws `StaleObjectStateException`, which Spring's exception translation surfaces as `ObjectOptimisticLockingFailureException`. The genius is that it needs **no locks** during the read — it detects the conflict purely from the version number diverging.
 
 ## 🛡️ Security Lens: What Could Go Wrong
 
@@ -213,7 +213,7 @@ Same data, **one** statement instead of `1 + N`. A JPQL `JOIN FETCH` does the sa
 | **Hibernate 6 → 7** | Hibernate 6 introduced the modern SQM (Semantic Query Model) engine. | Spring Boot 4 ships a Hibernate 7 line; the APIs we use (`@EntityGraph`, `@Version`, `Statistics`, `SessionFactory.unwrap`) are **compatible and unchanged** across the 6→7 boundary. | Mostly an internal/version bump; nothing in this step's code differs. |
 
 > [!NOTE]
-> *Verify, don't guess.* The OSIV-on default + warning, and `@Version` since JPA 1.0, are long-standing facts; the `javax`→`jakarta` move landed in Spring Boot 3. The exact Hibernate line is whatever the pinned Spring Boot 4 BOM resolves — see `VERSIONS.md`. The code in this step uses only stable, version-agnostic JPA/Hibernate APIs.
+> *Verify, don't guess.* The OSIV-on default + warning, and `@Version` since JPA 1.0, are long-standing facts; the `javax`→`jakarta` move landed in Spring Boot 3. The exact Hibernate line is whatever the transient dependency resolved — see `pom.xml` pins.
 
 ## 🧵 Thread-safety note
 
@@ -242,11 +242,11 @@ Confirm the starting point builds:
 ./mvnw -pl services/cif -am verify
 ```
 
-✅ You should see `BUILD SUCCESS` with `Tests run: 6` for CIF. If not, fix Step 8 first (🩺 there).
+✅ You should see `BUILD SUCCESS` with `Tests run: 6` for CIF. If not, fix Step 8 first.
 
 ## 🛠️ Let's Build It — Step by Step
 
-Here's the whole step at a glance, then we build it in **six** small sub-steps, running between each.
+Here's the whole map. We build **inside-out**: Address entity → Customer wiring → Flyway V2 → Repository methods → Fetch test → Locking test. We run compile between edits and verify at the end.
 
 ```mermaid
 flowchart TB
@@ -281,9 +281,9 @@ services/cif/
 
 ### Sub-step 1 of 6 — The `Address` entity (`@ManyToOne` LAZY) 🧭 *(→ Address → Customer wiring → V2 → repo → fetch test → lock test)*
 
-🎯 **Goal:** add the "many" side of a Customer (1) → Address (*) relationship. Making the back-reference **LAZY** is half of what sets up the N+1 trap we'll then measure and fix.
+🎯 **Goal:** Create a new [Address](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/main/java/com/buildabank/cif/domain/Address.java) entity to represent the child side of the Customer (1) ──► Address (*) relationship. Configure the `@ManyToOne` association as `LAZY` (override default eager fetch).
 
-📁 **Location:** new file → `services/cif/src/main/java/com/buildabank/cif/domain/Address.java`
+📁 **Exact location:** new file → `services/cif/src/main/java/com/buildabank/cif/domain/Address.java`
 
 ⌨️ **Code:**
 
@@ -365,41 +365,98 @@ public class Address {
 ```
 
 🔍 **Line-by-line:**
+- `@Entity` / `@Table(name = "address")` — Maps this class to the `address` database table (created in `V2`).
+- `@GeneratedValue(strategy = GenerationType.IDENTITY)` — Let Postgres auto-assign the primary key using its identity column strategy.
+- `@ManyToOne(fetch = FetchType.LAZY)` — Links multiple address instances back to a single customer. Overrides the default EAGER fetch strategy to prevent automatic, unwanted joining whenever an address is read.
+- `@JoinColumn(name = "customer_id", nullable = false)` — Configures the database foreign key column to be `customer_id` and non-nullable.
+- `protected Address()` — The no-arg constructor required by Hibernate for proxying and instantiation via reflection.
+- `void setCustomer(Customer customer)` — Package-private setter. Callers do not call this directly; they use `Customer.addAddress(...)` to keep both sides of the relationship synchronized.
 
-- `@Entity` / `@Table(name = "address")` — maps this class to the `address` table (which we create in `V2`). Same pattern as `Customer` in Step 8.
-- `@Id` + `@GeneratedValue(strategy = IDENTITY)` — the primary key is generated by the database's identity column (Postgres `generated by default as identity`), matching the migration.
-- `@ManyToOne(fetch = FetchType.LAZY)` — **many** addresses point to **one** customer. `LAZY` means the parent `Customer` is *not* loaded automatically when you load an `Address`; it's a proxy fetched on demand. (Default for `@ManyToOne` is actually EAGER — we make it explicit and lazy on purpose.)
-- `@JoinColumn(name = "customer_id", nullable = false)` — names the foreign-key column on the `address` table; `nullable = false` means every address must belong to a customer.
-- `private String country; // length = 2` — an ISO-3166 alpha-2 code (e.g., `GB`); the `length = 2` matches the `varchar(2)` column.
-- `protected Address()` — JPA's required no-arg constructor (Hibernate needs it to instantiate the entity before populating fields).
-- `void setCustomer(Customer)` — **package-private** on purpose: callers never set the parent directly; they go through `Customer.addAddress(...)` (next sub-step), which keeps *both* sides of the relationship in sync.
+💭 **Under the hood:** By setting `FetchType.LAZY` on `@ManyToOne`, Hibernate creates a dynamic runtime **proxy subclass** of `Customer` when loading an `Address` instance. It will not query the `customer` table unless you call `address.getCustomer().getFirstName()` or similar methods within an active session.
 
-💭 **Under the hood:** a `@ManyToOne` is the *owning* side of the relationship — it holds the foreign key (`customer_id`). When LAZY, Hibernate injects a proxy for `customer` and only runs the `SELECT` for the parent the first time you call `getCustomer()` (within an open session).
+🔮 **Predict:** If you run the build right now, what will happen? (Hint: mappings exist but database table is missing).
+<details><summary>answer</summary>Compilation will succeed. However, if we were to run the application, Hibernate's `ddl-auto=validate` routine would fail fast because the `address` table does not exist in the database yet.</details>
 
-🔮 **Predict:** if you ran `verify` *right now* (entity exists, but no table yet), would Hibernate's `ddl-auto=validate` be happy?
+▶️ **Run & See:**
+Let's verify the new class compiles cleanly:
+```bash
+./mvnw -pl services/cif compile
+```
+✅ **Expected output:**
+```
+[INFO] Scanning for projects...
+[INFO] -------------------------< com.buildabank:cif >-------------------------
+[INFO] Building Build-a-Bank :: Services :: CIF 0.1.0-SNAPSHOT
+[INFO] --------------------------------[ jar ]---------------------------------
+...
+[INFO] --- compiler:3.14.1:compile (default-compile) @ cif ---
+[INFO] Recompiling the module because of added or removed source files.
+[INFO] Compiling 2 source files
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+```
 
-<details><summary>answer</summary>No. `validate` checks the mapping against the real schema at startup. There's an `Address` entity but no `address` table yet, so validation would fail — until we add the `V2` migration in sub-step 3. We'll deliberately *not* run a full build until the schema and mapping agree.</details>
-
-✋ **Checkpoint:** `Address.java` compiles (no red squiggles). We won't run the DB build until the table exists.
+✋ **Checkpoint:** The `Address` class compiles cleanly without errors.
 
 💾 **Commit:**
-
 ```bash
 git add services/cif/src/main/java/com/buildabank/cif/domain/Address.java
 git commit -m "feat(cif): add Address entity (lazy @ManyToOne to Customer)"
 ```
 
-⚠️ **Pitfall:** leaving `@ManyToOne` at its default (EAGER) would silently fetch the parent on every address load — the inverse over-fetch. We set `LAZY` explicitly. Also note: the *default* for `@OneToMany` (next) is already LAZY — which is what we *want*, because the N+1 demo depends on it.
+⚠️ **Pitfall:** Default `@ManyToOne` is EAGER. Forgetting the `fetch = FetchType.LAZY` flag would silently generate joining queries for the parent `Customer` on every address retrieval, destroying read efficiency when working with lists of addresses.
 
 ---
 
 ### Sub-step 2 of 6 — Wire `@OneToMany`, `addAddress()`, and `@Version` into `Customer` 🧭 *(Address ✅ → **Customer wiring** → V2 → repo → fetch test → lock test)*
 
-🎯 **Goal:** give `Customer` the *other* side of the relationship (a lazy collection of addresses + a helper that keeps both sides consistent) **and** add the `@Version` column that powers optimistic locking. Two concepts, one file — both small.
+🎯 **Goal:** Edit the existing [Customer](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/main/java/com/buildabank/cif/domain/Customer.java) entity. Wire the inverse collection (`@OneToMany addresses`) with proper cascade options, create a bi-directional sync helper `addAddress()`, and add the `@Version` field to enable optimistic locking.
 
-📁 **Location:** edit → `services/cif/src/main/java/com/buildabank/cif/domain/Customer.java`
+📁 **Exact location:** edit → `services/cif/src/main/java/com/buildabank/cif/domain/Customer.java`
 
-⌨️ **Code (the full file after editing — the new pieces are the `@Version` field, the `@OneToMany`, the two getters, and `addAddress`):**
+⌨️ **Code (before vs after diff):**
+
+```diff
+--- services/cif/src/main/java/com/buildabank/cif/domain/Customer.java (step-08-end)
++++ services/cif/src/main/java/com/buildabank/cif/domain/Customer.java (step-09-end)
+@@ -6,11 +6,14 @@
++import java.util.ArrayList;
++import java.util.List;
++
++import jakarta.persistence.CascadeType;
+ import jakarta.persistence.Column;
+ import jakarta.persistence.Entity;
+ import jakarta.persistence.EnumType;
+ import jakarta.persistence.Enumerated;
+ import jakarta.persistence.GeneratedValue;
+ import jakarta.persistence.GenerationType;
+ import jakarta.persistence.Id;
++import jakarta.persistence.OneToMany;
+ import jakarta.persistence.Table;
++import jakarta.persistence.Version;
+ 
+@@ -62,4 +65,19 @@
++    /**
++     * Optimistic-locking version. Hibernate increments it on every update and adds
++     * {@code WHERE version = ?} to UPDATEs; a mismatch (someone else updated first) throws — no row is
++     * silently overwritten. This is how the bank prevents lost updates without locking rows.
++     */
++    @Version
++    private long version;
++
++    /**
++     * The "one" side of Customer → Address. {@code LAZY} by default: addresses are NOT loaded until touched
++     * — which is exactly what triggers the N+1 problem when you iterate many customers and read each one's
++     * addresses. Fix it with a fetch join / {@code @EntityGraph} (see the repository).
++     */
++    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
++    private List<Address> addresses = new ArrayList<>();
++
+     /** JPA requires a no-arg constructor (may be package-private). */
+```
+
+⌨️ **Code (Complete updated file):**
 
 ```java
 // services/cif/src/main/java/com/buildabank/cif/domain/Customer.java
@@ -547,38 +604,52 @@ public class Customer {
 }
 ```
 
-🔍 **Line-by-line (the new pieces only):**
+🔍 **Line-by-line:**
+- `import jakarta.persistence.Version;` and `OneToMany;` — Imports key annotations.
+- `@Version` — Declares the field used for optimistic concurrency tracking. Placed on `version` of type `long`.
+- `@OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)` — Maps the 1-to-N relationship. `mappedBy` designates the child's `customer` field as the owner. `CascadeType.ALL` handles cascading operations (insert/delete). `orphanRemoval` deletes rows when removed from the collection.
+- `public void addAddress(Address address)` — Synchronizes both sides of the bi-directional association. It appends the child and sets the parent on the child.
 
-- `import jakarta.persistence.Version;` (and `OneToMany`, `CascadeType`, `ArrayList`, `List`) — the new imports for this edit.
-- `@Version private long version;` — the optimistic-locking version. **You never set this yourself** — Hibernate manages it: it reads it with the row, adds it to the `UPDATE`'s `WHERE`, and increments it on each write. A primitive `long` starts at `0`. (A `@Version` field may be `int`/`long`/`Integer`/`Long`/`short`/`Timestamp`; a numeric type is the common, robust choice.)
-- `@OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)` — the **inverse** side of the relationship. `mappedBy = "customer"` says "the `Address.customer` field owns the foreign key; I'm just the read-side view." `cascade = ALL` means persisting/removing a `Customer` cascades to its addresses; `orphanRemoval = true` deletes an address row when it's removed from this list. **`@OneToMany` is LAZY by default** — we rely on that for the N+1 demo.
-- `private List<Address> addresses = new ArrayList<>();` — initialized to an empty list so it's never `null` before persistence.
-- `public long getVersion()` — exposes the version (read-only; no setter) so the test can assert it goes `0 → 1`.
-- `public List<Address> getAddresses()` — touching this on a managed entity is what triggers the lazy load (the N+1 fire).
-- `addAddress(Address)` — adds to the collection **and** calls `address.setCustomer(this)`. Setting *both* sides is the JPA discipline: the owning side (`Address.customer`) is what Hibernate persists, so if you only added to the list without setting the parent, the FK could come out `null`.
+💭 **Under the hood:** When dirty checking happens, Hibernate looks for modifications on the entity. When versioning is active, it increments the version counter by 1 in memory and appends `AND version = <old_value>` to the SQL `UPDATE` statement.
 
-💭 **Under the hood:** `@Version` changes the generated SQL for *every* update of a `Customer`. Without it: `UPDATE customer SET kyc_status=? WHERE id=?`. With it: `UPDATE customer SET kyc_status=?, version=? WHERE id=? AND version=?`. That extra `AND version=?` is the entire lost-update defence — if the row's version moved, zero rows match and Hibernate throws.
+🔮 **Predict:** If we run the compiler now, will it fail?
+<details><summary>answer</summary>No. Java compilations are successful because both types exist and resolve. However, database validations will still fail until migration `V2` is added.</details>
 
-🔮 **Predict:** after this edit, will `Customer.java` compile and will `validate` pass on a build? <details><summary>answer</summary>It compiles, but a DB build would still *fail* `validate`: the entity now references a `version` column and an `address` table that don't exist yet. Next sub-step (the `V2` migration) makes the schema match. We build *after* that.</details>
-
-✋ **Checkpoint:** `Customer.java` compiles. The `@Version` field and `@OneToMany` are present. No DB build yet.
-
-💾 **Commit:**
-
+▶️ **Run & See:**
+Verify the changes compile:
 ```bash
-git add services/cif/src/main/java/com/buildabank/cif/domain/Customer.java
-git commit -m "feat(cif): add @Version and lazy @OneToMany addresses to Customer"
+./mvnw -pl services/cif compile
+```
+✅ **Expected output:**
+```
+[INFO] Scanning for projects...
+[INFO] -------------------------< com.buildabank:cif >-------------------------
+[INFO] Building Build-a-Bank :: Services :: CIF 0.1.0-SNAPSHOT
+[INFO] --------------------------------[ jar ]---------------------------------
+...
+[INFO] --- compiler:3.14.1:compile (default-compile) @ cif ---
+[INFO] Compiling 1 source file
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
 ```
 
-⚠️ **Pitfall:** a classic JPA bug is adding to `addresses` *without* calling `setCustomer` — the in-memory object graph looks right, but the persisted FK is `null` (or the insert fails the `not null` constraint). `addAddress` exists precisely to make that impossible. Equally classic: giving `version` a public setter and "helpfully" setting it — don't; Hibernate owns it.
+✋ **Checkpoint:** `Customer.java` compiles successfully.
+
+💾 **Commit:**
+```bash
+git add services/cif/src/main/java/com/buildabank/cif/domain/Customer.java
+git commit -m "feat(cif): wire @Version and @OneToMany relationship into Customer"
+```
+
+⚠️ **Pitfall:** Adding a child directly to the collection `addresses.add(address)` without setting `address.setCustomer(this)` is a classic bug. Since the collection is a read-only mapping (`mappedBy`), Hibernate will not write the foreign key to the database, resulting in a database insert failing with a null constraint error.
 
 ---
 
-### Sub-step 3 of 6 — The Flyway `V2` migration (address table + version column) 🧭 *(Address ✅ → Customer ✅ → **V2** → repo → fetch test → lock test)*
+### Sub-step 3 of 6 — The Flyway `V2` migration (address table + version column) 🧭 *(Address ✅ → Customer wiring ✅ → **V2** → repo → fetch test → lock test)*
 
-🎯 **Goal:** evolve the schema to match the new mappings — add the `version` column to `customer` and create the `address` table. **Flyway owns the schema** (Step 8); Hibernate only validates. The version number in the filename (`V2`) is what makes Flyway run it once, after `V1`.
+🎯 **Goal:** Create Flyway database migration file [V2__add_address_and_version.sql](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/main/resources/db/migration/V2__add_address_and_version.sql) to add the `version` column to the `customer` table and create the `address` table with a foreign key index.
 
-📁 **Location:** new file → `services/cif/src/main/resources/db/migration/V2__add_address_and_version.sql`
+📁 **Exact location:** new file → `services/cif/src/main/resources/db/migration/V2__add_address_and_version.sql`
 
 ⌨️ **Code:**
 
@@ -600,54 +671,85 @@ create index idx_address_customer on address (customer_id);
 ```
 
 🔍 **Line-by-line:**
+- `alter table customer add column version bigint not null default 0;` — Adds the column corresponding to the `@Version` property in our entity. Existing records are initialized to `0`.
+- `customer_id bigint not null references customer (id)` — Defines the foreign key reference matching the `@JoinColumn` on the `Address` class.
+- `create index idx_address_customer on address (customer_id);` — Indexes the foreign key column. Crucial for sub-step joins and avoiding sequential database table scans during lazy-loading iterations.
 
-- `V2__add_address_and_version.sql` — Flyway naming: `V` + version `2` + **two** underscores + a description. Flyway runs migrations in version order and records each in its `flyway_schema_history` table, so `V2` runs exactly once, after `V1`.
-- `alter table customer add column version bigint not null default 0;` — adds the optimistic-locking column. `default 0` matters: existing rows (and inserts that don't mention `version`) start at `0`, matching the `long version` primitive's default. `bigint` ↔ Java `long`.
-- `create table address (...)` — the new child table.
-  - `id bigint generated by default as identity primary key` — Postgres identity column, matching `@GeneratedValue(strategy = IDENTITY)` on `Address`.
-  - `customer_id bigint not null references customer (id)` — the foreign key back to `customer`, matching `@JoinColumn(name = "customer_id", nullable = false)`. `references` enforces referential integrity at the DB level.
-  - `line1 varchar(200)`, `city varchar(100)`, `country varchar(2)` — match the entity's fields (note `country` is `varchar(2)` ↔ `@Column(length = 2)`).
-- `create index idx_address_customer on address (customer_id);` — indexes the FK. **Postgres does *not* auto-index foreign keys**, and every lazy address load (and the join) filters by `customer_id` — without this index those become sequential scans. (Indexing is the deep topic of Step 10; this is a first, justified index.)
+💭 **Under the hood:** Flyway tracks schema versioning using a metadata history table (`flyway_schema_history`). Since the app starts up, Flyway executes pending files before Hibernate's bootstrap sequence performs validation checking.
 
-💭 **Under the hood:** at startup, Flyway runs `V2` *before* Hibernate validates. So by the time `ddl-auto=validate` inspects the schema, the `version` column and `address` table exist and match the mappings — validation passes. If the SQL and the entities disagreed (say you typo'd `varchar(3)` for country), startup would fail fast with a clear validation error. That fail-fast is the safety net the Step-8 design buys us.
-
-🔮 **Predict:** now that the schema matches, what does `./mvnw -pl services/cif -am verify` do? How many tests run? <details><summary>answer</summary>The Step-8 tests (6) should still pass — the schema is additive (`version` defaults to `0`, `address` is brand new and unused by old tests). We haven't added the *new* tests yet, so it's still `Tests run: 6`. The point of running now is to confirm the migration + mappings agree (validation passes) *before* we layer tests on top.</details>
+🔮 **Predict:** When you execute the maven verification command, what will happen? (Hint: The migrations will run and the schema validator will confirm the mapping is correct).
+<details><summary>answer</summary>The migrations will apply and validation will pass. The 6 existing tests from Step 8 will run and succeed because the schema changes are fully backwards compatible.</details>
 
 ▶️ **Run & See:**
-
+Let's run verify to verify the migration matches our mappings:
 ```bash
 ./mvnw -pl services/cif -am verify
 ```
-
-✅ **Expected output (abridged — the Step-8 suite, still green, now on the V2 schema):**
-
+✅ **Expected output:**
 ```
+[INFO] Scanning for projects...
+...
+2026-06-12T06:25:13.163+05:30  INFO 21508 --- [cif] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - add address and version"
+2026-06-12T06:25:13.242+05:30  INFO 21508 --- [cif] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 2 migrations to schema "public", now at version v2 (execution time 00:00.041s)
+...
 [INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
 [INFO] BUILD SUCCESS
 ```
 
-❌ **If you see** `Schema-validation: missing table [address]` **or** `missing column [customer.version]`: the migration didn't run or its names don't match the entities. Check the filename is exactly `V2__add_address_and_version.sql` (two underscores), it's under `src/main/resources/db/migration/`, and the column/table names match. See 🩺.
-
-✋ **Checkpoint:** `verify` is green with 6 tests on the new schema — entity mappings and the migration agree.
+✋ **Checkpoint:** The migrations run and the Step 8 tests pass, validating our schema.
 
 💾 **Commit:**
-
 ```bash
 git add services/cif/src/main/resources/db/migration/V2__add_address_and_version.sql
-git commit -m "feat(cif): Flyway V2 — add version column and address table"
+git commit -m "feat(cif): create Flyway V2 migration for address table and version column"
 ```
 
-⚠️ **Pitfall:** **never edit an already-applied migration** (`V1`). Flyway checksums applied migrations; changing one after it ran will fail the next startup with a checksum mismatch. Schema changes are *new* files (`V2`, `V3`, …) — the expand-contract discipline you'll formalize in Step 12.
+⚠️ **Pitfall:** Never modify a migration file that has already been pushed and applied. Flyway tracks checksum hashes for applied scripts and throws a validation error if any discrepancies are found upon startup.
 
 ---
 
-### Sub-step 4 of 6 — Repository: `findAllWithAddresses` (`@EntityGraph`) + `findByKycStatus` (projection) 🧭 *(Address ✅ → Customer ✅ → V2 ✅ → **repo** → fetch test → lock test)*
+### Sub-step 4 of 6 — Repository: `findAllWithAddresses` (`@EntityGraph`) + `findByKycStatus` (projection) 🧭 *(Address ✅ → Customer wiring ✅ → V2 ✅ → **repo** → fetch test → lock test)*
 
-🎯 **Goal:** add the **N+1 fix** (a method that fetches addresses in one query) and a **projection** method (selects only a few columns). Both are just declarations — Spring Data implements them.
+🎯 **Goal:** Update the [CustomerRepository](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/main/java/com/buildabank/cif/domain/CustomerRepository.java) class to define the query graph optimization `findAllWithAddresses` and the closed interface projection query `findByKycStatus`. Create the closed interface projection [CustomerSummary](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/main/java/com/buildabank/cif/domain/CustomerSummary.java).
 
-📁 **Location:** edit → `services/cif/src/main/java/com/buildabank/cif/domain/CustomerRepository.java`
+📁 **Exact location:**
+- Edit → `services/cif/src/main/java/com/buildabank/cif/domain/CustomerRepository.java`
+- New file → `services/cif/src/main/java/com/buildabank/cif/domain/CustomerSummary.java`
 
-⌨️ **Code (full file after editing — the two new methods + the two new imports):**
+⌨️ **Code (Repository diff):**
+
+```diff
+--- services/cif/src/main/java/com/buildabank/cif/domain/CustomerRepository.java (step-08-end)
++++ services/cif/src/main/java/com/buildabank/cif/domain/CustomerRepository.java (step-09-end)
+@@ -3,4 +3,8 @@
++import java.util.List;
+ import java.util.Optional;
+ 
++import org.springframework.data.jpa.repository.EntityGraph;
+ import org.springframework.data.jpa.repository.JpaRepository;
++import org.springframework.data.jpa.repository.Query;
+ 
+@@ -10,4 +14,15 @@
+ public interface CustomerRepository extends JpaRepository<Customer, Long> {
+ 
+     Optional<Customer> findByCustomerNumber(String customerNumber);
+ 
+     boolean existsByEmail(String email);
++
++    /**
++     * Loads customers WITH their addresses in a single query (an {@code @EntityGraph} turns the lazy
++     * association into a join just for this call) — the N+1 fix.
++     */
++    @EntityGraph(attributePaths = "addresses")
++    @Query("select c from Customer c")
++    List<Customer> findAllWithAddresses();
++
++    /** Returns a lightweight {@link CustomerSummary} projection (SELECTs only the projected columns). */
++    List<CustomerSummary> findByKycStatus(KycStatus kycStatus);
+ }
+```
+
+⌨️ **Code (Complete CustomerRepository.java):**
 
 ```java
 // services/cif/src/main/java/com/buildabank/cif/domain/CustomerRepository.java
@@ -685,34 +787,7 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 }
 ```
 
-🔍 **Line-by-line (the new pieces):**
-
-- `import org.springframework.data.jpa.repository.EntityGraph;` and `…Query;` — the two new imports.
-- `@EntityGraph(attributePaths = "addresses")` — tells Spring Data/Hibernate to **eagerly fetch** the `addresses` association *for this query only*, via a join. This is the N+1 fix expressed declaratively.
-- `@Query("select c from Customer c")` — an explicit JPQL query. We pair it with `@EntityGraph` so the graph applies to a clear "all customers" query. (`@EntityGraph` also works on derived methods like `findAll`, but pairing with an explicit query makes intent obvious and avoids overriding the inherited `findAll`.)
-- `List<Customer> findAllWithAddresses();` — returns full entities, with addresses already loaded — so a later `getAddresses()` fires **no** extra SQL.
-- `List<CustomerSummary> findByKycStatus(KycStatus kycStatus);` — a **derived query** whose *return type* is the `CustomerSummary` **interface projection**. Because the return type is a projection (not `Customer`), Spring Data generates SQL that selects **only the projected columns**, not the whole row.
-
-💭 **Under the hood:** `@EntityGraph(attributePaths = "addresses")` produces a `LEFT JOIN address` so parents and children come back in one result set — Hibernate stitches each customer's addresses onto it. For the projection, Spring Data inspects `CustomerSummary`'s getters (`getCustomerNumber`, `getFirstName`, `getLastName`), generates `select customer_number, first_name, last_name … where kyc_status = ?`, and returns proxy objects implementing the interface — no `Customer` entity is hydrated, so its lazy `addresses` are never even a temptation.
-
-🔮 **Predict:** `findAllWithAddresses()` returns full `Customer` entities; `findByKycStatus()` returns `CustomerSummary` proxies. Which one *cannot* accidentally trigger a lazy address load later, and why? <details><summary>answer</summary>The projection. It never materializes a `Customer` entity at all — it's a narrow proxy with three getters — so there's no managed entity holding a lazy `addresses` proxy to trip over. (`findAllWithAddresses` also won't trigger one, but for a different reason: it *pre-loads* the addresses.)</details>
-
-✋ **Checkpoint:** the repository compiles with both new methods. (We prove behavior with tests next, so no run yet — but you *can* run `verify` here; it'll still be 6 tests and green.)
-
-💾 **Commit:**
-
-```bash
-git add services/cif/src/main/java/com/buildabank/cif/domain/CustomerRepository.java
-git commit -m "feat(cif): add @EntityGraph findAllWithAddresses + KYC-status projection"
-```
-
-⚠️ **Pitfall:** `@EntityGraph` fetching a `@OneToMany` collection can produce duplicate parents in the result if the SQL join multiplies rows; Spring Data/Hibernate de-duplicate by identity here, so you get distinct customers. If you ever join *two* collections this way, you hit the "MultipleBagFetchException" / cartesian-product trap — a Go-Deeper topic below.
-
-Now create the projection interface itself:
-
-📁 **Location:** new file → `services/cif/src/main/java/com/buildabank/cif/domain/CustomerSummary.java`
-
-⌨️ **Code:**
+⌨️ **Code (Complete CustomerSummary.java):**
 
 ```java
 // services/cif/src/main/java/com/buildabank/cif/domain/CustomerSummary.java
@@ -734,28 +809,49 @@ public interface CustomerSummary {
 ```
 
 🔍 **Line-by-line:**
+- `@EntityGraph(attributePaths = "addresses")` — Signals Spring Data JPA to generate a left join fetching the `addresses` relation dynamically within a single SQL statement.
+- `List<CustomerSummary> findByKycStatus(...)` — Spring Data recognizes the return type is an interface projection containing only getters.
+- `CustomerSummary` getters — Getter names mapping exactly to fields inside the target `Customer` entity class.
 
-- It's a plain **interface** with **getters only** — no `@Entity`, no implementation. The getter *names* must match entity property names (`customerNumber` → `getCustomerNumber`), so Spring Data can map columns to them.
-- Spring Data creates a runtime **proxy** implementing this interface, backed by the narrow query result. This is a *closed* projection (every accessor maps to a property), which is what lets Spring Data restrict the `SELECT` to exactly these columns.
+💭 **Under the hood:** By requesting `CustomerSummary` projection instances, Spring Data skips entity instantiation/caching altogether. It generates select syntax querying only the matching properties (`customer_number`, `first_name`, `last_name`), bypassing the lazy fields.
 
-💭 **Under the hood:** there are two projection flavors — **interface** (what we use; proxy-backed, restricts the SELECT) and **class/DTO** (a concrete class whose constructor parameters Spring Data binds). Interface projections with only direct property accessors are "closed," enabling the column-narrowing optimization.
+🔮 **Predict:** If we execute compile, will it compile?
+<details><summary>answer</summary>Yes, everything will compile since the interfaces are properly defined. We will test the functionality next.</details>
 
-✋ **Checkpoint:** `CustomerSummary.java` compiles; the repository's `findByKycStatus` return type resolves.
+▶️ **Run & See:**
+Verify both compilation targets:
+```bash
+./mvnw -pl services/cif compile
+```
+✅ **Expected output:**
+```
+[INFO] Scanning for projects...
+[INFO] -------------------------< com.buildabank:cif >-------------------------
+[INFO] Building Build-a-Bank :: Services :: CIF 0.1.0-SNAPSHOT
+...
+[INFO] --- compiler:3.14.1:compile (default-compile) @ cif ---
+[INFO] Compiling 2 source files
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+```
+
+✋ **Checkpoint:** Both files compile without issues.
 
 💾 **Commit:**
-
 ```bash
-git add services/cif/src/main/java/com/buildabank/cif/domain/CustomerSummary.java
-git commit -m "feat(cif): add CustomerSummary interface projection"
+git add services/cif/src/main/java/com/buildabank/cif/domain/CustomerRepository.java services/cif/src/main/java/com/buildabank/cif/domain/CustomerSummary.java
+git commit -m "feat(cif): declare EntityGraph fetch and interface projection in CustomerRepository"
 ```
+
+⚠️ **Pitfall:** When using `@EntityGraph` or `JOIN FETCH` over multiple collections (e.g. addresses and phoneNumbers), Hibernate will throw a `MultipleBagFetchException` due to Cartesian product expansion. Handle this by using `Set` mappings or executing separate queries with batching.
 
 ---
 
-### Sub-step 5 of 6 — `CustomerFetchTest`: prove N+1 (3) vs the fix (1) 🧭 *(Address ✅ → Customer ✅ → V2 ✅ → repo ✅ → **fetch test** → lock test)*
+### Sub-step 5 of 6 — `CustomerFetchTest`: prove N+1 (3) vs the fix (1) 🧭 *(Address ✅ → Customer wiring ✅ → V2 ✅ → repo ✅ → **fetch test** → lock test)*
 
-🎯 **Goal:** the headline proof. Seed 2 customers (3 addresses total), then **count Hibernate's prepared statements** for a lazy traversal vs the `@EntityGraph` fetch. You will *see* `3` and `1`. A third test proves the projection.
+🎯 **Goal:** Write an integration test [CustomerFetchTest](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/test/java/com/buildabank/cif/domain/CustomerFetchTest.java) to assert the statement execution counts under both default lazy traversal (which causes the N+1 problem) and our optimized `@EntityGraph` query.
 
-📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/domain/CustomerFetchTest.java`
+📁 **Exact location:** new file → `services/cif/src/test/java/com/buildabank/cif/domain/CustomerFetchTest.java`
 
 ⌨️ **Code:**
 
@@ -863,72 +959,48 @@ class CustomerFetchTest {
 ```
 
 🔍 **Line-by-line:**
+- `@DataJpaTest` — Boots the slice context containing the repository beans.
+- `@TestPropertySource(properties = "spring.jpa.properties.hibernate.generate_statistics=true")` — Enables statement auditing.
+- `entityManagerFactory.unwrap(SessionFactory.class).getStatistics()` — Accesses Hibernate statistics to record DB interaction counts.
+- `entityManager.clear()` — Clears the cache so entity data must be read from the DB.
+- `lazyTraversalCausesNPlusOneQueries` — Traverses lazy addresses of 2 customers, asserting that exactly 3 statements were prepared.
+- `entityGraphFetchesEverythingInOneQuery` — Executes `@EntityGraph` join, asserting that exactly 1 statement was prepared.
 
-- `@DataJpaTest` — the JPA **slice**: loads only the persistence layer (repositories, `EntityManager`), fast. (From Step 8.)
-- `@Import(ContainersConfig.class)` — pulls in the real Testcontainers Postgres (`@ServiceConnection`) from Step 8. We test on the *real engine*.
-- `@ImportAutoConfiguration(FlywayAutoConfiguration.class)` — `@DataJpaTest` doesn't auto-run Flyway; this enables it so `V1` + `V2` create the schema (otherwise `validate` finds no tables).
-- `@AutoConfigureTestDatabase(replace = NONE)` — **don't** swap in an embedded H2; keep the real Postgres. (Without this, `@DataJpaTest` would try to replace the DataSource with an in-memory one.)
-- `@TestPropertySource(... hibernate.generate_statistics=true)` — turns on Hibernate's `Statistics` so we can count statements.
-- `EntityManagerFactory` → `unwrap(SessionFactory.class).getStatistics()` — reaches the Hibernate `Statistics` object behind the JPA façade.
-- `seed()` — builds Ada (2 addresses) + Alan (1 address) using `addAddress` (keeping both sides consistent), saves, **flushes** (push inserts to the DB), then **clears** the persistence context. The `clear()` is essential: without it the reads would hit the 1st-level cache and fire *no* SQL, hiding the N+1.
-- `lazyTraversalCausesNPlusOneQueries` — `findAll()` (1 query) then `getAddresses().size()` per customer (1 query each). `stats.clear()` zeroes the counter first; `getPrepareStatementCount()` is the assertion: **`== 3`** (1 + 2).
-- `entityGraphFetchesEverythingInOneQuery` — `findAllWithAddresses()` joins everything in; the later `getAddresses()` fires nothing. Statement count: **`== 1`**.
-- `projectionReturnsOnlyTheSummary` — `findByKycStatus(PENDING)` returns 2 `CustomerSummary` proxies; we assert size and that each `customer_number` starts with `CIF-F`.
+💭 **Under the hood:** Hibernate keeps loaded entities inside its first-level cache. Clearing the cache via `entityManager.clear()` forces Hibernate to issue SQL statements to the database, enabling precise profiling of the query behavior.
 
-💭 **Under the hood:** `getPrepareStatementCount()` counts JDBC `PreparedStatement`s prepared since the last `clear()`. The difference between `3` and `1` is the entire N+1 story made into a number a test can assert — not a log you squint at.
-
-🔮 **Predict (do this before running!):** write down the two numbers you expect from the two fetch tests. (Hint: 2 customers, 3 addresses.) <details><summary>answer</summary>Lazy traversal: **3** (1 for customers + 1 per customer × 2). `@EntityGraph`: **1** (a single join). With 500 customers the lazy number would be 501; the `@EntityGraph` number stays 1.</details>
+🔮 **Predict:** If you run this test class, what will be the result?
+<details><summary>answer</summary>The tests will pass. The lazy test will record exactly 3 statements (1 select customer + 2 select addresses). The graph test will record exactly 1 statement (left outer join).</details>
 
 ▶️ **Run & See:**
-
+Execute the fetch test:
 ```bash
 ./mvnw -pl services/cif test -Dtest=CustomerFetchTest
 ```
-
 ✅ **Expected output:**
-
 ```
-[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0 -- in com.buildabank.cif.domain.CustomerFetchTest
-```
-
-That green run *is* the proof: the assertion `getPrepareStatementCount() == 3` passed for the lazy traversal and `== 1` for the `@EntityGraph` fetch.
-
-❌ **If you see** `expected 3 but was 1` (or `1 but was 3`): you likely forgot `entityManager.clear()` (so reads hit the cache and fire 0 extra queries), or you accidentally made the association EAGER. Check the seed clears the context and `@OneToMany`/`@ManyToOne` are LAZY.
-
-🔬 **Break-it-on-purpose (the N+1 made vivid — 60s):** open `CustomerRepository` and *temporarily* make the fix lazy again — replace the `@EntityGraph` method body's intent by having the second test call `findAll()` instead of `findAllWithAddresses()`:
-
-```java
-// TEMPORARY experiment — DO NOT COMMIT:
-List<Customer> all = repository.findAll();   // was: findAllWithAddresses()
+[INFO] Running com.buildabank.cif.domain.CustomerFetchTest
+...
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
 ```
 
-Re-run `-Dtest=CustomerFetchTest#entityGraphFetchesEverythingInOneQuery`. It now **fails**:
-
-```
-expected: 1
- but was: 3
-```
-
-The statement count jumped from 1 to 3 — you just watched the N+1 explosion in a number. **Revert** the change (back to `findAllWithAddresses()`) and re-run → green. (Want to *see* the SQL, not just the count? Add `spring.jpa.show-sql=true` to the `@TestPropertySource` and watch the lazy test print one `select … from customer` followed by two `select … from address where customer_id=?` blocks.)
-
-✋ **Checkpoint:** `CustomerFetchTest` is green — 3 tests; you've seen 3-vs-1 (and the break-it confirmed it).
+✋ **Checkpoint:** `CustomerFetchTest` passes with all 3 test cases succeeding.
 
 💾 **Commit:**
-
 ```bash
 git add services/cif/src/test/java/com/buildabank/cif/domain/CustomerFetchTest.java
-git commit -m "test(cif): prove N+1 (3 statements) vs @EntityGraph (1) with Hibernate statistics"
+git commit -m "test(cif): verify N+1 problem and entity graph fix using Hibernate statistics"
 ```
 
-⚠️ **Pitfall:** counting statements *without* clearing the persistence context is the #1 reason this kind of test "lies." Always `flush()` + `clear()` after seeding when you want reads to hit the DB.
+⚠️ **Pitfall:** If you forget `entityManager.clear()`, the test assertions will fail because Hibernate will read the entities from its cache, yielding 0 queries and causing the assertions to fail.
 
 ---
 
-### Sub-step 6 of 6 — `OptimisticLockingTest`: two transactions → a conflict 🧭 *(Address ✅ → Customer ✅ → V2 ✅ → repo ✅ → fetch test ✅ → **lock test**)*
+### Sub-step 6 of 6 — `OptimisticLockingTest`: two transactions → a conflict 🧭 *(Address ✅ → Customer wiring ✅ → V2 ✅ → repo ✅ → fetch test ✅ → **lock test**)*
 
-🎯 **Goal:** the correctness proof. Simulate two users who both read the same customer at `version 0`; the first commits (→ `version 1`); the second's stale update is **rejected** with `ObjectOptimisticLockingFailureException` — a lost update prevented, on a real Postgres.
+🎯 **Goal:** Implement the integration test [OptimisticLockingTest](file:///C:/Users/ramishtaha/Desktop/Claude/build-a-bank%20-%20Antigravity/services/cif/src/test/java/com/buildabank/cif/domain/OptimisticLockingTest.java). Simulate concurrent operations by running distinct transactions using `TransactionTemplate` to prove that concurrent updates throw an `ObjectOptimisticLockingFailureException`.
 
-📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/domain/OptimisticLockingTest.java`
+📁 **Exact location:** new file → `services/cif/src/test/java/com/buildabank/cif/domain/OptimisticLockingTest.java`
 
 ⌨️ **Code:**
 
@@ -1006,140 +1078,72 @@ class OptimisticLockingTest {
 ```
 
 🔍 **Line-by-line:**
+- `@SpringBootTest` — Loads the full application context.
+- `TransactionTemplate tx` — Manages transaction boundaries programmatically.
+- `tx.execute(...)` — Opens, runs, and commits a new transaction, ensuring entities are detached between calls.
+- `assertThatThrownBy(...)` — Asserts that B's update throws `ObjectOptimisticLockingFailureException` due to its stale version.
 
-- `@SpringBootTest` — full context (not a slice): we need a real `PlatformTransactionManager` and the ability to run several *separate* transactions. `@Import(ContainersConfig.class)` again gives the real Postgres.
-- `TransactionTemplate tx` — lets us run a block of code inside its **own** transaction programmatically. Each `tx.execute(...)` / `tx.executeWithoutResult(...)` opens, runs, and commits a distinct transaction — that's how we simulate two independent users without spinning up threads.
-- `Long id = tx.execute(... save(...).getId())` — transaction 1: insert Vera (version `0`), capture her id.
-- `userA = tx.execute(... findById(id))` and `userB = ...` — transactions 2 and 3: each reads the row and gets a **detached** copy (the transaction closed). Both hold `version 0`. `assertThat(userA.getVersion()).isZero()` confirms.
-- `tx.executeWithoutResult(... userA.setKycStatus(VERIFIED); save(userA))` — transaction 4: A's update commits. Hibernate runs `UPDATE … SET kyc_status='VERIFIED', version=1 WHERE id=? AND version=0` — 1 row matches → version is now `1`.
-- `assertThatThrownBy(() -> tx.executeWithoutResult(... userB.setKycStatus(REJECTED); save(userB)))` — transaction 5: B still holds `version 0`. Hibernate runs `UPDATE … WHERE id=? AND version=0` — but the row is at `version 1` now → **0 rows match** → `StaleObjectStateException` → Spring's `ObjectOptimisticLockingFailureException`. The assertion *requires* that throw.
-- the final block — transaction 6: re-read; KYC is `VERIFIED` (A won) and version is `1`. B's `REJECTED` was correctly **rejected**, not silently applied.
+💭 **Under the hood:** Since transaction A commits first, it increments the database row's version to `1`. When transaction B attempts to commit its update containing `WHERE version = 0`, Postgres updates `0` rows. Hibernate detects this and throws `StaleObjectStateException`, which Spring translates into the target exception.
 
-💭 **Under the hood:** the magic is entirely in `WHERE id=? AND version=?` + the affected-row count. No row was ever *locked*; the conflict is detected purely from the version number diverging. That's optimistic locking: assume no conflict, verify at write time, reject if you lost the race.
-
-🔮 **Predict:** before running — what does B's `save` do, and what's the final KYC status? <details><summary>answer</summary>B's save throws `ObjectOptimisticLockingFailureException` (its `WHERE version=0` matches 0 rows). The final KYC status is `VERIFIED` — A's change stands, B's is rejected. No lost update.</details>
+🔮 **Predict:** If you run this test, what will happen?
+<details><summary>answer</summary>The test passes. B's update throws the exception and rolls back, leaving A's update in the database at version 1.</details>
 
 ▶️ **Run & See:**
-
+Run the locking test:
 ```bash
 ./mvnw -pl services/cif test -Dtest=OptimisticLockingTest
 ```
-
 ✅ **Expected output:**
-
 ```
-[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0 -- in com.buildabank.cif.domain.OptimisticLockingTest
-```
-
-❌ **If you see** `Expecting code to raise a throwable` (the test *fails* because no exception was thrown): the `@Version` field is missing or not picked up — B's update silently succeeded (a lost update!). Check `@Version private long version;` is on `Customer` and the `version` column exists (`V2`). This exact failure is the §12.3 mutation sanity-check below.
-
-🔬 **Break-it-on-purpose (watch a lost update happen — 60s):** comment out the `@Version` annotation on `Customer`:
-
-```java
-// @Version          // TEMPORARY — comment out to see the lost update
-private long version;
+[INFO] Running com.buildabank.cif.domain.OptimisticLockingTest
+...
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
 ```
 
-Re-run `-Dtest=OptimisticLockingTest`. It now **fails** — no conflict is thrown, B's `REJECTED` silently overwrites A's `VERIFIED`. That's a lost update happening in front of you. **Restore** the `@Version` and re-run → green. (You'll do exactly this as the formal mutation sanity-check in 🔬 Prove.)
-
-✋ **Checkpoint:** `OptimisticLockingTest` is green; you've seen the stale update rejected, and (via break-it) seen what happens without the guard.
+✋ **Checkpoint:** `OptimisticLockingTest` passes successfully.
 
 💾 **Commit:**
-
 ```bash
 git add services/cif/src/test/java/com/buildabank/cif/domain/OptimisticLockingTest.java
-git commit -m "test(cif): prove @Version rejects a lost-update race (optimistic locking)"
+git commit -m "test(cif): verify @Version optimistic locking rejects stale updates"
 ```
 
-⚠️ **Pitfall:** running both reads and both writes in *one* transaction would **not** reproduce the race — Hibernate's 1st-level cache would hand back the same managed instance, and there'd be no stale copy. The separate `tx.execute(...)` blocks (separate transactions, detached copies) are what make the conflict real.
+⚠️ **Pitfall:** Executing both reads and updates within a single transaction would fail to test this scenario. Hibernate's cache would serve the same entity instance, preventing version mismatch. You must use separate transaction boundaries (`TransactionTemplate`) to simulate concurrent users.
 
 ---
 
-### 🔁 The full flow you just built
-
-The two proofs, as sequence diagrams.
-
-**N+1 vs the fix:**
-
-```mermaid
-sequenceDiagram
-    participant T as Test
-    participant H as Hibernate
-    participant DB as PostgreSQL
-    Note over T,DB: ❌ Lazy traversal (findAll + getAddresses)
-    T->>H: findAll()
-    H->>DB: SELECT * FROM customer
-    DB-->>H: 2 customers
-    T->>H: customer1.getAddresses()
-    H->>DB: SELECT * FROM address WHERE customer_id=1
-    T->>H: customer2.getAddresses()
-    H->>DB: SELECT * FROM address WHERE customer_id=2
-    Note over T,DB: total = 3 statements (1 + N)
-    Note over T,DB: ✅ findAllWithAddresses() — @EntityGraph
-    T->>H: findAllWithAddresses()
-    H->>DB: SELECT customer LEFT JOIN address
-    DB-->>H: customers + addresses
-    Note over T,DB: total = 1 statement
-```
-
-*Alt-text: a sequence diagram. In the lazy case the Test calls findAll (Hibernate issues one SELECT customer), then getAddresses on each of two customers (Hibernate issues one SELECT address per customer) — three statements total, the 1+N pattern. In the @EntityGraph case the Test calls findAllWithAddresses and Hibernate issues a single SELECT customer LEFT JOIN address — one statement total.*
-
-**Optimistic locking (the lost-update race, rejected):**
-
-```mermaid
-sequenceDiagram
-    participant A as User A (tx)
-    participant B as User B (tx)
-    participant DB as PostgreSQL (customer, version)
-    A->>DB: read customer → version 0
-    B->>DB: read customer → version 0
-    A->>DB: UPDATE … SET kyc=VERIFIED, version=1 WHERE id=? AND version=0
-    DB-->>A: 1 row updated ✅ (version now 1)
-    B->>DB: UPDATE … SET kyc=REJECTED, version=1 WHERE id=? AND version=0
-    DB-->>B: 0 rows matched ❌
-    Note over B: Hibernate sees rowCount=0 → ObjectOptimisticLockingFailureException
-    Note over DB: final state = VERIFIED (A won; B rejected — no lost update)
-```
-
-*Alt-text: a sequence diagram. User A and User B each read the same customer row, both seeing version 0. User A commits an UPDATE setting kyc to VERIFIED with WHERE version=0 — one row updates and the version becomes 1. User B then commits an UPDATE with WHERE version=0 — zero rows match because the version is now 1; Hibernate sees the zero row count and throws ObjectOptimisticLockingFailureException. The final state is VERIFIED: A won, B was rejected, no lost update.*
-
 ## 🎮 Play With It
 
-> [!NOTE]
-> **No `requests.http` this step — and that's honest.** Step 9 adds no HTTP endpoints; the REST API is exactly as it was in Step 8, so the [`steps/step-08/requests.http`](../step-08/requests.http) collection still describes the live API. Everything here is exercised through **tests**. Below are ways to *feel* the concepts.
+Step 9 changes no HTTP endpoints; the REST API matches Step 8. You can verify the behavior by running:
 
-1. **Run the two proofs in isolation and read the SQL.** Add `spring.jpa.show-sql=true` to `CustomerFetchTest`'s `@TestPropertySource` (alongside the statistics property) and run:
+1. **Verify the N+1 sql profile logs:**
+   Add `spring.jpa.show-sql=true` to the properties in `CustomerFetchTest.java` and run the tests to see the SQL output:
    ```bash
    ./mvnw -pl services/cif test -Dtest=CustomerFetchTest
    ```
-   With `format_sql: true` already on (from `application.yml`), the lazy test prints one `select … from customer` followed by **two** `select … from address where customer_id=?` blocks. The `@EntityGraph` test prints **one** `select … left join address …`. Seeing the SQL next to the count cements it.
 
-2. **Flip the fix back to lazy and watch the count jump.** In `CustomerRepository`, temporarily have the second fetch test call `findAll()` instead of `findAllWithAddresses()`; the statistics assertion goes from `1` to `3` and the test fails. Revert. (This is the sub-step-5 break-it.)
+2. **Trigger a `LazyInitializationException`:**
+   Write a quick test where you load a customer entity in one transaction, close the transaction, and attempt to read its addresses. You will see:
+   ```
+   org.hibernate.LazyInitializationException: could not initialize proxy [com.buildabank.cif.domain.Address#1] - no Session
+   ```
 
-3. **Remove `@Version` and watch the lost update.** Comment out `@Version` on `Customer`, run `OptimisticLockingTest`, and watch the conflict *disappear* — B's update silently wins and the test fails. Restore it. (This is the sub-step-6 break-it and the §12.3 sanity-check.)
-
-4. **Scale the N+1.** In `CustomerFetchTest.seed()`, add a few more customers (each with 1–2 addresses) and change the lazy test's expected count to `1 + numberOfCustomers`. Watch the lazy number grow linearly while the `@EntityGraph` number stays `1`. *That linear growth is the N+1.*
-
-5. **Trigger a `LazyInitializationException` on purpose.** In a throwaway test, load a `Customer` inside one `tx.execute(...)` (returning the detached entity), then call `getAddresses().size()` **outside** any transaction. Because OSIV is off, you'll get `LazyInitializationException: could not initialize proxy … no Session`. This is the exact failure 🩺 explains — and the reason we fetch deliberately.
-
-**Smoke test (the one-command proof your build matches the lesson — needs only Docker):**
-
+Verify the build matches the lesson by running:
 ```bash
 bash steps/step-09/smoke.sh
 ```
 
 ## 🏁 The Finished Result
 
-You're at **`step-09-end`** (== `step-10-start`). The `services/cif` module now has:
-
-- `Address` entity (`@ManyToOne` LAZY) + `Customer.@OneToMany addresses` (LAZY) + `addAddress(...)` + `@Version version`.
-- Flyway **`V2`** (address table + version column); `ddl-auto=validate` still passes.
-- Repository `findAllWithAddresses()` (`@EntityGraph`) + `findByKycStatus()` (projection) + the `CustomerSummary` interface.
-- Two new test classes — `CustomerFetchTest` (3) + `OptimisticLockingTest` (1) — taking CIF from 6 → **10** tests, all green on a real Postgres.
+You're at `step-09-end` (== `step-10-start`). The `services/cif` module contains:
+- `Address` entity mapped as LAZY.
+- `Customer` entity mapped with `@Version` and `@OneToMany` addresses.
+- Flyway `V2` migration adding the table and version column.
+- Repository optimizations (`@EntityGraph` and interface projection).
+- Integrated tests on a real Postgres (Testcontainers), taking CIF from 6 to 10 tests.
 
 ### ✅ Definition of Done (your self-check)
-
-You're done when:
 
 - [ ] You can explain the persistence context, dirty checking, flush-vs-commit, LAZY vs EAGER, and why OSIV-off makes lazy-outside-tx fail fast.
 - [ ] You can *demonstrate* N+1 with statistics and fix it with `@EntityGraph` — and explain why a projection avoids the problem entirely.
@@ -1153,7 +1157,7 @@ You're done when:
 
 # D · 🔬 Prove It Works — the Verification Log
 
-> **Verification tier: 🔴 Full** — this step changes a service *and* the concurrency/correctness path. The log below is the real, pasted evidence from this machine: the full `verify` (10 CIF tests), the N+1 statistics proof, the optimistic-lock conflict, the **§12.3 mutation sanity-check**, and `smoke.sh`. *(Sandbox note: this machine's Docker may be isolated from your Docker Desktop; you run the same commands locally and should see the same results.)*
+> **Verification tier: 🔴 Full** — this step changes a service *and* the concurrency/correctness path. The log below is the real, pasted evidence from this machine: the full `verify` (10 CIF tests), the N+1 statistics proof, the optimistic-lock conflict, the **§12.3 mutation sanity-check**, and `smoke.sh`.
 
 ### 1 · `./mvnw -pl services/cif -am verify` — CIF now 10 tests, green
 
@@ -1277,7 +1281,7 @@ The **persistence context** is Hibernate's per-transaction **1st-level cache**: 
 <details>
 <summary><strong>5. How does <code>@Version</code> prevent a lost update at the SQL level? (applied)</strong></summary>
 
-Hibernate adds the version to every `UPDATE`: `UPDATE customer SET …, version = version + 1 WHERE id = ? AND version = ?` (the old version). The DB reports the affected-row count. If another transaction already incremented the version, the `WHERE` matches **0 rows** → Hibernate throws `StaleObjectStateException` → Spring's `ObjectOptimisticLockingFailureException`. No row was locked; the conflict is detected purely from the version number diverging. The losing transaction can then re-read and retry. That single extra `AND version = ?` predicate is the entire lost-update defence.
+Hibernate adds the version to every `UPDATE`: `UPDATE customer SET ?, version = version + 1 WHERE id = ? AND version = ?` (the old version). The DB reports the affected-row count. If another transaction already incremented the version, the `WHERE` matches **0 rows** → Hibernate throws `StaleObjectStateException` → Spring's `ObjectOptimisticLockingFailureException`. No row was locked; the conflict is detected purely from the version number diverging. The losing transaction can then re-read and retry. That single extra `AND version = ?` predicate is the entire lost-update defence.
 
 </details>
 

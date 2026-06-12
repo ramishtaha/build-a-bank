@@ -429,3 +429,23 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 - **module canvas** — a per-module `.adoc` document (e.g. `module-service.adoc`) listing the module's base package, its Spring components, its **bean references** (which other modules it touches, by module), and events published/listened-to — the dependency edges spelled out in prose.
 - **C4 component diagram** — the level-3 view in the C4 model (Context → Container → Component → Code). Modulith renders the module graph as a C4 component diagram; isolated modules with no inter-module edges (e.g. `client`) are omitted from it but still counted by `verify()`.
 - **BOM (Bill of Materials), import scope** — a POM imported via `<type>pom</type><scope>import</scope>` into `dependencyManagement` that curates mutually-compatible versions; children then declare artifacts with **no `<version>`**. We import `spring-modulith-bom` so the Modulith deps need no explicit version (ArchUnit, with no BOM here, is pinned via the `archunit.version` property — note the asymmetry).
+
+---
+
+## Step 9 — Hibernate Performance & Correctness
+
+- **persistence context** — Hibernate's per-transaction first-level cache (an in-memory map of id → managed entity) that ensures the same database row is loaded only once within a transaction.
+- **dirty checking** — the Hibernate mechanism that snapshots managed entities on load and, at flush time, compares their current state to the snapshot to auto-generate SQL `UPDATE`s for changed fields — you never write raw updates for managed entities.
+- **flush** — the operation where Hibernate pushes pending SQL writes to the database; it occurs automatically on commit, before queries that might be affected, or on explicit request, but does not commit the transaction (flush ≠ commit).
+- **LAZY fetching** — an ORM association strategy where related entities are not loaded from the database until they are explicitly accessed in the code (contrasted with EAGER, which loads them immediately).
+- **proxy (Hibernate)** — a dynamically generated subclass that stands in for a lazy association, triggering a database query only when one of its getters is invoked.
+- **`LazyInitializationException`** — the exception thrown when code attempts to access a lazy association after the Hibernate session (or transaction) that loaded the entity has been closed.
+- **OSIV (Open-Session-in-View)** — a Spring Boot default mechanism that keeps the Hibernate session open for the entire duration of an HTTP request; we disable it (`open-in-view: false`) to force disciplined, explicit fetching in the service layer.
+- **N+1 problem** — a common ORM performance anti-pattern where loading N parent entities and traversing their lazy associations fires 1 initial query followed by N subsequent queries (one per parent) to load the children.
+- **`@EntityGraph`** — a JPA query hint that specifies an association to load eagerly via a left join, overriding the default lazy fetching configuration for a specific query to fix the N+1 problem.
+- **interface projection** — a Spring Data feature where you declare a Java interface with getters to return a lightweight, proxy-backed subset of columns from a database query, preventing full entity hydration.
+- **optimistic locking** — a concurrency control strategy that assumes conflicts are rare and verifies that a row's version has not changed since it was read before committing an update.
+- **`@Version`** — the JPA annotation used to mark a version field (usually a `long`) that Hibernate increments on every update, using it in the `UPDATE` query's `WHERE` clause to detect concurrent modifications.
+- **lost update** — a concurrency anomaly where one transaction silently overwrites the uncommitted or concurrent changes of another transaction without detection.
+- **pessimistic locking** — a concurrency control strategy that takes a database-level lock (e.g., `SELECT … FOR UPDATE`) on read to prevent other transactions from modifying the row until the transaction commits (Step 12).
+
