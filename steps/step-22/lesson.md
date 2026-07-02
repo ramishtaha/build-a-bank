@@ -11,14 +11,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | caching & cache-aside · CQRS read model · `@Async` + virtual threads · `@Scheduled` + ShedLock |
-| **C** | [🛠️ Build](#build) | **fourteen hands-on sub-steps (0–13)**: the module → the cached read model → async warming on virtual threads → the ShedLock'd refresh job → the read API → three test classes on real Redis → the play/verify harness |
-| **D** | [🔬 Prove](#prove) | the Verification Log — cache hit, refresh, virtual-thread async, ShedLock; §12.3 mutation; a fresh re-run |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting (cache write-visibility; ShedLock self-invocation) · resources · recap & next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1 h |
+| **B** | [🧠 Understand](#understand) | caching & cache-aside · CQRS read model · `@Async` + virtual threads · `@Scheduled` + ShedLock | ~1.5 h |
+| **C** | [🛠️ Build](#build) | **fourteen hands-on sub-steps (0–13)**: the module → the cached read model → async warming on virtual threads → the ShedLock'd refresh job → the read API → three test classes on real Redis → the play/verify harness | ~7.5 h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — cache hit, refresh, virtual-thread async, ShedLock; §12.3 mutation; a fresh re-run | ~2 h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~1.5 h |
+| **F** | [🏆 Review](#review) | troubleshooting (cache write-visibility; ShedLock self-invocation) · resources · recap & next | ~0.5 h |
 
 ---
 
@@ -32,7 +32,7 @@
 |---|---|
 | **Title** | Caching & async + a Market Info read model + clustered scheduling — `@Cacheable` on Redis (CQRS read model), `@Async` on virtual threads, `@Scheduled` + ShedLock |
 | **Step** | 22 of 67 · **Phase D — Distributed Systems, Messaging & Batch** 🔵→🟣 |
-| **Effort** | ≈ 14 hours focused. Reuses the Redis from Step 21 (now also a cache + a lock store). |
+| **Effort** | ≈ 14 hours focused — see the 🗓️ Session Plan below. Reuses the Redis from Step 21 (now also a cache + a lock store). |
 | **What you'll run this step** | **JVM + Maven**; **🐳 Docker** for Testcontainers **Redis**. New service on port 8085. |
 | **Buildable artifact** | A new **`services/market-info`** (no DB): `MarketRateService.getRate` `@Cacheable` on Redis (a CQRS read model), `refreshRate` `@CachePut`; a `CacheWarmer` `@Async` on **virtual threads**; a `RateRefreshJob` `@Scheduled` + **`@SchedulerLock`** (ShedLock, Redis lock store) so only one node refreshes; `GET /api/market/rates/{base}/{quote}`. `step-22-start == step-21-end`. |
 | **Verification tier** | 🔴 **Full** — new service + the build. `./mvnw verify` green + cache hit / refresh / virtual-thread async / ShedLock proven on **real Redis** + **§12.3 mutation** + clean-room + `smoke.sh`. |
@@ -94,6 +94,23 @@ Hitting a slow upstream (or recomputing) on every read doesn't scale; caching is
 - **Prereqs:** bank builds green (`git describe` → `step-21-end`); Docker running (Redis).
 - **Connects to what you know:** **Redis** (Step 21) is now also a cache + lock store — and ShedLock's lock is the very same `SET NX` + expiry primitive you used for the Idempotency-Key; **virtual threads** (Step 11) power `@Async`; the read model is the **read side** of the CQRS idea you'll complete in Step 52; the proxy/self-invocation rule (Step 7) governs `@Cacheable` and `@SchedulerLock` exactly as it governed `@Transactional`.
 - **Depends on:** Steps **21, 11, 20**. **+ Docker.**
+
+## 🗓️ Session Plan
+
+≈ 14 focused hours is **six sittings**, not one. Each sitting ends at a real ✋ checkpoint (a commit or a movement boundary), so you can stop without losing state.
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| **S1 · Orient + Understand** | A (this movement) + B: cache-aside & the CQRS read model, `@Async`/virtual threads, ShedLock, the Then-vs-Now table | ~2.5 h | the B→C bridge (files tree) |
+| **S2 · Scaffold + the read-model core** | C · Sub-steps 0–4: module pom + root registration, app class + `application.yml`, `FxRate`, `RateProvider`, `MarketRateService` (`@Cacheable`/`@CachePut`) | ~2.5 h | Sub-step 4's ✋ + commit |
+| **S3 · Async, lock, schedule** | C · Sub-steps 5–8: `AsyncConfig` + `CacheWarmer`, `RedisLockConfig`, `SchedulingConfig` + the test gate, `RateRefreshJob` | ~2.5 h | Sub-step 8's ✋ + commit |
+| **S4 · The web API + the proof** | C · Sub-steps 9–12: `MarketController`, `RedisContainers` + `MarketCacheTest`, `ShedLockTest`, `MarketControllerTest` — module **5/5 green** | ~2.5 h | Sub-step 12's ✋ (5/5 green) |
+| **S5 · Harness, live run + Prove** | C · Sub-step 13 (Makefile, `requests.http`, `smoke.sh`, ADR, the timed live curls) + 🎮 Play With It + D: the Verification Log | ~2.5 h | end of D |
+| **S6 · Apply + Review** | E + F: interview prep, your-turn challenges, recap; tag `step-22-end` | ~1.5 h | `step-22-end` tagged |
+
+**Optional routes:** the ⏭️ skip-test above (5 min) can route you past the whole step; the five 🚀 Go Deeper asides in E cost **+~5 min each**; the 🏋️ quick exercises are **+~20–30 min each** and the 🎯 stretch (event-driven read model) is a separate ~1–2 h sitting.
+
+✋ **Stopping after S1's Orient half?** You have no new code yet — nothing to rebuild. Next: B · Understand; first action: reread the headline diagram in the 📇 Cheat Card, then read "The Big Idea."
 
 ---
 
@@ -186,6 +203,8 @@ used. Whoever's `SET NX` succeeds owns the tick; `unlock` deletes the key (or, i
 elapsed, shortens its TTL to expire at the at-least boundary); a crashed holder's key simply expires at
 `lockAtMostFor`. One primitive, two patterns — "claim a key atomically before doing work."
 
+❓ **Quick check:** you scale to 3 pods and "refreshed N rates" appears **3× per tick** in the combined logs — what's missing, and which setting frees the lock if the winning node crashes mid-run? <details><summary>Answer</summary>`@SchedulerLock` (ShedLock) on the job — without it every instance runs the tick. `lockAtMostFor` bounds how long a crashed holder's lock survives before another node can win.</details>
+
 ## 🛡️ Security Lens & 🧵 Thread-safety note
 
 market-info serves low-sensitivity reference data and has **no auth yet** (like cif/notification — R-002);
@@ -208,6 +227,8 @@ use **virtual threads** — far cheaper for I/O-bound tasks.
 | Run a periodic job once per cluster | Quartz + JDBC `JobStore`, or hand-rolled leader election | `@Scheduled` + **ShedLock** over the Redis you already run | "one lock per tick" is all most jobs need; Quartz's persistence/clustering machinery is overkill for it |
 | Async executor sizing | `ThreadPoolTaskExecutor` with agonized-over core/max/queue numbers | `SimpleAsyncTaskExecutor` + **virtual threads** — a fresh cheap thread per task | Loom (JDK 21+) made threads cheap; pooling them stopped making sense for I/O-bound work |
 | Cache stack | Ehcache/JCache XML, or memcached with hand-rolled clients | `spring-boot-starter-cache` + Redis: annotations + auto-configured `RedisCacheManager` | Boot's cache abstraction made the provider a config switch (`spring.cache.type`) |
+
+✋ **Stopping here (end of S1)?** You have the three levers in your head and zero new files. Next: the B→C bridge (files tree), then C · Sub-step 0; first action: create `services/market-info/pom.xml`.
 
 ---
 
@@ -289,7 +310,7 @@ flowchart LR
 
 ---
 
-### Sub-step 0 of 13 — The module pom + root registration 🧭 *(you are here: **module** → config → record → provider → service → async → lock → schedule → job → web → tests → harness)*
+### Sub-step 0 of 13 — The module pom + root registration · ≈30 min 🧭 *(you are here: **module** → config → record → provider → service → async → lock → schedule → job → web → tests → harness)*
 
 🎯 **Goal:** create the `services/market-info` Maven module with exactly what a cache + Redis + ShedLock service needs — and meet the step's one dependency-management wrinkle head-on: **ShedLock is not managed by the Spring Boot BOM**, so it's the rare dependency you must pin yourself.
 
@@ -453,7 +474,7 @@ git commit -m "feat(market-info): scaffold module (cache + data-redis + ShedLock
 
 ---
 
-### Sub-step 1 of 13 — The application class + `application.yml` 🧭 *(module ✅ → **config** → record → provider → service → …)*
+### Sub-step 1 of 13 — The application class + `application.yml` · ≈30 min 🧭 *(module ✅ → **config** → record → provider → service → …)*
 
 🎯 **Goal:** the Spring Boot entry point with the two switches this step is about (`@EnableCaching`, `@EnableAsync`), and the YAML that says *cache in Redis, entries live 60 seconds, run on port 8085*.
 
@@ -585,7 +606,7 @@ git commit -m "feat(market-info): app class (@EnableCaching @EnableAsync) + Redi
 
 ---
 
-### Sub-step 2 of 13 — `FxRate`, the read-model value 🧭 *(module ✅ → config ✅ → **record** → provider → service → …)*
+### Sub-step 2 of 13 — `FxRate`, the read-model value · ≈15 min 🧭 *(module ✅ → config ✅ → **record** → provider → service → …)*
 
 🎯 **Goal:** the value object the cache stores — one FX rate. A `record` (immutable, value-semantics) that is `Serializable` because the Redis cache will store it as JDK-serialized bytes.
 
@@ -640,9 +661,11 @@ git commit -m "feat(market-info): FxRate read-model record (Serializable for the
 
 ⚠️ **Pitfall:** forgetting `implements Serializable` compiles **clean** and starts **clean** — it only blows up on the first actual cache write. If your stack trace says `DefaultSerializer requires a Serializable payload`, this line is the fix.
 
+✋ **Stopping here (mid-S2)?** You have the module, its config, and the `FxRate` record committed. Next: Sub-step 3 (`RateProvider`, the call-counted slow upstream); first action: create `services/market-info/src/main/java/com/buildabank/marketinfo/RateProvider.java`.
+
 ---
 
-### Sub-step 3 of 13 — `RateProvider`, the slow upstream that counts its calls 🧭 *(… record ✅ → **provider** → service → async → …)*
+### Sub-step 3 of 13 — `RateProvider`, the slow upstream that counts its calls · ≈25 min 🧭 *(… record ✅ → **provider** → service → async → …)*
 
 🎯 **Goal:** simulate the expensive thing the cache protects — a paid FX API with real latency — and make it **count its calls**, because "the upstream was called once for two reads" is *the* assertion that proves a cache works.
 
@@ -737,7 +760,7 @@ git commit -m "feat(market-info): call-counted slow RateProvider (the upstream t
 
 ---
 
-### Sub-step 4 of 13 — `MarketRateService`: `@Cacheable` + `@CachePut`, the heart of the step 🧭 *(… provider ✅ → **service** → async → lock → …)*
+### Sub-step 4 of 13 — `MarketRateService`: `@Cacheable` + `@CachePut`, the heart of the step · ≈35 min 🧭 *(… provider ✅ → **service** → async → lock → …)*
 
 🎯 **Goal:** the read model itself. `getRate` = cache-aside read (`@Cacheable`); `refreshRate` = forced overwrite (`@CachePut`). Two annotations, the whole pattern.
 
@@ -821,9 +844,11 @@ git commit -m "feat(market-info): @Cacheable getRate + @CachePut refreshRate —
 
 ⚠️ **Pitfall:** annotating a **`private`** method `@Cacheable`. The proxy can only intercept calls that go through the bean's public surface — on a private method the annotation is dead code (and unlike self-invocation, this one not even a careful caller can rescue). Cache/lock/transaction annotations: public methods, called cross-bean.
 
+✋ **Stopping here (end of S2)?** You have the cached read model — `@Cacheable` getRate + `@CachePut` refreshRate, the heart of the step — committed. Next: Sub-step 5 (async warming on virtual threads); first action: create `AsyncConfig.java` in `com.buildabank.marketinfo`.
+
 ---
 
-### Sub-step 5 of 13 — `AsyncConfig` + `CacheWarmer`: `@Async` on virtual threads 🧭 *(… service ✅ → **async** → lock → schedule → job → …)*
+### Sub-step 5 of 13 — `AsyncConfig` + `CacheWarmer`: `@Async` on virtual threads · ≈40 min 🧭 *(… service ✅ → **async** → lock → schedule → job → …)*
 
 🎯 **Goal:** warm the cache **off the request path**. First the executor (where async work runs — virtual threads), then the `@Async` method itself, which reports back whether it really ran on a virtual thread so a test can prove it.
 
@@ -918,6 +943,8 @@ public class CacheWarmer {
 
 🔮 **Predict:** if you call `warmer.warm("USD","EUR")` and *immediately* check `Thread.currentThread().isVirtual()` in the **caller**, what do you get? <details><summary>Answer</summary>Whatever the *caller's* thread is — `false` on a Tomcat/main thread. Only the body runs on the virtual thread; `@Async` changes where the *work* runs, not who calls it. The future's `true` refers to the worker.</details>
 
+❓ **Knowledge-check:** why does `warm()` return a `CompletableFuture` instead of `void`? <details><summary>Answer</summary>So a caller (and the test) can await completion and observe the result — `@Async void` is fire-and-forget, and its exceptions vanish into a handler with nowhere to see success or failure.</details>
+
 ▶️ **Run & See:**
 
 ```bash
@@ -940,7 +967,7 @@ git commit -m "feat(market-info): @Async CacheWarmer on a dedicated virtual-thre
 
 ---
 
-### Sub-step 6 of 13 — `RedisLockConfig`: the ShedLock `LockProvider` 🧭 *(… async ✅ → **lock** → schedule → job → web → …)*
+### Sub-step 6 of 13 — `RedisLockConfig`: the ShedLock `LockProvider` · ≈20 min 🧭 *(… async ✅ → **lock** → schedule → job → web → …)*
 
 🎯 **Goal:** give ShedLock its lock store. One bean: a `LockProvider` backed by the same Redis the cache uses.
 
@@ -1007,9 +1034,11 @@ git commit -m "feat(market-info): ShedLock RedisLockProvider over the shared Red
 
 ⚠️ **Pitfall:** reaching for ShedLock as a general distributed lock ("I'll guard my balance update with it!"). It's a *scheduler* guard with relaxed guarantees (clock-based expiry, no fencing). Money invariants stay on database locks (Step 12) — repeat after the risk register.
 
+✋ **Stopping here (mid-S3)?** You have async warming plus the ShedLock `LockProvider` wired over the shared Redis, committed. Next: Sub-step 7 (the gated scheduling switch); first action: create `SchedulingConfig.java`.
+
 ---
 
-### Sub-step 7 of 13 — `SchedulingConfig` + the test gate 🧭 *(… lock ✅ → **schedule switch** → job → web → tests → …)*
+### Sub-step 7 of 13 — `SchedulingConfig` + the test gate · ≈25 min 🧭 *(… lock ✅ → **schedule switch** → job → web → tests → …)*
 
 🎯 **Goal:** switch on `@Scheduled` and ShedLock's interceptor — **behind a property**, so production polls but tests can turn the timer off and stay deterministic. Plus the one-line test override file itself.
 
@@ -1087,7 +1116,7 @@ git commit -m "feat(market-info): gated @EnableScheduling + @EnableSchedulerLock
 
 ---
 
-### Sub-step 8 of 13 — `RateRefreshJob`: `@Scheduled` + `@SchedulerLock` 🧭 *(… schedule switch ✅ → **job** → web → tests → harness)*
+### Sub-step 8 of 13 — `RateRefreshJob`: `@Scheduled` + `@SchedulerLock` · ≈30 min 🧭 *(… schedule switch ✅ → **job** → web → tests → harness)*
 
 🎯 **Goal:** the clustered refresher — every `market.refresh-rate-ms`, **one** instance re-fetches the tracked pairs and `@CachePut`s them, keeping the read model warm and bounded-stale.
 
@@ -1158,6 +1187,8 @@ public class RateRefreshJob {
 
 🔮 **Predict:** start the service with Redis up. How long until the first `refreshed 3 FX rate(s)` log line — ~60 seconds, or ~immediately? And on which thread name? *(You'll verify both in sub-step 13's live run.)*
 
+❓ **Knowledge-check:** the lock-holding node crashes mid-tick — what happens at the next tick, and which setting bounds the wait? <details><summary>Answer</summary>The dead node's lock is still held, so every node skips — until `lockAtMostFor` (here `PT1M`) expires, after which the next tick's winner acquires it. `lockAtMostFor` bounds the outage.</details>
+
 ▶️ **Run & See:**
 
 ```bash
@@ -1177,9 +1208,11 @@ git commit -m "feat(market-info): ShedLock-guarded scheduled FX refresh (one nod
 
 ⚠️ **Pitfall:** `@SchedulerLock` (like `@Cacheable`) only works **through the proxy** — a `this.refresh()` call from inside the same bean bypasses the lock entirely and runs unguarded on every node. Keep the job method public, let only the scheduler (and tests, via the bean reference) invoke it.
 
+✋ **Stopping here (end of S3)?** You have the whole back half committed: cache, async warmer, lock provider, gated scheduling, and the ShedLock'd refresh job. Next: Sub-step 9 (`MarketController`, the read API); first action: create `MarketController.java`.
+
 ---
 
-### Sub-step 9 of 13 — `MarketController`: the read API 🧭 *(… job ✅ → **web** → tests → harness)*
+### Sub-step 9 of 13 — `MarketController`: the read API · ≈20 min 🧭 *(… job ✅ → **web** → tests → harness)*
 
 🎯 **Goal:** expose the read model: `GET /api/market/rates/{base}/{quote}` → the (cached) rate as JSON. Thin by design — normalize input, delegate cross-bean.
 
@@ -1251,7 +1284,7 @@ git commit -m "feat(market-info): GET /api/market/rates/{base}/{quote} read endp
 
 ---
 
-### Sub-step 10 of 13 — `RedisContainers` + `MarketCacheTest`: prove the cache on real Redis 🧭 *(… web ✅ → **tests** → harness)*
+### Sub-step 10 of 13 — `RedisContainers` + `MarketCacheTest`: prove the cache on real Redis · ≈50 min 🧭 *(… web ✅ → **tests** → harness)*
 
 🎯 **Goal:** the step's centerpiece proof, on a **real Redis** via Testcontainers: ① a repeat read is served from cache (upstream called once), ② `@CachePut` refresh overwrites the entry, ③ the `@Async` warm really runs on a virtual thread.
 
@@ -1445,9 +1478,11 @@ git commit -m "test(market-info): cache hit/refresh/async-on-VT proven on real R
 
 ⚠️ **Pitfall:** "fixing" the write-visibility reality with `Thread.sleep(500)` between the two reads. It works… until CI is slow (flake) or Redis is fast (you wasted 500ms × every build × forever). `await().untilAsserted` is the grown-up version: bounded, fast-when-possible, loud-when-broken.
 
+✋ **Stopping here (mid-S4)?** You have the centerpiece proof green — cache hit, refresh overwrite, virtual-thread warm, all on real Redis. Next: Sub-step 11 (`ShedLockTest`, the cluster guard); first action: create `services/market-info/src/test/java/com/buildabank/marketinfo/ShedLockTest.java`.
+
 ---
 
-### Sub-step 11 of 13 — `ShedLockTest`: the cluster guard, proven at the lock store 🧭 *(… cache test ✅ → **lock test** → controller test → harness)*
+### Sub-step 11 of 13 — `ShedLockTest`: the cluster guard, proven at the lock store · ≈30 min 🧭 *(… cache test ✅ → **lock test** → controller test → harness)*
 
 🎯 **Goal:** prove the guarantee `@SchedulerLock` stands on: while one holder owns the named lock, a second acquire is **refused**; after release, it's available again. One holder per tick ⇒ one node per tick.
 
@@ -1548,7 +1583,7 @@ git commit -m "test(market-info): held ShedLock lock refuses a second acquire (c
 
 ---
 
-### Sub-step 12 of 13 — `MarketControllerTest` + the whole module green 🧭 *(… lock test ✅ → **controller test → all 5** → harness)*
+### Sub-step 12 of 13 — `MarketControllerTest` + the whole module green · ≈30 min 🧭 *(… lock test ✅ → **controller test → all 5** → harness)*
 
 🎯 **Goal:** pin the web layer's one behavior (path → upper-cased lookup → JSON) with **standalone MockMvc** — no Spring context at all — then run the full module: 5 tests green.
 
@@ -1643,9 +1678,11 @@ git commit -m "test(market-info): standalone-MockMvc controller test; module 5/5
 
 ⚠️ **Pitfall:** asserting `jsonPath("$.rate").value("0.92")` (a string). Jackson writes `BigDecimal` as a JSON **number**; the matcher compares typed values and `"0.92" ≠ 0.92`. Match numbers as numbers.
 
+✋ **Stopping here (end of S4)?** You have the module **5/5 green** — built *and* proven. Next: Sub-step 13 (the harness + the live run); first action: edit the repo-root `Makefile` (add `run-market-info` + `play-22`).
+
 ---
 
-### Sub-step 13 of 13 — The harness: Makefile, `requests.http`, `smoke.sh`, ADR — and the live run 🧭 *(… tests ✅ → **harness — done!**)*
+### Sub-step 13 of 13 — The harness: Makefile, `requests.http`, `smoke.sh`, ADR — and the live run · ≈60 min 🧭 *(… tests ✅ → **harness — done!**)*
 
 🎯 **Goal:** make the step playable in one command, smokeable in one command, and decided-on-the-record — then **boot the real thing with real Redis and watch the cache work over HTTP**.
 
@@ -1865,6 +1902,14 @@ curl http://localhost:8085/api/market/rates/GBP/JPY     # untracked pair: ~42ms 
 curl http://localhost:8085/api/market/rates/GBP/JPY     # …then ~6ms hit (live-measured)
 ```
 
+```powershell
+# Windows/PowerShell — the VAR=value inline-env prefix above is bash-only:
+$env:REDIS_HOST='localhost'; .\mvnw.cmd -pl services/market-info spring-boot:run
+# unset later with: Remove-Item Env:REDIS_HOST
+```
+
+(`REDIS_HOST` defaults to `localhost` in `application.yml`, so on either OS the variable is optional when Redis runs locally.)
+
 🧪 **Little experiments (in [`requests.http`](requests.http)):**
 
 - **Feel the cache:** read an *untracked* pair (GBP/JPY) twice — miss then hit; we measured 42ms → 5.8ms. (Tracked pairs are always fast: the startup tick pre-warms them — check the identical `asOf` across repeats instead.)
@@ -1876,6 +1921,8 @@ curl http://localhost:8085/api/market/rates/GBP/JPY     # …then ~6ms hit (live
 ## 🏁 The Finished Result
 
 `step-22-end`: **12 modules**; an FX read model cached on Redis, warmed async on virtual threads, refreshed by a cluster-safe job. **✅ Definition of Done:** repeat reads are cache hits (identical value + `asOf`, no new upstream call), only one node refreshes per tick, `./mvnw verify` is green, `bash steps/step-22/smoke.sh` passes, and you've committed/tagged `step-22-end`.
+
+✋ **Stopping here (mid-S5)?** You have the whole service built, played with live, and tagged. Next: D · Prove — the Verification Log; first action: compare your own `./mvnw -B -pl services/market-info test` output against §1 of the log.
 
 ---
 
@@ -1942,7 +1989,9 @@ that's the mechanism the `@SchedulerLock` relies on. The live single-process dem
 
 # E · 🎓 Apply
 
-## 🚀 Go Deeper (Optional)
+✋ **Stopping after Prove (end of S5)?** You have the full 🔴 verification green — tests, §12.3 mutation, `smoke.sh`, clean-room. Next: E · Apply; first action: skim the 🚀 Go Deeper asides, or jump straight to 💼 Interview Prep.
+
+## 🚀 Go Deeper (Optional · +~5 min each)
 
 <details><summary>Cache-aside vs read-through/write-through</summary>Spring's <code>@Cacheable</code> is cache-aside: the app loads on a miss and stores. Read-through/write-through push that into the cache layer itself. Cache-aside is the common, explicit default; write-through helps when you must keep the cache and source in lockstep.</details>
 
@@ -1968,9 +2017,11 @@ that's the mechanism the `@SchedulerLock` relies on. The live single-process dem
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-- **Quick:** add an admin endpoint that drops a stale pair: `DELETE /api/market/rates/{base}/{quote}` calling a new `@CacheEvict(cacheNames = "fxRates", key = "#base + '/' + #quote")` method. Verify with `redis-cli KEYS 'fxRates*'` before/after. <details><summary>Hint</summary>Put the <code>@CacheEvict</code> method on <code>MarketRateService</code> and call it from the controller — cross-bean, same as the others. Test it standalone-MockMvc style with a <code>verify(rates).evictRate("USD","EUR")</code>.</details>
-- **Quick:** switch the cache value serializer to JSON so entries are human-readable in `redis-cli`. <details><summary>Hint</summary>Define a <code>RedisCacheManagerBuilderCustomizer</code> bean that sets <code>serializeValuesWith(SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer()))</code> on the default config — and then you can drop <code>implements Serializable</code> from <code>FxRate</code>. Check the entry with <code>redis-cli GET "fxRates::USD/EUR"</code>: JSON now.</details>
-- 🎯 **Stretch:** turn the rates into a real **event-driven read model** — consume a `rates.updated` Kafka event (the Step-20 pipeline) and `@CachePut` the cache on each event, so the read model updates on *events* instead of (or in addition to) the timer. Compare freshness vs the polled refresh. <details><summary>Design hints (no separate solutions folder for this step)</summary>① Add the Kafka starter + a <code>rates.updated</code> topic; publish a small <code>RateUpdatedEvent(base, quote)</code> from wherever rates "change" (a tiny admin endpoint will do as the trigger). ② A <code>@KafkaListener</code> in market-info calls <code>rates.refreshRate(base, quote)</code> — cross-bean, so <code>@CachePut</code> applies; reuse the Step-20 idempotent-consumer dedupe if you publish with an eventId. ③ Keep the ShedLock'd timer as the fallback sweep (events for freshness, polling for self-healing — the belt-and-braces real systems use). ④ Test on Testcontainers Redpanda + Redis together: publish an event, <code>await</code> until <code>getRate</code> returns the refreshed value with no new upstream call from the reader's side. ⑤ Honesty check: you now have two writers to one cache entry (timer + listener) — why is that safe here? (Both do full overwrites of independently-fetched values; last write wins and both are "fresh enough." Write the sentence in your ADR.)</details>
+- **Quick (+~20 min):** add an admin endpoint that drops a stale pair: `DELETE /api/market/rates/{base}/{quote}` calling a new `@CacheEvict(cacheNames = "fxRates", key = "#base + '/' + #quote")` method. Verify with `redis-cli KEYS 'fxRates*'` before/after. <details><summary>Hint</summary>Put the <code>@CacheEvict</code> method on <code>MarketRateService</code> and call it from the controller — cross-bean, same as the others. Test it standalone-MockMvc style with a <code>verify(rates).evictRate("USD","EUR")</code>.</details>
+- **Quick (+~30 min):** switch the cache value serializer to JSON so entries are human-readable in `redis-cli`. <details><summary>Hint</summary>Define a <code>RedisCacheManagerBuilderCustomizer</code> bean that sets <code>serializeValuesWith(SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer()))</code> on the default config — and then you can drop <code>implements Serializable</code> from <code>FxRate</code>. Check the entry with <code>redis-cli GET "fxRates::USD/EUR"</code>: JSON now.</details>
+- 🎯 **Stretch (+~1–2 h):** turn the rates into a real **event-driven read model** — consume a `rates.updated` Kafka event (the Step-20 pipeline) and `@CachePut` the cache on each event, so the read model updates on *events* instead of (or in addition to) the timer. Compare freshness vs the polled refresh. <details><summary>Design hints (no separate solutions folder for this step)</summary>① Add the Kafka starter + a <code>rates.updated</code> topic; publish a small <code>RateUpdatedEvent(base, quote)</code> from wherever rates "change" (a tiny admin endpoint will do as the trigger). ② A <code>@KafkaListener</code> in market-info calls <code>rates.refreshRate(base, quote)</code> — cross-bean, so <code>@CachePut</code> applies; reuse the Step-20 idempotent-consumer dedupe if you publish with an eventId. ③ Keep the ShedLock'd timer as the fallback sweep (events for freshness, polling for self-healing — the belt-and-braces real systems use). ④ Test on Testcontainers Redpanda + Redis together: publish an event, <code>await</code> until <code>getRate</code> returns the refreshed value with no new upstream call from the reader's side. ⑤ Honesty check: you now have two writers to one cache entry (timer + listener) — why is that safe here? (Both do full overwrites of independently-fetched values; last write wins and both are "fresh enough." Write the sentence in your ADR.)</details>
+
+✋ **Stopping here (mid-S6)?** You have the step verified; the challenges are optional extras. Next: F · Review; first action: the 🧠 Test Yourself quiz in the Recap.
 
 ---
 

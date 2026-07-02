@@ -14,14 +14,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | orchestration vs choreography · declarative HTTP clients · compensation · identity propagation |
-| **C** | [🛠️ Build](#build) | the CIF compensation target · the `onboarding` service · `@HttpExchange` clients · the orchestrator · tests · harness |
-| **D** | [🔬 Prove](#prove) | the Verification Log — happy path, compensation, token forwarding; §12.3 mutation; fresh re-run |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~30 min |
+| **B** | [🧠 Understand](#understand) | orchestration vs choreography · declarative HTTP clients · compensation · identity propagation | ~1h |
+| **C** | [🛠️ Build](#build) | the CIF compensation target · the `onboarding` service · `@HttpExchange` clients · the orchestrator · tests · harness | ~7.5h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — happy path, compensation, token forwarding; §12.3 mutation; fresh re-run | ~1.5h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~1h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~30 min |
 
 ---
 
@@ -107,6 +107,23 @@ of system-design question where this step *is* the answer.
 - **Connects to what you know:** the **`@HttpExchange` client** (Step 15 — you built `CifClient` for the gateway lab; today you build the same pattern *into a workflow*), **compensation** (Step 21's Saga refunded a failed payment — same recovery model, different control style), the **secured account service + token** (Step 17 — demand-account rejects unauthenticated calls, so somebody must carry the token), **CIF** (Step 8 — your very first service grows its first *state-machine* endpoint).
 - **Depends on:** Steps **15, 21, 17, 8**.
 
+## 🗓️ Session Plan
+
+≈12 focused hours rarely fits one sitting. Six sittings, each ending at a real save point:
+
+| Sitting | Covers | ~time | Ends when |
+|---|---|---|---|
+| **1 · The map** | A · Orient + B · Understand (big idea, clients recap, compensation, identity propagation) | ~1.5h | You can say "compensation, not rollback" and have skimmed the 🗺️ build map + 🌳 files tree |
+| **2 · Compensation target + scaffold** | Sub-steps 0–4 — CIF `deactivate` service/endpoint/slice test, the `onboarding` module pom, `OnboardingApplication` + `application.yml` | ~2h | Sub-step 4's ✋: CIF slice 4/4 green (no Docker); the 13th module compiles with its port-8086 config |
+| **3 · The declarative clients** | Sub-steps 5–7 — `CifClient`, `AccountClient` (token forwarding), `HttpInterfaceClients` factory + `ClientConfig` | ~1.5h | Sub-step 7's ✋: both clients compile and you can recite *interface → proxy → RestClient → JDK HttpClient* |
+| **4 · The orchestrator** | Sub-steps 8–10 — `OnboardingFailedException` (→ 502), `OnboardingService`, the web layer | ~1.5h | Sub-step 10's ✋: all 10 main-source files compile — the service is complete |
+| **5 · Prove & play** | Sub-steps 11–13 — capstone test (real HTTP + §12.3 mutation), controller test, harness (Makefile · `requests.http` · `smoke.sh` · ADR-0014) + 🎮 Play With It | ~2.5h | `bash steps/step-23/smoke.sh` passes; committed + tagged `step-23-end` |
+| **6 · Cement it** | D · Prove (compare the Verification Log) + E · Apply + F · Review (go-deeper, interview prep, recap, flashcards) | ~3h | Recap + one-line reflection done |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can send you straight to Step 24 · the four 🚀 Go Deeper fold-outs are +~5 min each · the 🏋️ quick exercises are +~20–30 min each · the 🎯 durable-onboarding stretch is +~1–2h on top.
+
+✋ **Stopping here?** You have the map, nothing built yet. Next: B · Understand (~1h of reading); first action: reopen this lesson at [🧠 The Big Idea](#understand).
+
 ---
 
 <a id="understand"></a>
@@ -181,6 +198,8 @@ Two properties to internalize, because interviewers probe both:
    synchronous and in-memory — see ADR-0014); the durable fix (persisted saga state + retries) is a later
    step. Knowing the limitation is part of knowing the pattern.
 
+❓ **Knowledge-check:** why can't the orchestrator just roll back the CIF create when the account step fails? <details><summary>Answer</summary>Each step commits in its **own service's database** — there is no umbrella transaction spanning services to roll back. Recovery is a **compensating** action (`deactivate`) that semantically undoes the create.</details>
+
 ## 🌱 Under the Hood: identity propagation
 
 demand-account is a **secured OAuth2 resource server** (Step 17): it validates a JWT on every request and
@@ -193,6 +212,8 @@ authority of its own. CIF has no auth yet (risk-register R-002), so no token is 
 (A service acting **on its own behalf** — a nightly job, a queue consumer — has no caller token to forward; it
 would mint its own *client-credentials* token. That's a later auth step. Knowing which of the two situations
 you're in is the actual skill.)
+
+❓ **Knowledge-check:** how does the orchestrator's call to the secured demand-account service get authorized, and why does the CIF call need nothing? <details><summary>Answer</summary>It **forwards the caller's `Authorization` bearer token** (identity propagation / token relay) so the resource server can validate it; CIF has no auth yet (R-002), so no token is needed there.</details>
 
 ## 🛡️ Security Lens & 🧵 Thread-safety note
 
@@ -220,6 +241,8 @@ maintenance mode) → `WebClient` (2017, reactive) → **`RestClient` + `@HttpEx
 the modern blocking-friendly default — and what Spring Cloud OpenFeign's own docs now point newcomers to).
 The key modern discipline survives every era: make the failure path (compensation) a first-class, tested part
 of the design — not an afterthought.
+
+✋ **Stopping here?** You have the concepts (orchestration vs choreography, compensation, token relay) and 12 modules still green. Next: C · Build, Sub-step 0 of 13 (the CIF compensation target); first action: open `services/cif/src/main/java/com/buildabank/cif/service/CustomerService.java` and add `deactivate(id)`.
 
 ---
 
@@ -299,7 +322,7 @@ can orchestrate against it), then the new service from the outside in: module �
 
 ---
 
-### Sub-step 0 of 13 — CIF: `CustomerService.deactivate`, the compensation target 🧭 *(you are here: **cif service** → cif endpoint → cif test → module → config → clients → orchestrator → web → tests → harness)*
+### Sub-step 0 of 13 — CIF: `CustomerService.deactivate`, the compensation target (~30 min) 🧭 *(you are here: **cif service** → cif endpoint → cif test → module → config → clients → orchestrator → web → tests → harness)*
 
 🎯 **Goal:** give CIF the ability to deactivate a customer (KYC → `REJECTED`). This is the *real action* the
 orchestrator's compensation will call — build the undo before the workflow that needs it.
@@ -451,7 +474,7 @@ deserves the id in the message.
 
 ---
 
-### Sub-step 1 of 13 — CIF: the deactivate endpoint 🧭 *(cif service ✅ → **cif endpoint** → cif test → module → …)*
+### Sub-step 1 of 13 — CIF: the deactivate endpoint (~20 min) 🧭 *(cif service ✅ → **cif endpoint** → cif test → module → …)*
 
 🎯 **Goal:** expose the compensation over HTTP — `POST /api/customers/{id}/deactivate` → `204 No Content`.
 This is the URL the orchestrator's `CifClient.deactivate` will hit.
@@ -603,7 +626,7 @@ requests.http, and docs all read worse. URL design is API design.
 
 ---
 
-### Sub-step 2 of 13 — CIF: prove the endpoint with the slice test 🧭 *(cif service ✅ → cif endpoint ✅ → **cif test** → module → …)*
+### Sub-step 2 of 13 — CIF: prove the endpoint with the slice test (~25 min) 🧭 *(cif service ✅ → cif endpoint ✅ → **cif test** → module → …)*
 
 🎯 **Goal:** one new `@WebMvcTest` case proving `POST /api/customers/{id}/deactivate` returns 204 **and**
 actually calls the service with the right id — fast, no database, no Docker.
@@ -778,9 +801,11 @@ git commit -m "test(cif): deactivate endpoint returns 204 and delegates to the s
 *plausible-looking lie* — slice tests on thin controllers earn their keep precisely by checking the
 delegation, because there's little else to check.
 
+✋ **Stopping here?** You have the compensation target built and proven (CIF 4/4 green, no Docker). Next: Sub-step 3 of 13 (the `onboarding` module pom); first action: create `services/onboarding/pom.xml`.
+
 ---
 
-### Sub-step 3 of 13 — the `onboarding` module: pom + root registration 🧭 *(cif ✅✅✅ → **module** → config → clients → orchestrator → web → tests → harness)*
+### Sub-step 3 of 13 — the `onboarding` module: pom + root registration (~25 min) 🧭 *(cif ✅✅✅ → **module** → config → clients → orchestrator → web → tests → harness)*
 
 🎯 **Goal:** scaffold the 13th Maven module — a deliberately *thin* web service: no JPA, no Flyway, no Kafka,
 no Redis. An orchestrator's dependency list should read like its job description: call HTTP, validate input,
@@ -926,7 +951,7 @@ service, thin pom.
 
 ---
 
-### Sub-step 4 of 13 — `OnboardingApplication` + `application.yml` 🧭 *(module ✅ → **config** → clients → orchestrator → web → tests → harness)*
+### Sub-step 4 of 13 — `OnboardingApplication` + `application.yml` (~30 min) 🧭 *(module ✅ → **config** → clients → orchestrator → web → tests → harness)*
 
 🎯 **Goal:** the boot class and the service's identity: name, port 8086, and — the step-specific part — **where
 the orchestrated services live**, as overridable config with sane localhost defaults and per-service timeouts.
@@ -1044,9 +1069,11 @@ git commit -m "feat(onboarding): application class + config (downstream URLs, ti
 without `http://` you'll get a confusing `IllegalArgumentException` at the first call, not at startup. Config
 errors that surface lazily are the worst kind; keep the scheme in the default so the shape is self-documenting.
 
+✋ **Stopping here?** You have the 13th module compiling with its port-8086 config and downstream URLs/timeouts; no clients yet. Next: Sub-step 5 of 13 (`CifClient`); first action: create `services/onboarding/src/main/java/com/buildabank/onboarding/client/CifClient.java`.
+
 ---
 
-### Sub-step 5 of 13 — `CifClient`: the first declarative client 🧭 *(module ✅ → config ✅ → **cif client** → account client → factory → orchestrator → …)*
+### Sub-step 5 of 13 — `CifClient`: the first declarative client (~30 min) 🧭 *(module ✅ → config ✅ → **cif client** → account client → factory → orchestrator → …)*
 
 🎯 **Goal:** declare CIF's API as a Java interface — `create` (step 1 of the workflow) and `deactivate` (the
 compensation) — plus the two small records that define exactly what we send and what we keep of the reply.
@@ -1164,7 +1191,7 @@ git commit -m "feat(onboarding): CifClient @HttpExchange interface (create + dea
 
 ---
 
-### Sub-step 6 of 13 — `AccountClient`: the secured downstream + token forwarding 🧭 *(… cif client ✅ → **account client** → factory → orchestrator → …)*
+### Sub-step 6 of 13 — `AccountClient`: the secured downstream + token forwarding (~25 min) 🧭 *(… cif client ✅ → **account client** → factory → orchestrator → …)*
 
 🎯 **Goal:** the second client — demand-account's `open` — with the step's security move: an `Authorization`
 parameter the orchestrator fills with the **caller's** bearer token (identity propagation).
@@ -1269,7 +1296,7 @@ parameters survive every threading model; that's why the token travels through m
 
 ---
 
-### Sub-step 7 of 13 — `HttpInterfaceClients` + `ClientConfig`: build the proxies (timeouts included) 🧭 *(… clients ✅✅ → **factory + beans** → orchestrator → web → tests → harness)*
+### Sub-step 7 of 13 — `HttpInterfaceClients` + `ClientConfig`: build the proxies (timeouts included) (~40 min) 🧭 *(… clients ✅✅ → **factory + beans** → orchestrator → web → tests → harness)*
 
 🎯 **Goal:** turn the two interfaces into working clients: a tiny **generic factory** (interface + base URL +
 timeouts → proxy) and a `@Configuration` that registers both as beans from the yml of sub-step 4. The factory
@@ -1428,9 +1455,11 @@ It works — with **default (effectively unbounded) timeouts**, and you've silen
 orchestrator this sub-step exists to prevent. If you write a factory like this, the timeouts are the whole
 point; don't let a shortcut version creep in via copy-paste.
 
+✋ **Stopping here?** You have both `@HttpExchange` clients and the factory + beans compiling; nothing calls them yet. Next: Sub-step 8 of 13 (the failure contract); first action: create `services/onboarding/src/main/java/com/buildabank/onboarding/service/OnboardingFailedException.java`.
+
 ---
 
-### Sub-step 8 of 13 — `OnboardingFailedException`: the failure contract 🧭 *(… factory ✅ → **exception** → orchestrator → web → tests → harness)*
+### Sub-step 8 of 13 — `OnboardingFailedException`: the failure contract (~15 min) 🧭 *(… factory ✅ → **exception** → orchestrator → web → tests → harness)*
 
 🎯 **Goal:** a typed exception that means "a downstream step failed *and the compensation already ran*" —
 mapped to **502 Bad Gateway** so callers can tell "you sent garbage" (4xx) from "a service behind me broke"
@@ -1510,7 +1539,7 @@ exceptions into domain ones at the boundary is the same DAO-translation idea fro
 
 ---
 
-### Sub-step 9 of 13 — `OnboardingService`: the orchestrator itself 🧭 *(… exception ✅ → **THE ORCHESTRATOR** → web → tests → harness)*
+### Sub-step 9 of 13 — `OnboardingService`: the orchestrator itself (~45 min) 🧭 *(… exception ✅ → **THE ORCHESTRATOR** → web → tests → harness)*
 
 🎯 **Goal:** the heart of the step — ~30 lines that run the workflow: create customer → derive account number
 → open account (token forwarded) → and on failure, **compensate then throw**. Read it slowly; every line is a
@@ -1688,7 +1717,7 @@ workflow engine) must intervene. Never write error handling that makes the error
 
 ---
 
-### Sub-step 10 of 13 — the web layer: `OnboardingRequest`, `OnboardingResult`, `OnboardingController` 🧭 *(… orchestrator ✅ → **web** → tests → harness)*
+### Sub-step 10 of 13 — the web layer: `OnboardingRequest`, `OnboardingResult`, `OnboardingController` (~35 min) 🧭 *(… orchestrator ✅ → **web** → tests → harness)*
 
 🎯 **Goal:** the front door — `POST /api/onboarding` with a validated body and an optional `Authorization`
 header that the controller hands to the orchestrator (which hands it downstream).
@@ -1824,9 +1853,11 @@ git commit -m "feat(onboarding): POST /api/onboarding -> 201 (validated body, Au
 **silently never run** — every malformed body sails into the orchestrator and fails as a confusing downstream
 error instead of a clean 400. (The slice test's invalid-body case exists to catch exactly this regression.)
 
+✋ **Stopping here?** You have the complete service — all 10 main-source files compile — but nothing proves it yet. Next: Sub-step 11 of 13 (the capstone test); first action: create `services/onboarding/src/test/java/com/buildabank/onboarding/OnboardingOrchestrationTest.java`.
+
 ---
 
-### Sub-step 11 of 13 — `OnboardingOrchestrationTest`: the capstone — real HTTP, in-process stubs 🧭 *(… web ✅ → **THE CAPSTONE TEST** → controller test → harness)*
+### Sub-step 11 of 13 — `OnboardingOrchestrationTest`: the capstone — real HTTP, in-process stubs (~50 min) 🧭 *(… web ✅ → **THE CAPSTONE TEST** → controller test → harness)*
 
 🎯 **Goal:** prove the three claims of the step — the **sequence** (create, then open), the **compensation**
 (forced account failure → deactivate the exact customer), and the **token forwarding** — over **real HTTP**,
@@ -2094,7 +2125,7 @@ Compensation correctness is "the right undo, on the right target, exactly once" 
 
 ---
 
-### Sub-step 12 of 13 — `OnboardingControllerTest` + the whole module green 🧭 *(… capstone ✅ → **controller test → all 4** → harness)*
+### Sub-step 12 of 13 — `OnboardingControllerTest` + the whole module green (~25 min) 🧭 *(… capstone ✅ → **controller test → all 4** → harness)*
 
 🎯 **Goal:** the web slice — `POST /api/onboarding` → 201 with the result and the header handed to the
 service; invalid body → 400. Then run the whole module.
@@ -2236,7 +2267,7 @@ tests for slice concerns.
 
 ---
 
-### Sub-step 13 of 13 — the harness: Makefile, `requests.http`, `smoke.sh`, ADR-0014 🧭 *(… tests ✅ → **harness — done!**)*
+### Sub-step 13 of 13 — the harness: Makefile, `requests.http`, `smoke.sh`, ADR-0014 (~40 min) 🧭 *(… tests ✅ → **harness — done!**)*
 
 🎯 **Goal:** the learner-facing tooling: one-command runs, a ready-made live walkthrough (happy path **and** a
 compensation you can trigger by stopping a service), the smoke gate, and the decision record.
@@ -2468,6 +2499,8 @@ grew its compensation endpoint; ADR-0014 records why.
 - [ ] You can explain orchestration vs choreography, compensation vs rollback, and token forwarding — out loud, no notes.
 - [ ] Committed and tagged `step-23-end`.
 
+✋ **Stopping here?** You have the whole build done, playable, and tagged `step-23-end`. Next: D · Prove (~1.5h); first action: run `./mvnw -B -pl services/onboarding test` and compare against the Verification Log below.
+
 ---
 
 <a id="prove"></a>
@@ -2551,9 +2584,11 @@ touched this step's code), so everything below is the tagged code, re-executed t
 
 # E · 🎓 Apply
 
+✋ **Re-entering here?** Your build is proven and `step-23-end` is tagged — E and F are depth + recap (~1.5h total); first action: the four Go Deeper fold-outs below.
+
 ## 🚀 Go Deeper (Optional)
 
-<details><summary><strong>Orchestration vs choreography — how to choose</strong></summary>
+<details><summary><strong>Orchestration vs choreography — how to choose</strong> (+~5 min)</summary>
 
 Orchestration: a coordinator owns the flow — best for short, well-defined processes you want to see/trace/
 change in one place; the coordinator is a coupling point (it must know every participant) and can grow into a
@@ -2565,7 +2600,7 @@ each — Step 21 (Saga via direct service calls with compensation inside one ser
 coordinator) — which is exactly the compare-and-contrast interviewers want.
 </details>
 
-<details><summary><strong>Why isn't this crash-safe — and what would make it durable?</strong></summary>
+<details><summary><strong>Why isn't this crash-safe — and what would make it durable?</strong> (+~5 min)</summary>
 
 The orchestrator holds the workflow position in a call stack. Crash after `cif.create` returns but before
 `accounts.open` (or before `cif.deactivate`) and the position is gone: a customer exists with no account and
@@ -2576,7 +2611,7 @@ idempotent steps (a resumed step may re-execute — note how our derived `DDA-<c
 and constant-valued deactivate are already shaped for that).
 </details>
 
-<details><summary><strong>Token relay vs client-credentials vs token exchange</strong></summary>
+<details><summary><strong>Token relay vs client-credentials vs token exchange</strong> (+~5 min)</summary>
 
 Three identities a service-to-service call can carry: **(1) the caller's, forwarded** (this step) — right when
 the downstream must authorize *the user*; limited by token expiry mid-flow and full-token-replay trust in the
@@ -2587,7 +2622,7 @@ transfer") — the high-end answer to the replay objection. We use (1), the simp
 user-initiated flow; the auth steps later add the machinery for (2).
 </details>
 
-<details><summary><strong>Where are the retries?</strong></summary>
+<details><summary><strong>Where are the retries?</strong> (+~5 min)</summary>
 
 Deliberately absent. A blind retry of `accounts.open` after a *timeout* is dangerous without idempotency: the
 first request may have succeeded after the client gave up (the account exists; a retry might fail on
@@ -2660,20 +2695,20 @@ combination.
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-- **Quick:** map `IllegalArgumentException` in CIF's deactivate to a **404** (extend CIF's exception handling)
+- **Quick (+~20 min):** map `IllegalArgumentException` in CIF's deactivate to a **404** (extend CIF's exception handling)
   and add the slice-test case. <details><summary>Hint</summary>CIF already has a `GlobalExceptionHandler`
   (Step 13) — add an `@ExceptionHandler(IllegalArgumentException.class)` → `ProblemDetail` with
   `HttpStatus.NOT_FOUND`; assert `status().isNotFound()` for `POST /api/customers/999/deactivate` with the
   mock throwing.</details>
-- **Quick:** add a third workflow step — emit a `customer.onboarded` event (Step-20 Outbox/Kafka) so
+- **Quick (+~30 min):** add a third workflow step — emit a `customer.onboarded` event (Step-20 Outbox/Kafka) so
   notification sends a welcome — and *decide* whether its failure should compensate.
   <details><summary>Hint</summary>It shouldn't: a missed welcome message isn't worth unwinding a banking
   relationship. Not every step deserves a compensation — classify steps as *pivotal* (compensate if later
   steps fail) vs *retriable* (fire-and-recover). The outbox makes the notification step reliably retriable,
   which is exactly why it doesn't need one.</details>
-- **Quick:** promote `ClientConfig`'s four `@Value`s into a `@ConfigurationProperties(prefix = "services")`
+- **Quick (+~20 min):** promote `ClientConfig`'s four `@Value`s into a `@ConfigurationProperties(prefix = "services")`
   record and bind both clients from it.
-- 🎯 **Stretch — durable onboarding:** persist the workflow state so a restart can resume or compensate
+- 🎯 **Stretch (+~1–2h) — durable onboarding:** persist the workflow state so a restart can resume or compensate
   instead of losing the flow. No reference solution is shipped for this one — design hints:
   <details><summary>Design hints</summary>① Give the orchestrator a tiny DB (or reuse Redis) with an
   `onboarding_workflow` table: `id, request, customer_id, state (CUSTOMER_CREATED / ACCOUNT_OPENED /
@@ -2684,6 +2719,8 @@ combination.
   compensates. ④ Now kill the orchestrator mid-flow (a test can crash between steps by stubbing) and prove
   the sweeper converges the system. ⑤ Compare your ~100 lines with what Temporal gives you for free — that
   comparison is the lesson.</details>
+
+✋ **Stopping here?** Only the recap remains. Next: F · Review (~30 min); first action: skim the 🩺 Troubleshooting table, then the recap.
 
 ---
 

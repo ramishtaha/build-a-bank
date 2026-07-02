@@ -7,7 +7,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 export const handlers = [
   // Auth
   http.post(`${API_BASE}/api/auth/login`, async ({ request }) => {
-    const { username, password } = await request.json() as any;
+    const { username, password } = (await request.json()) as { username: string; password: string };
     if (username === 'alice' && password === 'password123') {
       return HttpResponse.json<LoginResponse>({ token: 'mock-jwt', expiresInSeconds: 3600 });
     }
@@ -58,7 +58,7 @@ export const handlers = [
     const auth = request.headers.get('Authorization');
     if (!auth) return new HttpResponse(null, { status: 401 });
     
-    const body = await request.json() as any;
+    const body = (await request.json()) as { amount: number };
     if (body.amount > 1000000) {
       return HttpResponse.json({ detail: 'Insufficient funds' }, { status: 422 });
     }

@@ -11,14 +11,16 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | the gateway pattern · sync vs async comms · declarative HTTP + timeouts |
-| **C** | [🛠️ Build](#build) | a `gateway/` module routing to the services · a declarative `CifClient` with timeouts |
-| **D** | [🔬 Prove](#prove) | the Verification Log — gateway routing, client deserialize + timeout, §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards, cumulative review & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1h |
+| **B** | [🧠 Understand](#understand) | the gateway pattern · sync vs async comms · declarative HTTP + timeouts | ~2h |
+| **C** | [🛠️ Build](#build) | a `gateway/` module routing to the services · a declarative `CifClient` with timeouts | ~9h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — gateway routing, client deserialize + timeout, §12.3 mutation | ~1.5h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~3h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards, cumulative review & what's next | ~1.5h |
+
+*(≈ 18 h total at a careful beginner pace — see the 🗓️ Session Plan below for how to slice it into sittings.)*
 
 ---
 
@@ -66,6 +68,8 @@ If you can confidently do **all** of this, skim the 🧩 Pattern Spotlight and j
 # Run the whole front-to-back path locally (3 terminals): cif (8081), demand-account (8082), gateway (8080)
 ./mvnw -pl services/cif spring-boot:run
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run
+#   (the VAR=value prefix is bash-only; PowerShell equivalent:
+#    $env:SPRING_DATASOURCE_URL='jdbc:postgresql://localhost:5433/demand_account'; .\mvnw.cmd -pl services/demand-account spring-boot:run)
 ./mvnw -pl gateway spring-boot:run
 #   → everything through http://localhost:8080  (e.g. GET /cif/api/customers/1, POST /bank/api/v1/transfers)
 
@@ -112,6 +116,25 @@ Every microservices diagram has a box at the top labelled "API Gateway" — it's
 
 > **Depends on: Steps 14, 13, 8.**
 
+## 🗓️ Session Plan
+
+≈ 18 hours doesn't fit in one chair. Slice it into **8 sittings** of ~2–3 h, each ending at a real save point (a commit or a green test) — stop mid-sitting and you'll pay a re-orientation tax; stop at a save point and the 🔁 re-entry line at each ✋ checkpoint tells you exactly where to resume.
+
+| # | Sitting | Covers | ~time | Ends at (save point) |
+|---|---|---|---|---|
+| 1 | The map | A · Orient + all of B · Understand (Big Idea → Thread-safety note) | ~3h | you can draw the gateway diagram + explain servlet-vs-reactive from memory |
+| 2 | Module, app & routes | Build sub-steps 0–2 (gateway pom + root pom, `GatewayApplication`, `application.yml` routes) | ~2h | sub-step 2 ✋ checkpoint + commit — routes defined |
+| 3 | Prove the routing | Sub-step 3 (`GatewayRoutingTest` + the 🔬 break-it mutation) | ~2h | routing test green + commit (✋ sub-step 3) |
+| 4 | The typed client | Sub-steps 4–7 (`CifCustomer` DTO, `CifClient` interface, `CifClientFactory` + timeouts, `CifClientConfig` bean) | ~2h | sub-step 7 ✋ checkpoint + commit — timeout-bounded `cifClient` bean |
+| 5 | Client tests + harness | Sub-steps 8–9 (`CifClientTest`, then smoke.sh / requests.http / Makefile / ADR) | ~2.5h | sub-step 9 ✋ checkpoint — `smoke.sh` passes, harness committed |
+| 6 | Play, prove & close | 🎮 Play With It (3-terminal full path) + 🏁 Finished Result + D · Prove + ✅ Definition of Done | ~2h | `step-15-end` committed and tagged |
+| 7 | Apply | E · Go Deeper, Interview Prep, Your Turn challenges 1–3 | ~3h | challenge code committed |
+| 8 | Review | F · Troubleshooting scan, glossary, recap, Test Yourself, flashcards + 🧠 Cumulative Review (1–15) | ~1.5h | all Test Yourself + cumulative questions answered cold |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can compress the whole step to a ~3h skim for experienced learners; each 🚀 Go Deeper aside is +~10 min; Your Turn stretches 4–5 are +~1h and can be dropped without losing the spine.
+
+> 🔁 **Stopping here?** You have the map: prerequisites checked (repo at `step-15-start`, `./mvnw verify` green, Docker running). Next: B · Understand (The Big Idea); first action: reread the 📇 Cheat Card diagram, then open [#understand](#understand).
+
 ---
 
 <a id="understand"></a>
@@ -146,6 +169,8 @@ flowchart TB
 ```
 
 *Alt-text: clients enter through the gateway, which holds routes (/cif/** → cif, /bank/** → demand-account) and filters (StripPrefix, headers, later auth/rate-limit). The gateway forwards to the cif and demand-account services. Separately, demand-account calls cif synchronously over HTTP with a declarative client and timeout; asynchronous Kafka events (Step 20) are the decoupled alternative.*
+
+❓ **Knowledge-check:** why did we pick the **servlet** gateway variant over the reactive one for this platform? <details><summary>answer</summary>The whole stack is Spring MVC + virtual threads — the servlet gateway stays on the same stack, and its blocking forwards scale fine on virtual threads, so the reactive model adds complexity for no benefit here.</details>
 
 ## 🧩 Pattern Spotlight — API Gateway / BFF
 
@@ -193,6 +218,8 @@ flowchart TB
 ## 🧵 Thread-safety note
 
 The gateway and the `CifClient` are **stateless singletons** shared across request threads — the gateway's routes/filters are immutable config; the `RestClient`/`HttpClient` behind the client are thread-safe and hold no per-request state. So there's nothing to synchronize (Step 11's "stateless singletons are safe" rule). The servlet gateway's *blocking* forward does occupy a thread per in-flight request — which is exactly why **virtual threads** (Step 11) matter here: cheap blocking lets the simple model scale. Per-call data (path variables, body) flows as method arguments, never shared fields.
+
+> 🔁 **Stopping here?** You have the concepts: gateway/BFF, servlet-vs-reactive, sync-vs-async, declarative clients + timeouts. Next: C · Build, sub-step 0 (the gateway module pom); first action: create `gateway/pom.xml`.
 
 ---
 
@@ -259,7 +286,7 @@ adr/0007-api-gateway-and-service-to-service.md   (new)
 
 ### Sub-step 0 of 9 — The gateway module pom + register it 🧭 *(you are here: **module** → app → routes → routing test → DTO → client → factory → config → client test → harness)*
 
-🎯 **Goal:** create a new Maven module `gateway/` that pulls in the **servlet** gateway starter (version managed by the Spring Cloud BOM), and register it in the root reactor so `./mvnw verify` builds it.
+🎯 **Goal:** create a new Maven module `gateway/` that pulls in the **servlet** gateway starter (version managed by the Spring Cloud BOM), and register it in the root reactor so `./mvnw verify` builds it. *(⏱️ ~45 min)*
 
 📁 **Location:** new file → `gateway/pom.xml`
 
@@ -366,11 +393,13 @@ git commit -m "build(gateway): add Spring Cloud Gateway Server WebMVC module"
 
 ⚠️ **Pitfall:** grabbing `spring-cloud-starter-gateway` (or `-server-webflux`) instead drags **WebFlux/Netty** into an MVC app — two web stacks fighting over the context. Use the `-server-webmvc` artifact.
 
+> 🔁 **Stopping here?** You have a gateway module that resolves on the BOM, committed. Next: sub-step 1 (`GatewayApplication`); first action: create `gateway/src/main/java/com/buildabank/gateway/GatewayApplication.java`.
+
 ---
 
 ### Sub-step 1 of 9 — The `GatewayApplication` main class 🧭 *(module ✅ → **app** → routes → routing test → …)*
 
-🎯 **Goal:** the Spring Boot entry point for the gateway process. It's deliberately empty — all the routing lives in config (next sub-step).
+🎯 **Goal:** the Spring Boot entry point for the gateway process. It's deliberately empty — all the routing lives in config (next sub-step). *(⏱️ ~20 min)*
 
 📁 **Location:** new file → `gateway/src/main/java/com/buildabank/gateway/GatewayApplication.java`
 
@@ -414,7 +443,7 @@ git commit -m "feat(gateway): add GatewayApplication entry point"
 
 ### Sub-step 2 of 9 — The routes (`application.yml`) 🧭 *(app ✅ → **routes** → routing test → …)*
 
-🎯 **Goal:** route `/cif/**` → cif and `/bank/**` → demand-account, **strip the service prefix** before forwarding, and **add a response header** to prove a filter ran.
+🎯 **Goal:** route `/cif/**` → cif and `/bank/**` → demand-account, **strip the service prefix** before forwarding, and **add a response header** to prove a filter ran. *(⏱️ ~1h)*
 
 📁 **Location:** new file → `gateway/src/main/resources/application.yml`
 
@@ -490,11 +519,13 @@ git commit -m "feat(gateway): route /cif and /bank with StripPrefix + header fil
 
 ⚠️ **Pitfall:** the config prefix is `spring.cloud.gateway.server.webmvc.routes` (2025+). The old `spring.cloud.gateway.mvc.routes` is **deprecated and won't bind** — you get a gateway that starts cleanly but 404s everything. If routing mysteriously does nothing, check this prefix first.
 
+> 🔁 **Stopping here?** You have routes defined and committed (not yet proven). Next: sub-step 3 (`GatewayRoutingTest`); first action: create `gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java`.
+
 ---
 
 ### Sub-step 3 of 9 — `GatewayRoutingTest` (prove routing against a stub) 🧭 *(routes ✅ → **routing test** → DTO → …)*
 
-🎯 **Goal:** prove the gateway forwards, **strips the prefix**, and **adds the header** — against an in-process stub HTTP server, so the test needs no real services and no Docker.
+🎯 **Goal:** prove the gateway forwards, **strips the prefix**, and **adds the header** — against an in-process stub HTTP server, so the test needs no real services and no Docker. *(⏱️ ~2h)*
 
 📁 **Location:** new file → `gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java`
 
@@ -630,6 +661,8 @@ expected: "/api/customers/1"
 ```
 `receivedPath` is still `null` → the stub's handler never ran, so the gateway didn't forward. Cause: the route `uri` didn't get the stub's address (the stub was started too late, e.g. in `@BeforeEach` instead of `@DynamicPropertySource`), so the forward hit a dead port. See 🩺.
 
+🔮 **Predict:** if the stub returned 500 instead of 200, what status would the test's HTTP client see through the gateway? <details><summary>answer</summary>500 — the gateway streams the downstream's response back, status included; it doesn't rewrite errors (a fallback route would — Your Turn #5).</details>
+
 🔬 **Break-it (the §12.3 mutation):** delete `- StripPrefix=1` from the `cif` route in `application.yml` and rerun — the stub now receives `/cif/api/customers/1` and the test fails (`expected "/api/customers/1" but was "/cif/api/customers/1"`). Put it back. (Recorded in 🔬 §3 — this is *why* we trust the test.)
 
 ✋ **Checkpoint:** the gateway boots in a test and routes correctly to a stub, stripping the prefix and adding the header.
@@ -642,11 +675,13 @@ git commit -m "test(gateway): prove routing, StripPrefix, and response-header fi
 
 ⚠️ **Pitfall:** starting the stub *inside* `@DynamicPropertySource` (static, before the context) is required — a `@BeforeEach` stub starts too late for the route `uri` to be set, and you'd get connection-refused forwards.
 
+> 🔁 **Stopping here?** You have gateway routing proven green and committed. Next: sub-step 4 (`CifCustomer` DTO); first action: create `services/demand-account/src/main/java/com/buildabank/account/client/CifCustomer.java`.
+
 ---
 
 ### Sub-step 4 of 9 — `CifCustomer` (the client-side DTO) 🧭 *(routing test ✅ → **DTO** → client → …)*
 
-🎯 **Goal:** define the *slice* of a CIF customer that demand-account cares about — a small, immutable record, decoupled from CIF's own `Customer` entity.
+🎯 **Goal:** define the *slice* of a CIF customer that demand-account cares about — a small, immutable record, decoupled from CIF's own `Customer` entity. *(⏱️ ~15 min)*
 
 📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/client/CifCustomer.java`
 
@@ -682,7 +717,7 @@ git commit -m "feat(demand-account): add CifCustomer client DTO"
 
 ### Sub-step 5 of 9 — `CifClient` (the declarative HTTP interface) 🧭 *(DTO ✅ → **client** → factory → …)*
 
-🎯 **Goal:** a **type-safe interface** describing the call to CIF — *no implementation*. Spring will generate the implementing proxy.
+🎯 **Goal:** a **type-safe interface** describing the call to CIF — *no implementation*. Spring will generate the implementing proxy. *(⏱️ ~45 min)*
 
 📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/client/CifClient.java`
 
@@ -733,11 +768,15 @@ git commit -m "feat(demand-account): declarative CifClient (@HttpExchange)"
 
 ⚠️ **Pitfall:** the path-variable name inside `{...}` must match the parameter name (or you must write `@PathVariable("customerNumber")`). Java drops parameter names from bytecode unless compiled with `-parameters` (Spring Boot's compiler config enables it) — if you see "name for argument not specified," that flag is missing.
 
+❓ **Knowledge-check:** `CifClient` is just an interface with no implementation anywhere in the codebase — who provides the implementation, and when? <details><summary>answer</summary>Spring generates it at runtime: `HttpServiceProxyFactory` builds a dynamic proxy that turns each annotated method call into an HTTP request via the backing `RestClient`.</details>
+
+> 🔁 **Stopping here?** You have a compiling `CifClient` interface + DTO, committed. Next: sub-step 6 (factory + timeouts); first action: create `CifClientFactory.java` in the same `client/` package.
+
 ---
 
 ### Sub-step 6 of 9 — `CifClientFactory` (RestClient + timeouts) 🧭 *(client ✅ → **factory** → config → …)*
 
-🎯 **Goal:** build a `CifClient` from a `RestClient` configured with **connect and read timeouts**, so a slow CIF fails fast instead of hanging the caller. A static factory so tests and Spring build it identically.
+🎯 **Goal:** build a `CifClient` from a `RestClient` configured with **connect and read timeouts**, so a slow CIF fails fast instead of hanging the caller. A static factory so tests and Spring build it identically. *(⏱️ ~1h)*
 
 📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/client/CifClientFactory.java`
 
@@ -810,7 +849,7 @@ git commit -m "feat(demand-account): CifClientFactory (RestClient + connect/read
 
 ### Sub-step 7 of 9 — `CifClientConfig` (register the bean from config) 🧭 *(factory ✅ → **config** → client test → …)*
 
-🎯 **Goal:** expose the `CifClient` as a Spring bean, built from **config** (base URL + timeouts) so ops can tune it per environment without recompiling.
+🎯 **Goal:** expose the `CifClient` as a Spring bean, built from **config** (base URL + timeouts) so ops can tune it per environment without recompiling. *(⏱️ ~30 min)*
 
 📁 **Location:** new file → `services/demand-account/src/main/java/com/buildabank/account/client/CifClientConfig.java`
 
@@ -865,11 +904,13 @@ git commit -m "feat(demand-account): register CifClient bean (config-driven URL 
 
 ⚠️ **Pitfall:** note the two property namespaces in play — the **gateway** uses `services.cif.uri` (routing target) while this **bean** uses `services.cif.url` (client base URL). They're different keys on purpose (one is the gateway's, one is demand-account's); don't conflate them.
 
+> 🔁 **Stopping here?** You have a timeout-bounded `cifClient` bean, committed. Next: sub-step 8 (`CifClientTest`); first action: create `services/demand-account/src/test/java/com/buildabank/account/client/CifClientTest.java`.
+
 ---
 
 ### Sub-step 8 of 9 — `CifClientTest` (deserialize + fail-fast) 🧭 *(config ✅ → **client test** → harness)*
 
-🎯 **Goal:** prove the client (a) **deserializes** a real JSON response into a `CifCustomer`, and (b) **trips the read timeout** on a slow dependency — both against an in-process stub, no Spring context, no Docker.
+🎯 **Goal:** prove the client (a) **deserializes** a real JSON response into a `CifCustomer`, and (b) **trips the read timeout** on a slow dependency — both against an in-process stub, no Spring context, no Docker. *(⏱️ ~1.5h)*
 
 📁 **Location:** new file → `services/demand-account/src/test/java/com/buildabank/account/client/CifClientTest.java`
 
@@ -1000,7 +1041,7 @@ git commit -m "test(demand-account): CifClient deserialize + read-timeout (fail 
 
 ### Sub-step 9 of 9 — The play & verify harness (requests.http, smoke.sh, Makefile, ADR) 🧭 *(client test ✅ → **harness**)*
 
-🎯 **Goal:** ship the learner-facing tooling — a one-shot `smoke.sh`, a `requests.http` to drive the live front-to-back path, `make` helpers, and the ADR recording the two senior decisions.
+🎯 **Goal:** ship the learner-facing tooling — a one-shot `smoke.sh`, a `requests.http` to drive the live front-to-back path, `make` helpers, and the ADR recording the two senior decisions. *(⏱️ ~1h)*
 
 📁 **Location:** `steps/step-15/smoke.sh`
 
@@ -1131,6 +1172,8 @@ git commit -m "docs(step-15): smoke.sh, requests.http, make helpers, ADR-0007"
 
 ⚠️ **Pitfall:** `smoke.sh` needs Docker (demand-account's Testcontainers). If `docker info` fails, the script exits early *by design* with a clear message — start Docker Desktop, then rerun.
 
+> 🔁 **Stopping here?** You have `smoke.sh` passing and the harness committed — the build is done. Next: 🎮 Play With It, then 🏁 The Finished Result; first action: open `steps/step-15/requests.http` and start the 3 terminals from the 📇 Cheat Card.
+
 ---
 
 ### 🔁 The full flow you just built
@@ -1196,6 +1239,8 @@ git tag step-15-end
 - [ ] `bash steps/step-15/smoke.sh` prints `✅ Step 15 smoke test PASSED`.
 - [ ] You've committed and tagged `step-15-end`.
 
+> 🔁 **Stopping here?** You have `step-15-end` tagged, all 8 modules green. Next: D · Prove (the Verification Log); first action: compare your own outputs against 🔬 §1–§5 below.
+
 ---
 
 <a id="prove"></a>
@@ -1254,25 +1299,27 @@ Fresh `git clone` at `step-15-end` → `make doctor` + `./mvnw verify` → **BUI
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① Gateway routes in Java (RouterFunction DSL)</summary>
+<summary>① Gateway routes in Java (RouterFunction DSL) (+~10 min)</summary>
 
 Besides YAML, the MVC gateway has a Java DSL: `GatewayRouterFunctions.route("cif").route(path("/cif/**"), http()).before(uri("http://localhost:8081")).filter(stripPrefix(1))...` as a `RouterFunction<ServerResponse>` bean. Java config gives you conditionals, loops, and custom filter functions — handy when routes are dynamic or numerous. YAML is cleaner for static routes (what we have).
 </details>
 
 <details>
-<summary>② Why not a circuit breaker yet?</summary>
+<summary>② Why not a circuit breaker yet? (+~10 min)</summary>
 
 Timeouts stop a single call from hanging, but if a downstream is *consistently* failing, every request still pays the timeout (latency) and may pile up. A **circuit breaker** (Resilience4j, Step 37) "opens" after a failure threshold and fails fast (or serves a fallback) without even trying — protecting both caller and callee, and giving the downstream room to recover. Add **bulkheads** (isolate thread pools per dependency) and **retries with backoff** for the full picture. We layer those in Step 37.
 </details>
 
+❓ **Knowledge-check:** timeouts are set — so why do we still need a circuit breaker (Step 37)? <details><summary>answer</summary>A timeout only bounds each individual call; if the downstream is *consistently* failing, every request still pays the timeout latency and can pile up. A circuit breaker opens after a failure threshold and fails fast without even calling the downstream.</details>
+
 <details>
-<summary>③ BFF vs shared gateway</summary>
+<summary>③ BFF vs shared gateway (+~10 min)</summary>
 
 One gateway for everyone is simplest. A **BFF** gives each client (web, mobile, partner) its own gateway that aggregates/tailors calls — the mobile BFF might combine three service calls into one trimmed payload to save round-trips on a phone. Trade-off: more gateways to operate, but each is simpler and evolves with its client. Start with one; split to BFFs when client needs diverge.
 </details>
 
 <details>
-<summary>④ Should demand-account call CIF directly or through the gateway?</summary>
+<summary>④ Should demand-account call CIF directly or through the gateway? (+~10 min)</summary>
 
 Two schools. **East-west through the gateway**: simpler addressing (one host), edge policies applied uniformly — but an extra hop and the gateway becomes a single point of failure for internal traffic. **Direct service-to-service** (what the `cifClient` bean defaults to, `:8081`): fewer hops, lower latency, but each caller needs the callee's address (service discovery, Step 34+) and you reapply cross-cutting concerns (mTLS in Step 41, a service mesh in Step 56). Most systems use the gateway for *north-south* (client→system) traffic and direct calls (or a mesh) for *east-west* (service→service). We've built both pieces; the wiring choice is config.
 </details>
@@ -1300,6 +1347,8 @@ Two schools. **East-west through the gateway**: simpler addressing (one host), e
 3. **Java-DSL routes.** Re-express one route as a `RouterFunction` bean and confirm the test still passes.
 4. **Stretch — timeout tuning.** Make the read timeout configurable and prove (a test) that a downstream slower than the timeout fails fast while a fast one succeeds.
 5. **Stretch — gateway error handling.** Stop a downstream and observe the gateway's 5xx; add a fallback route or a friendly error body.
+
+> 🔁 **Stopping here?** You have the pattern applied: Go Deeper asides, interview answers, and (at least) Your Turn challenges 1–3. Next: F · Review; first action: scan the 🩺 troubleshooting table, then work the 🧠 Test Yourself questions cold.
 
 ---
 

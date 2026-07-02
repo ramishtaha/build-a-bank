@@ -1284,6 +1284,17 @@ You're at **`step-07-end`** — the **Phase-A finale**. The `spring-lab` module 
 ./mvnw -pl playground/spring-lab -am verify
 ```
 
+✅ **Expected output** — freshly captured 2026-07-02 (aids pass) in a clean worktree at `step-07-end`, `test` goal (identical surefire summary; `verify` additionally packages the jar and passed the same day via `smoke.sh`):
+
+```
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.319 s -- in com.buildabank.springlab.account.AccountControllerTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.612 s -- in com.buildabank.springlab.aop.AuditAspectSelfInvocationTest
+[INFO] Tests run: 16, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Build-a-Bank :: Playground :: Spring Lab ........... SUCCESS [  9.159 s]
+[INFO] BUILD SUCCESS
+[INFO] Total time:  9.744 s
+```
+
 **✅ Definition of Done** (the learner's self-check):
 
 - [ ] You can explain aspect/pointcut/advice/join point, JDK vs CGLIB proxies (and Boot's CGLIB default), and the self-invocation pitfall — in your own words.
@@ -1348,6 +1359,53 @@ AUDIT ✔ AccountService.findById(..) returned in 947 µs
 ```
 
 The smoke script builds + tests, boots the jar on `:8082`, asserts the `200` body contains `Ada Lovelace`, that `/999` returns `404`, and that the log contains `AUDIT` lines — then prints the pass line.
+
+### Re-run 1 — re-verified 2026-07-02 (aids pass)
+
+> Re-run in an isolated worktree checked out at the **`step-07-end`** tag (pure JVM, no Docker). **Drift-check:** `git diff step-07-end..HEAD -- playground/spring-lab steps/step-07` shows **zero changes in `playground/spring-lab`** — the module at HEAD is byte-identical to the tag; only this step's docs drifted (the lesson's enrichment, +177/−24, and the new `capsule.md`). The tag worktree is still the baseline used for the runs below.
+
+**Module tests (`./mvnw -pl playground/spring-lab -am test`) — real tail from this machine:**
+
+```
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.319 s -- in com.buildabank.springlab.account.AccountControllerTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.612 s -- in com.buildabank.springlab.aop.AuditAspectSelfInvocationTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.061 s -- in com.buildabank.springlab.autoconfig.GreetingAutoConfigurationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.455 s -- in com.buildabank.springlab.config.BankPropertiesTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.417 s -- in com.buildabank.springlab.MarketRateContextTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.019 s -- in com.buildabank.springlab.rates.ConditionalBeansTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.374 s -- in com.buildabank.springlab.SpringLabApplicationTests
+[INFO] Tests run: 16, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Build-a-Bank :: Playground :: Spring Lab ........... SUCCESS [  9.159 s]
+[INFO] BUILD SUCCESS
+[INFO] Total time:  9.744 s
+[INFO] Finished at: 2026-07-02T11:02:27+05:30
+```
+
+All **16** spring-lab tests green on Java 25.0.3 — including both Step-7 classes: `AccountControllerTest` 3/3 (MockMvc slice) and `AuditAspectSelfInvocationTest` 3/3 (counter proof). Every booted test context re-printed the proxy proof: `AccountService class : com.buildabank.springlab.account.AccountService$$SpringCGLIB$$0` / `is AOP proxy? : true` / `is CGLIB proxy? : true`.
+
+**`bash steps/step-07/smoke.sh` (from the worktree root — runs `verify`, boots the jar on `:8082`, asserts the 200 body / 404 / `AUDIT` lines):**
+
+```
+==> 1/3 Build + test (incl. MockMvc slice + self-invocation proof)
+==> 2/3 Boot the capstone app
+==> 3/3 Hit the slice + assert (200 body, 404, and the aspect logged)
+✅ Step 7 smoke test PASSED
+```
+
+**And the smoke boot's log (`/tmp/bab-step07.log`) — the aspect firing over real HTTP, fresh timings, clean glyphs:**
+
+```
+o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8082 (http) with context path '/'
+c.b.springlab.ProxyInspectorRunner       : AccountService class : com.buildabank.springlab.account.AccountService$$SpringCGLIB$$0
+c.b.springlab.ProxyInspectorRunner       : is AOP proxy?        : true
+c.b.springlab.ProxyInspectorRunner       : is CGLIB proxy?      : true
+c.buildabank.springlab.aop.AuditAspect   : AUDIT ▶ AccountService.findById(..) called
+c.buildabank.springlab.aop.AuditAspect   : AUDIT ✔ AccountService.findById(..) returned in 467 µs
+```
+
+(Honest console note: piped through Maven on this Windows console the glyphs rendered as `AUDIT ?` / `�s` mojibake again — exactly the rendering gotcha §4 above records; the boot **log file** carries the clean `▶`/`✔`/`µs` shown here.)
+
+**Not re-run:** the 🎮 Play-With-It mutation experiments (remove `@Audited`, delete `proceed()`, flip `proxy-target-class`) — those require editing code, which is frozen in this documentation pass (§12.8); their recorded behavior stands. The manual `spring-boot:run` on `:8080` + `requests.http` exploration was also skipped — the smoke's jar boot on `:8082` exercised the same slice end-to-end today (three `AUDIT ▶/✔ findById` pairs at 467/438/353 µs).
 
 ---
 

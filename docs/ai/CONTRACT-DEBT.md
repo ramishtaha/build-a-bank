@@ -4,7 +4,7 @@
 
 | Step(s) | Artifact | Reason skipped | Remediation plan | Status |
 |---|---|---|---|---|
-| 02–30 | `solutions/step-NN/` stretch-goal reference solutions (only step-01 exists) | Sessions prioritized verified code + lessons; solutions never scheduled | Backfill highest-value first (12, 21, 25–28) or formally descope to inline `<details>` answers; decision due at Phase F capstone (Step 32) | 🔶 open (backfilled by audit 2026-07-02) |
+| 02–30 | `solutions/step-NN/` stretch-goal reference solutions (only step-01 exists) | Sessions prioritized verified code + lessons | **Descoped 2026-07-02:** the enrichment passes replaced every dangling `solutions/` pointer with in-lesson design-hint `<details>` (steps 19–27 explicitly; audit fixers rerouted the rest). Inline hints are now the canonical form; folders only if a future capstone warrants one | ✅ descoped |
 | 01–30 | `concepts/intellij-idea.md` living IDE doc | Never created; IDE tips were inlined per-lesson instead | Either create once and grow from Step 33 on, or descope (inline 💡 asides are working) | 🔶 open (backfilled) |
 | 01–30 | Bruno/Postman collections per step | `requests.http` + curl shipped instead | Descoped by contract right-sizing (2026-07-02): Bruno/Postman now optional | ✅ descoped |
 | 01–30 | `seed/` demo datasets + `make seed-NN` | Steps used test fixtures/Flyway data instead | Descoped to optional (2026-07-02); revisit for UI-heavy steps 31–32 where demo data pays off | ✅ descoped |

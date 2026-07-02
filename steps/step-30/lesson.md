@@ -10,13 +10,15 @@
 
 A one-line map of where we're going. Click to jump.
 
-1. **[A · 🧭 Orient](#orient)** — what this step delivers, cheat card, why it matters, and whether you can skip.
-2. **[B · 🧠 Understand](#understand)** — server vs UI state, TanStack Query query/mutation lifecycle, RHF + Zod resolvers, and SSE vs WebSocket.
-3. **[B→C bridge: 🌳 files we'll touch](#bridge)** — mapping files and visualizing the architecture.
-4. **[C · 🛠️ Build](#build)** — the heart: 9 full-micro-anatomy sub-steps building the HTTP client, queries, panels, validated forms, SSE hook, and gateway configuration.
-5. **[D · 🔬 Prove](#prove)** — the Verification Log (🟠 Standard tier): real unedited console output from Vitest, linting, gateway tests, and the mutation sanity-check.
-6. **[E · 🎓 Apply](#apply)** — go-deeper details, interview prep bank, and practice challenges.
-7. **[F · 🏆 Review](#review)** — troubleshooting tables, glossary, recap study notes, and a **mixed cumulative review quiz (Steps 1–30)**.
+1. **[A · 🧭 Orient](#orient)** — what this step delivers, cheat card, why it matters, and whether you can skip. *(~30 min)*
+2. **[B · 🧠 Understand](#understand)** — server vs UI state, TanStack Query query/mutation lifecycle, RHF + Zod resolvers, and SSE vs WebSocket. *(~1.5 h)*
+3. **[B→C bridge: 🌳 files we'll touch](#bridge)** — mapping files and visualizing the architecture. *(~10 min)*
+4. **[C · 🛠️ Build](#build)** — the heart: 9 full-micro-anatomy sub-steps building the HTTP client, queries, panels, validated forms, SSE hook, and gateway configuration. *(~10.5 h incl. 🎮 Play With It)*
+5. **[D · 🔬 Prove](#prove)** — the Verification Log (🟠 Standard tier): real unedited console output from Vitest, linting, gateway tests, and the mutation sanity-check. *(~1 h)*
+6. **[E · 🎓 Apply](#apply)** — go-deeper details, interview prep bank, and practice challenges. *(~1.5 h)*
+7. **[F · 🏆 Review](#review)** — troubleshooting tables, glossary, recap study notes, and a **mixed cumulative review quiz (Steps 1–30)**. *(~45 min)*
+
+*(~times sum to the step's ≈16 h focused effort.)*
 
 ---
 
@@ -93,6 +95,24 @@ Hand-rolling data fetching with `useEffect`/`useState` leads to stale data, race
 - **Connects to what you know:** consumes demand-account's paginated ledger (Step 14), idempotent transfer + Idempotency-Key (Steps 14/21), and the notification SSE stream (Step 20) — all behind the gateway (Step 29).
 - **Depends on:** Steps **29, 14, 20, 21**.
 
+## 🗓️ Session Plan
+
+≈16 hours won't fit one sitting. Seven sittings, each ending at a safe save point:
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| 1 | **A · Orient + B · Understand** (Big Idea → SSE vs WebSocket) | ~2 h | the ❓ quick check at the end of B |
+| 2 | **B→C bridge + Sub-steps 1–2** — install + `QueryClientProvider`, then the extended HTTP API client | ~2 h | Sub-step 2's ✋ checkpoint (client tests green) |
+| 3 | **Sub-steps 3–4** — the TanStack Query hooks, then `AccountPanel` (loading / error / data) | ~2 h | Sub-step 4's ✋ checkpoint |
+| 4 | **Sub-step 5** — the RHF + Zod transfer form + idempotent mutation | ~2 h | Sub-step 5's ✋ checkpoint |
+| 5 | **Sub-steps 6–7** — the SSE hook + `LiveNotifications`, then the dashboard composition | ~2 h | Sub-step 7's ✋ checkpoint |
+| 6 | **Sub-steps 8–9 + 🎮 Play With It** — the gateway `/notifications/**` route, the test providers + full suite, then the live end-to-end run (4 JVM backends + the SPA) | ~2.5 h | 🏁 The Finished Result (DoD) |
+| 7 | **D · Prove + E · Apply + F · Review** | ~3 h | recap + flashcards + cumulative quiz |
+
+**Optional routes:** the ⏭️ skip-test (~5 min) can route you past the whole step; the three 🚀 Go Deeper asides are +~10 min each; 🏋️ Your Turn challenges (+~30 min–2 h) can wait until after Step 31.
+
+✋ **Stopping after orientation?** Nothing is built yet — Sitting 1 continues straight into [B · Understand](#understand); first action: reopen this file at the Big Idea.
+
 ---
 
 <a id="understand"></a>
@@ -133,6 +153,10 @@ The transfer hits a **JWT-protected** endpoint (`/bank/**`); the API client atta
 - **WebSocket** — full-duplex (both directions), a single TCP upgrade; right for chat, collaborative editing.
 - **SSE** — one-way **server→client** over plain HTTP, with **automatic reconnection** and simple `text/event-stream` framing; right for notifications, live tickers, progress. The bank's notifications are one-way, so SSE is the simpler fit (and what the backend built in Step 20). Caveat: `EventSource` can't send custom headers (e.g. `Authorization`) — fine here (notifications aren't user-scoped); for authed streams you'd pass a token in the URL or use a WebSocket.
 
+❓ **Quick check:** which of these is server state — the ledger page, the form's `amount` field, or a modal-open flag? <details><summary>Answer</summary>Only the ledger page: it lives on the server, is shared, and can go stale — so a query owns it. The amount field and modal flag are UI state (local, ephemeral) and stay in plain React state.</details>
+
+✋ **Stopping here?** You have the concepts; nothing is typed yet. Next: the B→C bridge (file map), then C · Build, Sub-step 1; first action: `cd frontend` and run the `npm install` line in Sub-step 1.
+
 ---
 
 <a id="bridge"></a>
@@ -164,7 +188,7 @@ gateway/  (+ /notifications/** route → notification:8084)
 
 ---
 
-### Sub-step 1 — Install Libraries & Configure QueryClient
+### Sub-step 1 — Install Libraries & Configure QueryClient · ~30 min
 
 🧭 *(you are here: **install/setup** ──► HTTP API client ──► query hooks ──► panel UI ──► validated form ──► SSE hook ──► dashboard integration ──► gateway route ──► testing)*
 
@@ -273,7 +297,7 @@ git commit -m "chore(frontend): install query/form/validation deps and configure
 
 ---
 
-### Sub-step 2 — Extend HTTP Client with Account and Transfer Operations
+### Sub-step 2 — Extend HTTP Client with Account and Transfer Operations · ~1.5 h
 
 🧭 *(you are here: install/setup ──► **HTTP API client** ──► query hooks ──► panel UI ──► validated form ──► SSE hook ──► dashboard integration ──► gateway route ──► testing)*
 
@@ -446,9 +470,11 @@ git commit -m "feat(frontend): extend API client with account fetch and idempote
 
 ⚠️ **Pitfall:** Ensure `/bank` prefix is correctly prepended to the path so the gateway routes it to the demand-account service instead of failing with a `404`.
 
+✋ **Stopping here?** You have a typed API client (Bearer header, `/bank` prefix, Idempotency-Key, ProblemDetail parsing) with 6 passing tests, committed. Next: Sub-step 3 — the TanStack Query hooks; first action: create `frontend/src/accounts/queries.ts`.
+
 ---
 
-### Sub-step 3 — Create TanStack Query Server-State Hooks
+### Sub-step 3 — Create TanStack Query Server-State Hooks · ~1 h
 
 🧭 *(you are here: install/setup ──► HTTP API client ──► **query hooks** ──► panel UI ──► validated form ──► SSE hook ──► dashboard integration ──► gateway route ──► testing)*
 
@@ -543,9 +569,11 @@ git commit -m "feat(frontend): add TanStack Query hooks for account queries and 
 
 ⚠️ **Pitfall:** Missing `enabled` configurations. If missing, query functions will execute with `null` tokens upon initial render, throwing errors.
 
+❓ **Knowledge-check:** after `useTransfer` succeeds and invalidates `['account']` + `['entries']`, which queries actually refetch — every invalidated one, or only some? <details><summary>Answer</summary>Invalidation marks <em>all</em> matching queries stale, but only the <em>active</em> (currently mounted/on-screen) ones refetch immediately; inactive ones refetch the next time a component mounts them.</details>
+
 ---
 
-### Sub-step 4 — Build the Account Panel Component
+### Sub-step 4 — Build the Account Panel Component · ~1 h
 
 🧭 *(you are here: install/setup ──► HTTP API client ──► query hooks ──► **panel UI** ──► validated form ──► SSE hook ──► dashboard integration ──► gateway route ──► testing)*
 
@@ -632,9 +660,11 @@ git commit -m "feat(frontend): add AccountPanel component to display balance and
 
 ⚠️ **Pitfall:** Forgetting `role="alert"` on errors or not checking for empty datasets (`length === 0`), which may cause blank renders instead of "No transactions yet" notifications.
 
+✋ **Stopping here?** You have cached queries rendering all three async states (loading / error / data) in `AccountPanel`, tests green and committed. Next: Sub-step 5 — the validated transfer form; first action: create `frontend/src/accounts/TransferForm.tsx`.
+
 ---
 
-### Sub-step 5 — Build the Validated Transfer Form
+### Sub-step 5 — Build the Validated Transfer Form · ~2 h
 
 🧭 *(you are here: install/setup ──► HTTP API client ──► query hooks ──► panel UI ──► **validated form** ──► SSE hook ──► dashboard integration ──► gateway route ──► testing)*
 
@@ -747,9 +777,11 @@ git commit -m "feat(frontend): add validated TransferForm using React Hook Form 
 
 ⚠️ **Pitfall:** Not utilizing `z.coerce.number()`. HTML form inputs yield string types. Without coercion, checking positive values using `.positive()` on raw input strings will cause validation failures.
 
+❓ **Knowledge-check:** the schema validates `amount` — why must it be `z.coerce.number().positive()` rather than plain `z.number().positive()`? <details><summary>Answer</summary>A number `<input>` yields a *string*, so `z.number()` would reject (or misbehave on) every real submission; `z.coerce.number()` converts the string to a number first, then validates positivity — coercion and validation in one place.</details>
+
 ---
 
-### Sub-step 6 — Implement Live Notifications via Server-Sent Events
+### Sub-step 6 — Implement Live Notifications via Server-Sent Events · ~1.5 h
 
 🧭 *(you are here: install/setup ──► HTTP API client ──► query hooks ──► panel UI ──► validated form ──► **SSE hook** ──► dashboard integration ──► gateway route ──► testing)*
 
@@ -864,9 +896,11 @@ git commit -m "feat(frontend): subscribe to live notifications via SSE and rende
 
 ⚠️ **Pitfall:** Forgetting to return the cleanup function in `useEffect` can cause connections to stay open on navigation, leaking sockets.
 
+✋ **Stopping here?** You have the SSE hook + `LiveNotifications` accumulating pushed `transfer` events (hook test green, committed). Next: Sub-step 7 — compose the dashboard; first action: edit `frontend/src/pages/DashboardPage.tsx`.
+
 ---
 
-### Sub-step 7 — Compose the Dashboard Page
+### Sub-step 7 — Compose the Dashboard Page · ~30 min
 
 🧭 *(you are here: install/setup ──► HTTP API client ──► query hooks ──► panel UI ──► validated form ──► SSE hook ──► **dashboard integration** ──► gateway route ──► testing)*
 
@@ -949,7 +983,7 @@ git commit -m "feat(frontend): integrate AccountPanel, TransferForm, and LiveNot
 
 ---
 
-### Sub-step 8 — Front the Notification Stream in the Gateway
+### Sub-step 8 — Front the Notification Stream in the Gateway · ~1 h
 
 🧭 *(you are here: install/setup ──► HTTP API client ──► query hooks ──► panel UI ──► validated form ──► SSE hook ──► dashboard integration ──► **gateway route** ──► testing)*
 
@@ -1037,7 +1071,7 @@ git commit -m "feat(gateway): route notification stream through gateway and veri
 
 ---
 
-### Sub-step 9 — Verify with Test Providers & Suite
+### Sub-step 9 — Verify with Test Providers & Suite · ~45 min
 
 🧭 *(you are here: install/setup ──► HTTP API client ──► query hooks ──► panel UI ──► validated form ──► SSE hook ──► dashboard integration ──► gateway route ──► **testing**)
 
@@ -1111,9 +1145,11 @@ git commit -m "test(frontend): add query provider wrappers and tests for panels,
 
 ⚠️ **Pitfall:** Ensure you clear mock registers between tests so states do not leak.
 
+✋ **Stopping here?** All 9 sub-steps are done and committed — 15 frontend tests + 5 gateway routing tests green. Next: 🎮 Play With It — the live run needs the four JVM backends up; first action: the command block below (note the CORS env vars).
+
 ---
 
-## 🎮 Play With It
+## 🎮 Play With It · ~45 min
 
 Run the following commands to spin up backing services and the frontend application locally:
 
@@ -1146,6 +1182,8 @@ At the end of this step, the SPA is fully wired to fetch caching data, validate 
 2. Gateway integration tests pass.
 3. The repository builds cleanly.
 4. Running `smoke.sh` passes successfully.
+
+✋ **Stopping here?** You have the working step (Definition of Done above). Next: D · Prove — read the Verification Log against your own runs; first action: `bash steps/step-30/smoke.sh`.
 
 ---
 
@@ -1209,7 +1247,9 @@ adding: **routes `/notifications/api/notifications/stream` (StripPrefix) → not
 
 # E · 🎓 Apply
 
-## 🚀 Go Deeper (Optional)
+✋ **Fresh session?** Everything is built and verified (D's log) — this movement is reading + practice (~1.5 h); first action: the first Go Deeper aside below.
+
+## 🚀 Go Deeper (Optional · +~10 min each)
 
 <details><summary>Why invalidate instead of manually setting the cache?</summary>`invalidateQueries` marks data stale and refetches the truth from the server — simple and always correct. `setQueryData` (optimistic update) is faster (no round-trip) but you must roll back on error and risk drift. For money, refetching the authoritative balance is the safer default; optimistic updates are a Step-31+ refinement.</details>
 
@@ -1227,9 +1267,11 @@ adding: **routes `/notifications/api/notifications/stream` (StripPrefix) → not
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-* **Quick:** Add an **optimistic update** to `useTransfer` (decrement the balance immediately, roll back on error) and a test for the rollback.
-* **Quick:** Add a `useEntries` "load more" (pagination) — bump the `page` and merge, or use `useInfiniteQuery`.
-* 🎯 **Stretch (reference solution in `solutions/step-30/`):** Add a `useQuery` for the auth `/me` and show a global header; add a Zod schema for "open account" with a second form, invalidating the account query on success.
+* **Quick (+~30–45 min):** Add an **optimistic update** to `useTransfer` (decrement the balance immediately, roll back on error) and a test for the rollback.
+* **Quick (+~30–45 min):** Add a `useEntries` "load more" (pagination) — bump the `page` and merge, or use `useInfiniteQuery`.
+* 🎯 **Stretch (+~1–2 h · reference solution in `solutions/step-30/`):** Add a `useQuery` for the auth `/me` and show a global header; add a Zod schema for "open account" with a second form, invalidating the account query on success.
+
+✋ **Stopping here?** Only F · Review remains (~45 min) — it's the retention payoff; first action: skim the Troubleshooting table, then do the recap + flashcards + cumulative quiz.
 
 ---
 

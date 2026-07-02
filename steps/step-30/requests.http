@@ -1,0 +1,35 @@
+# steps/step-30/requests.http — the gateway endpoints the Step-30 frontend exercises.
+# These are the contracts the Step-30 Vitest suite fakes with vi.mock('../api/client') — hit them
+# for real here (gateway on :8080; run
+# `make run-gateway run-auth run-demand-account run-notification` or the compose profile first).
+
+### 1 · Login through the gateway (auth service) — grab the token
+# @name login
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{ "username": "alice", "password": "password123" }
+
+### 2 · Who am I (Bearer from #1)
+GET http://localhost:8080/api/auth/me
+Authorization: Bearer {{login.response.body.token}}
+
+### 3 · Account balance (gateway strips /bank → demand-account)
+GET http://localhost:8080/bank/api/accounts/ACC-A
+Authorization: Bearer {{login.response.body.token}}
+
+### 4 · Ledger entries, newest first (Step 14 pagination envelope)
+GET http://localhost:8080/bank/api/v1/accounts/ACC-A/entries?page=0&size=10&sort=createdAt,desc
+Authorization: Bearer {{login.response.body.token}}
+
+### 5 · Idempotent transfer (fresh UUID per attempt — same key never double-pays)
+POST http://localhost:8080/bank/api/v1/transfers
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+Idempotency-Key: {{$guid}}
+
+{ "from": "ACC-A", "to": "ACC-B", "amount": 25.00, "description": "step-30 smoke transfer" }
+
+### 6 · Live notifications stream (SSE — leave running, then fire #5 again in another tab)
+GET http://localhost:8080/notifications/api/notifications/stream
+Accept: text/event-stream

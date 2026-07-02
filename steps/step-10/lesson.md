@@ -16,12 +16,14 @@
 
 A one-line map of where we're going. Click to jump.
 
-1. **[A · 🧭 Orient](#orient)** — what this database-deep-dive covers, the cheat card, and whether you can skip.
-2. **[B · 🧠 Understand](#understand)** — query plans, indexes, MVCC, isolation levels, connection pools, partitioning, and zero-downtime schema change.
-3. **[C · 🛠️ Build](#build)** — the heart: building the raw-JDBC Testcontainers harness + six executable labs (explain, MVCC, write skew, connection pool, range partitioning, online DDL).
-4. **[D · 🔬 Prove](#prove)** — the Verification Log (🔴 Full tier): real pasted JUnit execution output and the §12.3 mutation proof.
-5. **[E · 🎓 Apply](#apply)** — go-deeper details, interview prep questions, and practice exercises.
-6. **[F · 🏆 Review](#review)** — stuck? troubleshooting, resources, key glossary terms, flashcards, and the Cumulative Review (Steps 1-10).
+1. **[A · 🧭 Orient](#orient)** — what this database-deep-dive covers, the cheat card, and whether you can skip. *~1h*
+2. **[B · 🧠 Understand](#understand)** — query plans, indexes, MVCC, isolation levels, connection pools, partitioning, and zero-downtime schema change. *~2.5h*
+3. **[C · 🛠️ Build](#build)** — the heart: building the raw-JDBC Testcontainers harness + six executable labs (explain, MVCC, write skew, connection pool, range partitioning, online DDL). *~12h*
+4. **[D · 🔬 Prove](#prove)** — the Verification Log (🔴 Full tier): real pasted JUnit execution output and the §12.3 mutation proof. *~1.5h*
+5. **[E · 🎓 Apply](#apply)** — go-deeper details, interview prep questions, and practice exercises. *~2h*
+6. **[F · 🏆 Review](#review)** — stuck? troubleshooting, resources, key glossary terms, flashcards, and the Cumulative Review (Steps 1-10). *~1h*
+
+*(~time per movement; the six sum to the step's ≈ 20h effort.)*
 
 ---
 
@@ -123,6 +125,22 @@ Two sentences from real incident reviews: *"The query got slow as the table grew
 
 > **Depends on: Steps 8, 9** (and conceptually 5–7 for the Spring/JPA fundamentals you're now looking underneath).
 
+## 🗓️ Session Plan (~20 h ≈ 7 sittings)
+
+You don't do this step in one sitting. Each sitting below ends at a real ✋ checkpoint, 💾 commit, or section boundary, so you can walk away without losing state:
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| **S1** | A · Orient (skip-test, cheat card) + B · Understand | ~2.5h | end of B — you can say which isolation level stops which anomaly, from the table |
+| **S2** | C · Sub-steps 0–1 — `DbLab` harness + `QueryPlanLabTest` | ~3h | ✋ + 💾 *"test(cif): verify optimizer scan choices under index configurations"* |
+| **S3** | C · Sub-step 2 — `MvccIsolationTest` (dirty / non-repeatable / phantom) | ~2.5h | ✋ + 💾 *"test(cif): verify read isolation levels and anomalies"* |
+| **S4** | C · Sub-step 3 — `WriteSkewTest` (the step's §12.3 mutation point) | ~2.5h | ✋ + 💾 *"test(cif): prove that SERIALIZABLE prevents write skew anomalies"* |
+| **S5** | C · Sub-steps 4–5 — `ConnectionPoolTest` + `PartitioningLabTest` | ~3h | ✋ + 💾 *"test(cif): verify range partition pruning"* |
+| **S6** | C · Sub-step 6 — `OnlineSchemaChangeTest` + 🎮 Play With It (`queries.sql` in psql) | ~2.5h | end of C — all six labs green, CIF at **21** tests |
+| **S7** | D · Prove (`./mvnw -pl services/cif -am verify`, §12.3 mutation check, `smoke.sh`) + E · Apply + F · Review | ~3h | flashcards + one-line reflection |
+
+*Optional routes:* pass the ⏭️ skip-test and the whole step compresses to a **~5h skim** (S1 + S7); each 🚀 Go Deeper aside costs **+~10 min**; 🎮 Play With It by hand in psql is **+~30 min**.
+
 ---
 
 <a id="understand"></a>
@@ -197,6 +215,8 @@ flowchart TB
 
 **Connection pools (HikariCP).** The pool holds up to `maximumPoolSize` physical connections. `getConnection()` borrows one; `close()` *returns it to the pool* (it does not actually close the socket). If all are in use, a borrower **waits** up to `connectionTimeout` and then throws `SQLTransientConnectionException("… request timed out")`. This is why pool size is a capacity decision: with `maximumPoolSize = 2`, the *third* concurrent caller waits and may time out — exactly the lab. Hikari exposes live gauges (`getActiveConnections`, `getIdleConnections`, `getThreadsAwaitingConnection`).
 
+> ❓ **Pool size 2, three concurrent borrowers — what happens to the third, and after how long?** <details><summary>answer</summary>It waits *inside* `getConnection()` for up to `connectionTimeout` (500 ms in our lab), then throws `SQLTransientConnectionException("… request timed out")`. It only succeeds if one of the two holders returns a connection during that wait.</details>
+
 **Partitioning.** A large table can be **declaratively partitioned** (e.g. `PARTITION BY RANGE (created_at)`) into child tables per month. The planner does **partition pruning**: a query restricted to one month touches only that partition. Wins: smaller indexes per partition, fast bulk-delete by `DROP TABLE partition` (vs a giant `DELETE`), and parallelism. Cost: more objects to manage, and the partition key must suit your queries.
 
 **Online (zero-downtime) schema change.** A plain `CREATE INDEX` takes a lock that blocks writes for the whole build; **`CREATE INDEX CONCURRENTLY`** builds without that long lock — but it *cannot run inside a transaction block* (it manages its own commits), so a migration tool must run it outside one. Adding a column with a **constant default** is **metadata-only** since PG 11 (instant, no table rewrite). These are the primitives behind the **expand-contract** migration pattern you'll use for real in Step 12.
@@ -219,9 +239,14 @@ flowchart TB
 | **`SELECT … FOR UPDATE SKIP LOCKED`** | Older queue-on-Postgres patterns blocked or polled awkwardly. | `SKIP LOCKED` (PG 9.5+) lets workers grab un-locked rows — a clean job-queue primitive. | Better concurrency primitives in the engine itself. |
 | **Serializable** | Classic SERIALIZABLE meant heavy two-phase locking. | PG uses **SSI** (Serializable Snapshot Isolation): snapshot reads + dependency tracking, aborting on `40001`. | Serializable guarantees without read locks — but apps must **retry**. |
 
+> [!NOTE]
+> *Verify, don't guess.* `INCLUDE` indexes and fast constant-default column adds are PG 11+; `SKIP LOCKED` is PG 9.5+; SSI has been Postgres's SERIALIZABLE since 9.1. We run **PostgreSQL 17** (`postgres:17-alpine`, pinned), so all apply. Other engines differ (e.g. MySQL/InnoDB's REPEATABLE READ does *not* prevent phantoms the same way; SQL Server's defaults differ) — the *anomaly definitions* are portable; the *level that prevents each* is engine-specific. Always check your engine.
+
 ## 🧵 Thread-safety note
 
 This step is the **database half** of concurrency: isolation levels and MVCC protect data across *separate database transactions*. It is **not** the same as in-JVM thread-safety (two threads sharing a mutable object) — that's the **Java Memory Model** in **Step 11**. Note the through-line: Step 9's `@Version` optimistic lock, this step's SERIALIZABLE/`SELECT … FOR UPDATE`, and Step 11's `synchronized`/atomics are three layers of the *same* question — "what happens when two things touch the same state at once?" In **Step 12** you'll deliberately choose among them to move money correctly under load.
+
+*✋ Stopping here? You have the theory — which isolation level stops which anomaly, and why. Next: C · Build, Sub-step 0 (the `DbLab` harness); first action: `./mvnw -pl services/cif -am verify` to confirm the 10-test starting point.*
 
 ---
 
@@ -279,7 +304,7 @@ steps/step-10/
 
 ---
 
-### Sub-step 0 of 6 — The `DbLab` harness 🧭 *(you are here: **harness** → plans → MVCC → write skew → pool → partitions → online DDL)*
+### Sub-step 0 of 6 — The `DbLab` harness *(≈45 min)* 🧭 *(you are here: **harness** → plans → MVCC → write skew → pool → partitions → online DDL)*
 
 🎯 **Goal:** Create a reusable base harness class that launches a single, shared Testcontainers Postgres instance and exposes raw JDBC utility methods to avoid Hibernate hiding transaction boundaries and isolation anomalies.
 
@@ -381,7 +406,7 @@ git commit -m "test(cif): add DbLab harness for raw-JDBC database labs"
 
 ---
 
-### Sub-step 1 of 6 — `QueryPlanLabTest`: watch the plan flip 🧭 *(harness ✅ → **plans** → MVCC → write skew → pool → partitions → online DDL)*
+### Sub-step 1 of 6 — `QueryPlanLabTest`: watch the plan flip *(≈2h)* 🧭 *(harness ✅ → **plans** → MVCC → write skew → pool → partitions → online DDL)*
 
 🎯 **Goal:** Seed 20,000 transaction rows and execute `EXPLAIN (ANALYZE)` to verify how the planner switches access paths from Seq Scan to Bitmap Index Scan, and finally to Index Only Scan (with zero heap fetches) after adding a covering index.
 
@@ -518,9 +543,11 @@ git commit -m "test(cif): verify optimizer scan choices under index configuratio
 
 ⚠️ **Pitfall:** Stale statistics. Forgetting to run `ANALYZE` after loading bulk data can cause the optimizer to use inaccurate plans.
 
+*✋ Stopping here? You have the `DbLab` harness plus the query-plan lab green (Seq → Bitmap Index → Index Only) and committed. Next: Sub-step 2 (`MvccIsolationTest` — the anomalies); first action: create `services/cif/src/test/java/com/buildabank/cif/dblab/MvccIsolationTest.java`.*
+
 ---
 
-### Sub-step 2 of 6 — `MvccIsolationTest`: dirty / non-repeatable / phantom 🧭 *(harness ✅ → plans ✅ → **MVCC** → write skew → pool → partitions → online DDL)*
+### Sub-step 2 of 6 — `MvccIsolationTest`: dirty / non-repeatable / phantom *(≈2h)* 🧭 *(harness ✅ → plans ✅ → **MVCC** → write skew → pool → partitions → online DDL)*
 
 🎯 **Goal:** Interleave two concurrent transactions at different isolation levels to demonstrate dirty reads (impossible), non-repeatable reads (visible at READ COMMITTED), repeatable snapshots (at REPEATABLE READ), and phantom reads.
 
@@ -714,9 +741,11 @@ git commit -m "test(cif): verify read isolation levels and anomalies"
 
 ⚠️ **Pitfall:** Hanging locks. If transaction connections are not explicitly committed, rolled back, or closed, they will keep locks open and block other tests.
 
+*✋ Stopping here? You have all four anomaly tests green and committed. Next: Sub-step 3 (write skew — the step's centerpiece and its §12.3 mutation point); first action: create `WriteSkewTest.java` in the same `dblab` folder, or re-run `./mvnw -pl services/cif test -Dtest=MvccIsolationTest` first to confirm you're still green.*
+
 ---
 
-### Sub-step 3 of 6 — `WriteSkewTest`: the anomaly that beats REPEATABLE READ 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → **write skew** → pool → partitions → online DDL)*
+### Sub-step 3 of 6 — `WriteSkewTest`: the anomaly that beats REPEATABLE READ *(≈2.5h)* 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → **write skew** → pool → partitions → online DDL)*
 
 🎯 **Goal:** Demonstrate write skew (overlapping reads, writes to different rows violating a combined invariant) under REPEATABLE READ, and show how SERIALIZABLE prevents it by aborting one transaction with SQLSTATE 40001.
 
@@ -867,9 +896,13 @@ git commit -m "test(cif): prove that SERIALIZABLE prevents write skew anomalies"
 
 ⚠️ **Pitfall:** Failing to handle `40001`. A serializable system requires the application to catch serialization errors and retry the entire transaction from the start.
 
+> ❓ **Both write-skew transactions wrote *different* rows — so why does SERIALIZABLE abort one when REPEATABLE READ happily commits both?** <details><summary>answer</summary>REPEATABLE READ only detects *write-write* conflicts on the same row, and there are none here. SERIALIZABLE (SSI) additionally tracks *read/write* dependencies: T1 read the row T2 wrote and vice-versa — a dangerous cycle — so Postgres aborts one with SQLSTATE `40001`, and the app must retry the whole transaction.</details>
+
+*✋ Stopping here? You have write skew proven both ways (−100 at REPEATABLE READ, 40001 at SERIALIZABLE) and committed. Next: Sub-step 4 (the connection pool); first action: create `ConnectionPoolTest.java`.*
+
 ---
 
-### Sub-step 4 of 6 — `ConnectionPoolTest`: run the pool dry 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → **pool** → partitions → online DDL)*
+### Sub-step 4 of 6 — `ConnectionPoolTest`: run the pool dry *(≈1.5h)* 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → **pool** → partitions → online DDL)*
 
 🎯 **Goal:** Configure a HikariCP instance with a pool size of 2 and timeout of 500ms, saturate the pool with two connections, and assert that a third borrow request blocks and times out with `SQLTransientConnectionException`.
 
@@ -985,7 +1018,7 @@ git commit -m "test(cif): verify connection pool exhaustion and recovery"
 
 ---
 
-### Sub-step 5 of 6 — `PartitioningLabTest`: prune to one partition 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → **partitions** → online DDL)*
+### Sub-step 5 of 6 — `PartitioningLabTest`: prune to one partition *(≈1.5h)* 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → **partitions** → online DDL)*
 
 🎯 **Goal:** Range-partition a transactions table by date, insert rows, and run `EXPLAIN` to verify that the planner prunes queries to only touch the relevant child table.
 
@@ -1092,9 +1125,11 @@ git commit -m "test(cif): verify range partition pruning"
 
 ⚠️ **Pitfall:** Partition key omissions. If a query does not filter on the partition key, the database must query all partitions.
 
+*✋ Stopping here? You have partition pruning proven and committed. Next: Sub-step 6 (online DDL — the last lab); first action: create `OnlineSchemaChangeTest.java`.*
+
 ---
 
-### Sub-step 6 of 6 — `OnlineSchemaChangeTest`: zero-downtime DDL 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → partitions ✅ → **online DDL**)*
+### Sub-step 6 of 6 — `OnlineSchemaChangeTest`: zero-downtime DDL *(≈1.5h)* 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → partitions ✅ → **online DDL**)*
 
 🎯 **Goal:** Prove that `CREATE INDEX CONCURRENTLY` cannot run in a transaction block (fails with `25001`) but works in autocommit mode, and show that adding a column with a constant default is metadata-only and instant.
 
@@ -1207,7 +1242,7 @@ git commit -m "test(cif): verify zero-downtime DDL primitives"
 
 ---
 
-### 🎮 Play With It
+### 🎮 Play With It *(optional · +~30 min)*
 
 To run these manual experiments by hand, open a shell and run:
 
@@ -1218,6 +1253,8 @@ docker exec -it pg-lab psql -U postgres
 ```
 
 Now you can copy and paste raw queries from `steps/step-10/queries.sql` to interact with indexing, isolation levels, write skew, partitions, and online migrations directly.
+
+*✋ Stopping here? You have all six labs green — CIF is at 21 tests. Next: D · Prove; first action: run `./mvnw -pl services/cif -am verify` and compare against the Verification Log.*
 
 ---
 
@@ -1298,13 +1335,13 @@ Expecting code to raise a throwable.
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① The planner's cost model — why it sometimes ignores your index</summary>
+<summary>① The planner's cost model — why it sometimes ignores your index *(+~10 min)*</summary>
 
 Postgres estimates each plan's cost from `pg_statistic` (refreshed by `ANALYZE`) and constants like `random_page_cost` (default 4.0) vs `seq_page_cost` (1.0). If a predicate matches *most* of the table, a Seq Scan's sequential I/O genuinely beats thousands of random index lookups — so the planner *correctly* ignores the index. On SSDs, lowering `random_page_cost` (e.g. to 1.1) tells the planner random I/O is cheap, often flipping more queries to index scans. Always validate with `EXPLAIN ANALYZE` on representative data, and watch the **estimated-vs-actual rows** gap — that's your stale-stats smell.
 </details>
 
 <details>
-<summary>② `SELECT … FOR UPDATE` vs SERIALIZABLE — two ways to stop write skew</summary>
+<summary>② `SELECT … FOR UPDATE` vs SERIALIZABLE — two ways to stop write skew *(+~10 min)*</summary>
 
 You saw SERIALIZABLE catch write skew with `40001`. The alternative is **pessimistic**: `SELECT … FOR UPDATE` locks the rows you read so the second transaction *blocks* until the first commits, then sees the new state and re-evaluates. Trade-off: SERIALIZABLE has no read locks (great throughput) but needs **retry** logic; `FOR UPDATE` needs no retry but holds locks (less concurrency, deadlock risk). For the linked-account rule you'd `SELECT … FOR UPDATE` *both* rows in a deterministic order. You'll choose between these for the ledger in **Step 12** — and `@Version` (Step 9) is the third, lock-free option for single-row lost updates.
 </details>
@@ -1314,6 +1351,8 @@ You saw SERIALIZABLE catch write skew with `40001`. The alternative is **pessimi
 1. **"Walk me through this `EXPLAIN` output."** → Read **bottom-up**: name the scan node (Seq/Index/Bitmap/Index Only) and join nodes; compare **estimated vs actual rows** (a big gap = stale stats → `ANALYZE`); check `Buffers` for I/O. State what you'd change (add/adjust an index, rewrite the predicate to be sargable, update stats).
 2. **"What is write skew, and how do you prevent it?"** → Two transactions read overlapping data, each decides based on its snapshot, and each writes a **different** row, together violating an invariant no single one broke. Snapshot isolation (REPEATABLE READ) can't catch it (no write-write conflict). Fix: **SERIALIZABLE** (SSI detects the dependency cycle, aborts with `40001` → **retry**), or **`SELECT … FOR UPDATE`** to serialize, or restructure to a single-row conflict (e.g. a guarded balance row + `@Version`).
 3. **"What's the difference between READ COMMITTED and REPEATABLE READ, and when would you use each?"** → READ COMMITTED takes a fresh snapshot **per statement** (so non-repeatable reads and phantoms can occur); REPEATABLE READ freezes **one** snapshot for the transaction (preventing both — and, in Postgres, phantoms too).
+
+*✋ Stopping here? You have the go-deeper asides and the interview answers under your belt. Next: F · Review; first action: read the 🩺 troubleshooting table, then work through the Cumulative Review (Steps 1–10).*
 
 ---
 

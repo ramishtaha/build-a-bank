@@ -223,7 +223,7 @@ Tick the box as you finish each step (its `step-NN-end` tag is green and committ
 |---|---|---|---|---|---|
 | [ ] | 29 | Frontend pt.1 — foundations | 🔵 | React + TS + Vite, components, routing, calling the gateway, the login/auth flow | ~20h |
 | [ ] | 30 | Frontend pt.2 — state, data & forms | 🔵 | data fetching/caching (TanStack Query), client state, forms + validation (React Hook Form + Zod), loading/error UX, WebSocket live updates | ~20h |
-| [ ] | 31 | Frontend pt.3 — testing & accessibility | 🔵 | component tests (Testing Library), E2E (Playwright), API mocking (MSW), WCAG basics, i18n + multi-currency formatting | ~20h |
+| [x] | 31 | Frontend pt.3 — testing & accessibility | 🔵 | component tests (Testing Library), E2E (Playwright), API mocking (MSW), WCAG basics, i18n + multi-currency formatting | ~20h |
 | [ ] | 32 | Frontend pt.4 — hardening & ship | 🔵 | token refresh & route guards, bundle/perf optimization, Dockerize the SPA + serve via gateway/CDN, deploy, end-to-end demo | ~20h |
 
 > [!TIP]

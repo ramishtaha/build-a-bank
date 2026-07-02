@@ -1548,6 +1548,24 @@ INFO o.f.core.internal.command.DbMigrate : Successfully applied 1 migration to s
 
 (6 tests = 2 repository + 3 controller + 1 integration.)
 
+🗓️ **Re-verified 2026-07-02 (aids pass)** — the same module-level run repeated fresh in a clean worktree at `step-08-end` (`./mvnw -pl services/cif -am test`, output filtered to the key lines). Note the *different* random ports vs the block above (52247/55414, not 57881) — that's the Testcontainers randomness doing its honest-proof job:
+
+```
+[INFO] Building Build-a-Bank :: Services :: CIF 0.1.0-SNAPSHOT            [2/2]
+INFO tc.postgres:17-alpine : Container is started (JDBC URL: jdbc:postgresql://localhost:52247/test?loggerLevel=OFF)
+INFO org.flywaydb.core.FlywayExecutor : Database: jdbc:postgresql://localhost:52247/test?loggerLevel=OFF (PostgreSQL 17.10)
+INFO o.f.core.internal.command.DbMigrate : Successfully applied 1 migration to schema "public", now at version v1 (execution time 00:00.039s)
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 15.83 s -- in com.buildabank.cif.CifApplicationIntegrationTest
+INFO tc.postgres:17-alpine : Container is started (JDBC URL: jdbc:postgresql://localhost:55414/test?loggerLevel=OFF)
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.574 s -- in com.buildabank.cif.domain.CustomerRepositoryTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.759 s -- in com.buildabank.cif.web.CustomerControllerTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+[INFO] Total time:  24.049 s
+```
+
+(Full details of this re-run — drift check, smoke.sh — in [Verification Log Re-run 5](#prove).)
+
 ✋ **Checkpoint:** `./mvnw -pl services/cif -am verify` is **green with 6 tests**, with the Testcontainers random-port JDBC URL and Flyway lines visible. **This is the Definition-of-Done core.**
 
 🔄 **Stopping here?** (End of sitting S6.) You have the DoD core: 6/6 green on real Postgres. Next: sub-step 12 (the live run); first action: `docker info`, then create `services/cif/compose.yaml`.
@@ -1833,6 +1851,42 @@ Runs `./mvnw -B -q -pl services/cif -am verify` (Testcontainers Postgres + Flywa
 ### Clean-room note (learner step)
 
 For a Full-tier step you'd verify from a fresh `git clone` with only the pinned tools: `make doctor` then `make verify`, confirming `step-08-end == step-09-start` and that the start tag is red where the learner will make it green. As a learner, run `bash steps/step-08/smoke.sh` from a clean checkout with Docker running — same effect.
+
+### Re-run 5 — re-verified 2026-07-02 (aids pass)
+
+Fresh evidence pass, executed in an **isolated git worktree checked out at the `step-08-end` tag** (commit `aef2beb`), Docker running, Java 25.0.3 / Spring Boot 4.0.6 / Windows 11.
+
+**Drift check first:** `git diff step-08-end..HEAD -- services/cif steps/step-08` is **not empty** — later steps grew `services/cif` past this lesson (Steps 9–10 added `Address`, `V2__add_address_and_version.sql`, `@Version` optimistic locking, and the dblab / fetch / SQL-injection test classes: 20 files, +1152/−27). That's why this re-run was executed **at the tag**, where the module is exactly what this lesson builds — the 6-test result below is the Step-8 truth; `HEAD`'s module has more tests that belong to later steps.
+
+**1) `./mvnw -pl services/cif -am test` — real output (filtered to the key lines):**
+
+```
+[INFO] Building Build-a-Bank :: Parent 0.1.0-SNAPSHOT                     [1/2]
+[INFO] Building Build-a-Bank :: Services :: CIF 0.1.0-SNAPSHOT            [2/2]
+2026-07-02T11:01:36.487+05:30  INFO ... tc.postgres:17-alpine : Container is started (JDBC URL: jdbc:postgresql://localhost:52247/test?loggerLevel=OFF)
+2026-07-02T11:01:37.539+05:30  INFO ... org.flywaydb.core.FlywayExecutor : Database: jdbc:postgresql://localhost:52247/test?loggerLevel=OFF (PostgreSQL 17.10)
+2026-07-02T11:01:37.634+05:30  INFO ... o.f.core.internal.command.DbValidate : Successfully validated 1 migration (execution time 00:00.038s)
+2026-07-02T11:01:37.873+05:30  INFO ... o.f.core.internal.command.DbMigrate : Migrating schema "public" to version "1 - create customer"
+2026-07-02T11:01:37.942+05:30  INFO ... o.f.core.internal.command.DbMigrate : Successfully applied 1 migration to schema "public", now at version v1 (execution time 00:00.039s)
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 15.83 s -- in com.buildabank.cif.CifApplicationIntegrationTest
+2026-07-02T11:01:46.681+05:30  INFO ... tc.postgres:17-alpine : Container is started (JDBC URL: jdbc:postgresql://localhost:55414/test?loggerLevel=OFF)
+2026-07-02T11:01:46.960+05:30  INFO ... o.f.core.internal.command.DbMigrate : Successfully applied 1 migration to schema "public", now at version v1 (execution time 00:00.018s)
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.574 s -- in com.buildabank.cif.domain.CustomerRepositoryTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.759 s -- in com.buildabank.cif.web.CustomerControllerTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+[INFO] Total time:  24.049 s
+```
+
+Same signature as §1, fresh numbers: **two** throwaway Postgres containers on **random high ports** — 52247 for the `@SpringBootTest`, 55414 for the `@DataJpaTest` (different from §1's 57881, as randomness demands) — PostgreSQL 17.10, Flyway migrating `1 - create customer` onto an empty schema each time, **6/6 tests green, BUILD SUCCESS in 24.049 s**. (In this run surefire happened to execute the integration test first — test-class order isn't fixed, totals are.)
+
+**2) `bash steps/step-08/smoke.sh` — run from the worktree root, real final line:**
+
+```
+✅ Step 8 smoke test PASSED (CIF verified on a real Postgres)
+```
+
+**Not re-run:** the §12.3 mutation check (§3) — it requires deliberately editing `CustomerController`, and code is frozen in this documentation pass; the recorded break-then-revert evidence stands. Likewise the live Compose POST→GET (§2) was not repeated — the same request path is exercised end-to-end by the `@SpringBootTest` and `smoke.sh` above, and §2's captured values remain the reference.
 
 ---
 

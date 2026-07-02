@@ -11,14 +11,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | ACID & `@Transactional` internals · double-entry · optimistic vs pessimistic locking |
-| **C** | [🛠️ Build](#build) | the `demand-account` service in 12 sub-steps: module → schema → entities → locked repo → transfer service → propagation → API → tests |
-| **D** | [🔬 Prove](#prove) | the Verification Log — 11 tests, the capstone (fails without locking, passes with it), §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards, 🧠 Phase-B cumulative review & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1h |
+| **B** | [🧠 Understand](#understand) | ACID & `@Transactional` internals · double-entry · optimistic vs pessimistic locking | ~2.5h |
+| **C** | [🛠️ Build](#build) | the `demand-account` service in 12 sub-steps: module → schema → entities → locked repo → transfer service → propagation → API → tests | ~13h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — 11 tests, the capstone (fails without locking, passes with it), §12.3 mutation | ~2.5h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~2h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards, 🧠 Phase-B cumulative review & what's next | ~1h |
 
 ---
 
@@ -32,7 +32,7 @@
 |---|---|
 | **Title** | Demand Account + double-entry ledger + transaction management deep — move money correctly under concurrency |
 | **Step** | 12 of 67 · **Phase B — Data, Databases, Concurrency & Transactions** 🔵 · **🎖️ end-of-phase milestone** |
-| **Effort** | ≈ 22 hours focused (a meaty milestone — a whole new service plus the concurrency capstone). Experienced learners can skim the JPA basics and focus on the locking + propagation sections (~6h). |
+| **Effort** | ≈ 22 hours focused (a meaty milestone — a whole new service plus the concurrency capstone). Experienced learners can skim the JPA basics and focus on the locking + propagation sections (~6h). Plan it as ~9 sittings — see the **🗓️ Session Plan** below. |
 | **What you'll run this step** | **JVM + Maven** for build & tests; **🐳 Docker** for the tests (Testcontainers Postgres) and for running the service live. One command: `./mvnw -pl services/demand-account -am verify`. |
 | **Buildable artifact** | A NEW service **`services/demand-account`** (its own Postgres DB): `Account` (BigDecimal balance + `@Version`), an append-only `LedgerEntry` (double-entry), a `TransferService` with a **pessimistic-lock** transfer (`SELECT … FOR UPDATE`) + a deliberately-unsafe one for the capstone, `@Transactional` propagation/rollback/readOnly, a REST API, and **11 tests** including the **Phase-B capstone** concurrency stress test. `step-12-start == step-11-end`. |
 | **Verification tier** | 🔴 **Full** — a new service *and* the money + concurrency path. `./mvnw verify` green + all **11** tests + the capstone proven **both ways** (lost update without locking; perfect with it) + a live HTTP round-trip + the **§12.3 mutation** (remove the lock → 17/20 transfers fail → revert) + clean-room + `smoke.sh`. |
@@ -122,6 +122,26 @@ Moving money is the canonical "get it exactly right or people lose real money" p
 
 > **Depends on: Steps 7, 8, 9, 10, 11.** This step is the convergence point of Phase B.
 
+## 🗓️ Session Plan
+
+≈ 22 hours is a multi-day build — don't face it as one wall. Nine sittings of ~1.5–3h, each ending at a real ✋ checkpoint or commit you can walk away from:
+
+| # | Sitting | Covers | ~ | Ends at (save point) |
+|---|---|---|---|---|
+| S1 | Orient + Understand | skip-test · Cheat Card · Big Idea · Pattern Spotlight · Under the Hood · Thread-safety note | ~2.5h | end of B; skip-test answered |
+| S2 | Wire it up | sub-steps 1–3 (module → config → Flyway V1 schema) | ~2h | sub-step 3 ✋ + commit |
+| S3 | Domain | sub-steps 4–6 (`Account` · `LedgerEntry`/`AuditEntry` · the `FOR UPDATE` repositories) | ~2.75h | sub-step 6 ✋ + commit |
+| S4 | Move the money | sub-steps 7–8 (`TransferService` safe path + unsafe twin · `REQUIRES_NEW` propagation) | ~3h | sub-step 8 ✋ + commit |
+| S5 | REST API, live | sub-step 9 (controller, DTOs, error mapping, main class) + first live run on 8082 | ~1.5h | sub-step 9 ✋ (201/200/422 over HTTP) + commit |
+| S6 | Tests + 🎓 capstone | sub-steps 10–11 (`ContainersConfig` + `TransferServiceTest` · `ConcurrentTransferTest` both ways) | ~2.5h | sub-step 11 ✋ (capstone green) + commit |
+| S7 | Round out the suite | sub-step 12 (optimistic · propagation · web slice · live HTTP tests) + 🎮 Play With It | ~2h | sub-step 12 ✋ — **Tests run: 11** + commit |
+| S8 | Prove | D · 🔬: the §12.3 mutation, `smoke.sh`, clean-room, Definition of Done | ~2.5h | DoD all checked; `step-12-end` tagged |
+| S9 | Apply + Review | E + F: interview prep · Your Turn · recap · flashcards · Phase-B cumulative review | ~3h | one-line reflection written |
+
+*Optional routes:* the ⏭️ skip-test (5 min) can shrink the step to the ~6h experienced path (locking + propagation only); each 🚀 Go Deeper aside is +~10 min; Your Turn challenges are +30–60 min each — all safely skippable on a first pass.
+
+✋ **Stopping here?** You have the prerequisites confirmed (`step-12-start` green, Docker running). Next: B · 🧠 Understand (~2.5h); first action: read "The Big Idea" below.
+
 ---
 
 <a id="understand"></a>
@@ -179,6 +199,8 @@ flowchart TB
 
 **Rollback rules (a classic gotcha).** By default Spring rolls back on **`RuntimeException`** and **`Error`**, but **commits** on checked exceptions. So our `InsufficientFundsException extends RuntimeException` → a failed transfer rolls back automatically (no half-transfer). If you threw a *checked* exception and wanted rollback, you'd need `@Transactional(rollbackFor = MyCheckedException.class)`. Proven: `overdraw_isRejected_andRollsBackEverything` shows the debit that ran *before* the exception is undone and **no ledger rows** remain.
 
+❓ **Knowledge-check:** your transfer method throws a *checked* exception on failure — does `@Transactional` roll the transfer back by default? <details><summary>answer</summary>No — by default Spring rolls back only on `RuntimeException`/`Error`; checked exceptions commit. You'd need `@Transactional(rollbackFor = ...)`, which is why `InsufficientFundsException` extends `RuntimeException`.</details>
+
 **`readOnly = true`.** A hint that the transaction won't write: Hibernate sets the flush mode to `MANUAL` (skips dirty-checking flushes) and the driver/DB can optimize. Our `balanceOf`/`totalSystemBalance` are read-only. (It's a hint, not a hard guarantee against writes.)
 
 **Optimistic vs pessimistic at the engine (Steps 9 + 10 combined).**
@@ -212,6 +234,8 @@ flowchart TB
 ## 🧵 Thread-safety note
 
 The account `balance` is **shared mutable state** touched by concurrent transfer threads — exactly Step 11's hazard, now in the database. Three layers defend it, and you should be able to place each: **(1)** in-JVM, a single instance could use `synchronized` — but that **fails across multiple service instances** (the real deployment), so we don't rely on it; **(2)** optimistic `@Version` (Step 9) — detect-and-retry; **(3)** pessimistic `FOR UPDATE` (Step 10) — lock-and-wait, our default for money. The database is the single point of truth where all instances coordinate, which is why the *database* lock (not a JVM lock) is the right tool for distributed money movement. (Distributed locks like Redis/ShedLock come in Step 22.)
+
+✋ **Stopping here?** You have the theory: ACID, propagation, rollback rules, optimistic vs pessimistic. Next: C · 🛠️ Build, sub-step 1 (module wiring, ~30 min); first action: add the `<module>services/demand-account</module>` line to the root `pom.xml`.
 
 ---
 
@@ -297,7 +321,7 @@ steps/step-12/{requests.http, smoke.sh}
 
 ---
 
-### Sub-step 1 of 12 — Module wiring 🧭 *(you are here: **module** → config → schema → entities → repo → service → propagation → api → tests)*
+### Sub-step 1 of 12 — Module wiring ⏱ ~30 min 🧭 *(you are here: **module** → config → schema → entities → repo → service → propagation → api → tests)*
 
 🎯 **Goal:** register a new Maven module so `./mvnw` builds it, and give it the same Spring Boot + JPA + Flyway + Testcontainers dependency set as the cif service from Step 8.
 
@@ -455,7 +479,7 @@ git commit -m "feat(demand-account): add module + dependencies (web, JPA, Flyway
 
 ---
 
-### Sub-step 2 of 12 — Configuration: `application.yml` + `compose.yaml` 🧭 *(module ✅ → **config** → schema → entities → …)*
+### Sub-step 2 of 12 — Configuration: `application.yml` + `compose.yaml` ⏱ ~45 min 🧭 *(module ✅ → **config** → schema → entities → …)*
 
 🎯 **Goal:** tell the service how to reach Postgres (env-driven, 12-factor), turn **OSIV off** and let **Flyway own the schema** (`ddl-auto=validate`), pick port **8082**, and provide a one-command local Postgres on host port **5433**.
 
@@ -561,7 +585,7 @@ git commit -m "feat(demand-account): app config (validate + OSIV off + 8082) and
 
 ---
 
-### Sub-step 3 of 12 — The Flyway `V1` schema 🧭 *(module ✅ → config ✅ → **schema** → entities → …)*
+### Sub-step 3 of 12 — The Flyway `V1` schema ⏱ ~45 min 🧭 *(module ✅ → config ✅ → **schema** → entities → …)*
 
 🎯 **Goal:** write the SQL that creates `account`, the append-only `ledger_entry`, and an `audit_log` table. **This file is the source of truth for the schema** — Hibernate only validates against it.
 
@@ -633,9 +657,11 @@ git commit -m "feat(demand-account): Flyway V1 — account + double-entry ledger
 
 ⚠️ **Pitfall:** a *single* underscore (`V1_create….sql`) — Flyway won't recognize the description separator. It must be **two** underscores after the version.
 
+✋ **Stopping here?** You have the module, config, and V1 schema committed. Next: sub-step 4 (the `Account` entity, ~1h); first action: create `services/demand-account/src/main/java/com/buildabank/account/domain/Account.java`.
+
 ---
 
-### Sub-step 4 of 12 — The `Account` entity (money + `@Version` + the overdraft invariant) 🧭 *(module ✅ → config ✅ → schema ✅ → **entity** → ledger → repo → …)*
+### Sub-step 4 of 12 — The `Account` entity (money + `@Version` + the overdraft invariant) ⏱ ~1h 🧭 *(module ✅ → config ✅ → schema ✅ → **entity** → ledger → repo → …)*
 
 🎯 **Goal:** the `Account` aggregate — a `BigDecimal` balance, the `@Version` optimistic-lock column, and `debit`/`credit` methods that **refuse to overdraw** (the invariant this service must never break). Plus the tiny `EntryDirection` enum and `InsufficientFundsException` it leans on.
 
@@ -827,7 +853,7 @@ git commit -m "feat(demand-account): Account (BigDecimal + @Version, overdraft-r
 
 ---
 
-### Sub-step 5 of 12 — The `LedgerEntry` + `AuditEntry` entities 🧭 *(module ✅ → … → entity ✅ → **ledger** → repo → …)*
+### Sub-step 5 of 12 — The `LedgerEntry` + `AuditEntry` entities ⏱ ~45 min 🧭 *(module ✅ → … → entity ✅ → **ledger** → repo → …)*
 
 🎯 **Goal:** the append-only `LedgerEntry` (one leg of a money movement) and the standalone `AuditEntry` (for the propagation demo).
 
@@ -1027,7 +1053,7 @@ git commit -m "feat(demand-account): append-only LedgerEntry (double-entry leg) 
 
 ---
 
-### Sub-step 6 of 12 — The repositories (the pessimistic lock + the books-balance query) 🧭 *(module ✅ → … → ledger ✅ → **repo** → service → …)*
+### Sub-step 6 of 12 — The repositories (the pessimistic lock + the books-balance query) ⏱ ~1h 🧭 *(module ✅ → … → ledger ✅ → **repo** → service → …)*
 
 🎯 **Goal:** the three Spring Data repositories. The interesting one is `AccountRepository`, with the **locked read** (`findByAccountNumberForUpdate`), the conservation query (`totalBalance`), and the deliberately-unsafe bulk write used only by the capstone.
 
@@ -1142,6 +1168,8 @@ public interface AuditEntryRepository extends JpaRepository<AuditEntry, Long> {
 
 🔮 **Predict:** `findByAccountNumberForUpdate` carries `@Lock(PESSIMISTIC_WRITE)`. If you call it from a method that is **not** `@Transactional`, does the `FOR UPDATE` lock do anything useful? <details><summary>answer</summary>No — a lock only persists for the life of a transaction. With no surrounding transaction, the lock is taken and released immediately (or auto-commit makes it meaningless). `@Lock` is only useful inside a `@Transactional` service method.</details>
 
+❓ **Knowledge-check:** a second transaction calls `findByAccountNumberForUpdate` on a row another transaction has already locked — what happens, and until when? <details><summary>answer</summary>It **blocks** at the `SELECT … FOR UPDATE` until the lock holder commits or rolls back — the lock is held for the rest of the transaction. That waiting is what serializes concurrent transfers on a hot account.</details>
+
 ▶️ **Run & See:**
 ```bash
 ./mvnw -q -pl services/demand-account -am test-compile
@@ -1163,9 +1191,11 @@ git commit -m "feat(demand-account): repositories — pessimistic FOR UPDATE rea
 
 ⚠️ **Pitfall:** a `@Modifying` query without a surrounding transaction throws (`TransactionRequiredException`), and bulk updates **don't** trigger `@Version` checks or dirty-checking — that's precisely why `applyBalanceUnsafe` is unsafe and labelled demonstration-only.
 
+✋ **Stopping here?** You have all entities plus the `FOR UPDATE` repositories committed and compiling. Next: sub-step 7 (`TransferService`, ~2h); first action: create `services/demand-account/src/main/java/com/buildabank/account/service/TransferService.java`.
+
 ---
 
-### Sub-step 7 of 12 — `TransferService` (the safe money path, and the unsafe demo) 🧭 *(module ✅ → … → repo ✅ → **service** → propagation → api → tests)*
+### Sub-step 7 of 12 — `TransferService` (the safe money path, and the unsafe demo) ⏱ ~2h 🧭 *(module ✅ → … → repo ✅ → **service** → propagation → api → tests)*
 
 🎯 **Goal:** the production transfer — lock both accounts in a **deadlock-safe order**, debit/credit, write the two ledger legs, all in one transaction — plus a clearly-labelled `transferUnsafe` the capstone uses to *show* the race, and the read-only balance/conservation helpers.
 
@@ -1338,7 +1368,7 @@ git commit -m "feat(demand-account): pessimistic deadlock-safe transfer + double
 
 ---
 
-### Sub-step 8 of 12 — Propagation: `AuditService` (`REQUIRES_NEW`) + `PropagationDemoService` 🧭 *(module ✅ → … → service ✅ → **propagation** → api → tests)*
+### Sub-step 8 of 12 — Propagation: `AuditService` (`REQUIRES_NEW`) + `PropagationDemoService` ⏱ ~1h 🧭 *(module ✅ → … → service ✅ → **propagation** → api → tests)*
 
 🎯 **Goal:** show `REQUIRES_NEW` — an audit record that commits **independently**, surviving an outer rollback — and demonstrate why it must live in a **separate bean** (the self-invocation pitfall from Step 7).
 
@@ -1448,9 +1478,11 @@ git commit -m "feat(demand-account): REQUIRES_NEW audit propagation demo (separa
 
 ⚠️ **Pitfall:** putting `REQUIRES_NEW` on a method called via `this.` inside the same bean does nothing — the proxy is bypassed. Cross a bean boundary.
 
+✋ **Stopping here?** You have the deadlock-safe transfer (and its unsafe twin) plus the `REQUIRES_NEW` propagation demo committed — the whole service layer is done. Next: sub-step 9 (REST API, ~1.5h); first action: create `services/demand-account/src/main/java/com/buildabank/account/web/OpenAccountRequest.java`.
+
 ---
 
-### Sub-step 9 of 12 — REST API: controller, DTOs, error mapping + the main class 🧭 *(module ✅ → … → propagation ✅ → **api** → tests)*
+### Sub-step 9 of 12 — REST API: controller, DTOs, error mapping + the main class ⏱ ~1.5h 🧭 *(module ✅ → … → propagation ✅ → **api** → tests)*
 
 🎯 **Goal:** a usable HTTP API — open an account, transfer, read a balance — with Bean Validation and sensible error codes, plus the Spring Boot entry point so the service can actually start.
 
@@ -1685,9 +1717,11 @@ git commit -m "feat(demand-account): accounts/transfers REST API + validation + 
 
 ⚠️ **Pitfall:** wrong port — the service is on **8082** (8080=hello, 8081=cif). The compose maps Postgres to host **5433** to dodge the local 5432, so run with `SPRING_DATASOURCE_URL=…localhost:5433/demand_account` or you'll hit "connection refused" / the wrong database.
 
+✋ **Stopping here?** You have a live HTTP API answering on 8082 (201/200/422), committed. Next: sub-step 10 (Testcontainers + `TransferServiceTest`, ~1h); first action: create `services/demand-account/src/test/java/com/buildabank/account/ContainersConfig.java`.
+
 ---
 
-### Sub-step 10 of 12 — Testcontainers config + `TransferServiceTest` (the ledger behaves) 🧭 *(module ✅ → … → api ✅ → **tests** → capstone → more tests)*
+### Sub-step 10 of 12 — Testcontainers config + `TransferServiceTest` (the ledger behaves) ⏱ ~1h 🧭 *(module ✅ → … → api ✅ → **tests** → capstone → more tests)*
 
 🎯 **Goal:** spin up a **real** Postgres for tests with `@ServiceConnection`, and prove the core ledger behaviour: a transfer moves money and writes a **balanced pair** of entries; an overdraw **rolls back everything**.
 
@@ -1850,7 +1884,7 @@ git commit -m "test(demand-account): Testcontainers config + ledger behaviour (b
 
 ---
 
-### Sub-step 11 of 12 — The 🎓 Phase-B capstone (`ConcurrentTransferTest`) 🧭 *(module ✅ → … → tests ✅ → **capstone** → more tests)*
+### Sub-step 11 of 12 — The 🎓 Phase-B capstone (`ConcurrentTransferTest`) ⏱ ~1.5h 🧭 *(module ✅ → … → tests ✅ → **capstone** → more tests)*
 
 🎯 **Goal:** the capstone — a concurrency stress test that **fails without locking** (a deterministic lost update) and **passes with it** (20 concurrent transfers, money conserved, books balanced, no overdraft).
 
@@ -2026,9 +2060,11 @@ git commit -m "test(demand-account): 🎓 Phase-B capstone — fails without loc
 
 ⚠️ **Pitfall:** without the `CyclicBarrier`, the two unsafe transfers might *not* interleave (one finishes before the other reads), and you'd see the "correct" A=0,B=200 — masking the bug. The barrier forces the interleave so the lost update is reproducible every run.
 
+✋ **Stopping here?** You have the 🎓 capstone green and committed — the race demonstrated both ways. Next: sub-step 12 (the remaining 4 test classes, ~1.5h); first action: create `services/demand-account/src/test/java/com/buildabank/account/service/OptimisticLockTest.java`.
+
 ---
 
-### Sub-step 12 of 12 — Optimistic, propagation & web-slice tests + the live HTTP test 🧭 *(module ✅ → … → capstone ✅ → **more tests** → run for real)*
+### Sub-step 12 of 12 — Optimistic, propagation & web-slice tests + the live HTTP test ⏱ ~1.5h 🧭 *(module ✅ → … → capstone ✅ → **more tests** → run for real)*
 
 🎯 **Goal:** round out the suite to **11 tests** — prove the optimistic (`@Version`) alternative, the `REQUIRES_NEW` propagation, the controller in isolation (`@WebMvcTest`), and the whole thing over a real HTTP socket.
 
@@ -2434,6 +2470,8 @@ You're at **`step-12-end`** (== `step-13-start`) — and the **end of Phase B** 
 - [ ] `bash steps/step-12/smoke.sh` prints `✅ Step 12 smoke test PASSED`.
 - [ ] You've committed and tagged `step-12-end`.
 
+✋ **Stopping here?** All 11 tests are green and committed — the build is done. Next: D · 🔬 Prove (~2.5h: the §12.3 mutation, `smoke.sh`, clean-room); first action: run `./mvnw -pl services/demand-account -am verify`.
+
 ---
 
 <a id="prove"></a>
@@ -2494,22 +2532,24 @@ Fresh `git clone` at `step-12-end` → `make doctor` + full `./mvnw verify` → 
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① Retry-on-conflict: the optimistic counterpart to pessimistic locking</summary>
+<summary>① Retry-on-conflict: the optimistic counterpart to pessimistic locking (+~10 min)</summary>
 
 With `@Version` (no `FOR UPDATE`), a conflicting transfer throws `ObjectOptimisticLockingFailureException`. The standard fix is a bounded **retry loop** (Spring Retry's `@Retryable`, or a hand-rolled `for` loop): catch the exception, re-read, re-apply, up to N attempts with small backoff. It out-throughputs pessimistic locking when conflicts are *rare* (no lock held) but degrades under heavy contention (we saw 17/20 conflicts). Pessimistic locking is the opposite trade. Knowing *which* to reach for is the senior skill.
 </details>
 
 <details>
-<summary>② Derived vs materialized balance</summary>
+<summary>② Derived vs materialized balance (+~10 min)</summary>
 
 We keep a materialized `balance` *and* an append-only ledger. The alternative is to **derive** the balance by summing entries (`SELECT sum(...) FROM ledger_entry WHERE account_id = ?`) — perfectly auditable, no balance to lock, but O(entries) per read. Real systems often snapshot a running balance periodically (or per statement period) to bound the sum. Event sourcing (Step 52) makes the ledger the *only* source of truth and projects balances as read models.
 </details>
 
 <details>
-<summary>③ `NESTED` propagation & savepoints</summary>
+<summary>③ `NESTED` propagation & savepoints (+~10 min)</summary>
 
 `Propagation.NESTED` creates a **savepoint** inside the current transaction. If the nested work fails, you roll back to the savepoint without aborting the whole transaction — useful for "attempt this optional sub-step." It needs a JDBC driver/DB that supports savepoints (Postgres does). Contrast with `REQUIRES_NEW` (a truly independent transaction that commits separately).
 </details>
+
+❓ **Knowledge-check:** an inner piece of work fails — when does the rest of the outer transaction survive with `NESTED`, and what happens to already-committed `REQUIRES_NEW` work if the outer transaction later rolls back? <details><summary>answer</summary>`NESTED` rolls back only to its savepoint, so the outer transaction continues; `REQUIRES_NEW` work committed in its own independent transaction and **stays committed** regardless of the outer rollback (the audit-row demo).</details>
 
 ## 💼 Interview Prep: Questions You'll Be Asked
 
@@ -2534,6 +2574,8 @@ We keep a materialized `balance` *and* an append-only ledger. The alternative is
 3. **Force a deadlock, then fix it.** Temporarily lock in transfer-direction order (from-then-to) and run A→B and B→A concurrently — observe a Postgres deadlock (`40P01`); restore the ordered locking. *(Reference: `solutions/step-12/`.)*
 4. **Stretch — multi-account conservation.** Open 5 accounts and run hundreds of random transfers concurrently (pessimistic); assert `totalSystemBalance` is constant and `ledgerNet == 0` throughout.
 5. **Stretch — expand-contract.** Add a `status` column to `account` via a safe additive migration (Step 10's fast default), backfill, and switch a read to it — the pattern you'll automate in Step 38.
+
+✋ **Stopping here?** You have the interview answers rehearsed and any Your-Turn challenges committed. Next: F · 🏆 Review (~1h); first action: skim the 🩺 troubleshooting table, then the recap + flashcards.
 
 ---
 

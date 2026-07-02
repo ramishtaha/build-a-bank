@@ -13,14 +13,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | what threat modeling is · STRIDE · trust boundaries & DFDs · OWASP Top 10 / API Top 10 · BOLA · how headers/CORS/parameterized queries *actually* work |
-| **C** | [🛠️ Build](#build) | **11 sub-steps**: write the threat model (assets → DFD → STRIDE → attack trees → OWASP → capstone) · the risk register · harden the edge (headers + deny-by-default CORS) · the hardening test · the injection-safety test · ADR + harness |
-| **D** | [🔬 Prove](#prove) | the Verification Log — real test runs, the live CORS-403, the §12.3 mutation, smoke.sh, and a fresh re-run today |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges (incl. the Phase-C capstone) |
-| **F** | [🏆 Review](#review) | troubleshooting (the CORS two-beans gotcha) · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~Time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~30 min |
+| **B** | [🧠 Understand](#understand) | what threat modeling is · STRIDE · trust boundaries & DFDs · OWASP Top 10 / API Top 10 · BOLA · how headers/CORS/parameterized queries *actually* work | ~1.5 h |
+| **C** | [🛠️ Build](#build) | **11 sub-steps**: write the threat model (assets → DFD → STRIDE → attack trees → OWASP → capstone) · the risk register · harden the edge (headers + deny-by-default CORS) · the hardening test · the injection-safety test · ADR + harness | ~8 h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — real test runs, the live CORS-403, the §12.3 mutation, smoke.sh, and a fresh re-run today | ~1 h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges (incl. the Phase-C capstone) | ~2.5 h |
+| **F** | [🏆 Review](#review) | troubleshooting (the CORS two-beans gotcha) · resources · recap, flashcards & what's next | ~30 min |
 
 ---
 
@@ -114,6 +114,23 @@ A bank that passes every functional test can still be trivially robbed if any au
 
 > **Depends on:** Steps **17, 14, 13, 8/10**. **+ Docker.**
 
+## 🗓️ Session Plan
+
+≈14 hours does **not** mean one heroic weekend. Six sittings, each ending at a real save point (a ✋ checkpoint or section boundary):
+
+| Sitting | What you do | ~Time | Ends at |
+|---|---|---|---|
+| **S1 · Frame it** | A 🧭 Orient + B 🧠 Understand (STRIDE, trust boundaries, BOLA, how headers/CORS/parameterization work) | ~2 h | the B→C bridge diagram |
+| **S2 · Model it** | Sub-steps 1–3: assets + DFD + trust boundaries (§1–2), STRIDE-per-element (§3), attack trees (§4) | ~2.5 h | Sub-step 3 ✋ checkpoint |
+| **S3 · Finish the model** | Sub-steps 4–6: OWASP ×2 walkthrough (§5–6), capstone + secure-defaults checklist (§7–8), the risk register (R-001) | ~2.5 h | Sub-step 6 ✋ checkpoint |
+| **S4 · Harden & prove the edge** | Sub-steps 7–9: security headers, deny-by-default CORS, `SecurityHardeningTest` + the §12.3 mutation | ~2.5 h | Sub-step 9 ✋ checkpoint + commit |
+| **S5 · Injection proof & close the build** | Sub-steps 10–11 (`SqlInjectionSafetyTest`, ADR-0010 + harness) + 🎮 Play With It + D 🔬 Verification Log | ~2 h | 🏁 commit & tag `step-18-end` |
+| **S6 · Apply & close Phase C** | E 🎓 go-deeper + interview prep + Phase-C capstone · F 🏆 recap | ~2.5 h | 🎉 end of Phase C |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can compress the whole step to a ~3 h skim; the four 🚀 Go Deeper asides are +~5 min each; the ⌨️ type-it-yourself in sub-step 10 is +~10 min; Your Turn quick challenges are +~15–30 min each; the capstone's BOLA-fix stretch adds ~2–3 h on top of S6.
+
+> 🔋 **Stopping here?** You have the map: what this step builds, why, and the six-sitting plan. Next: B 🧠 Understand (STRIDE, trust boundaries, BOLA); first action: read "The Big Idea" just below.
+
 ---
 
 <a id="understand"></a>
@@ -189,6 +206,8 @@ flowchart LR
 
 - **CSRF and why ours stays off.** Cross-Site Request Forgery rides **ambient credentials** — cookies the browser attaches automatically. Our APIs use Bearer tokens the client must attach explicitly, so there is no ambient credential to forge with. We disable CSRF **deliberately and documentedly** (it's in the secure-defaults checklist) — and the model notes it must come back the moment any cookie-based auth appears.
 
+❓ **Knowledge-check:** with the CORS allow-list empty (deny-by-default), our existing server-to-server integration tests still pass — why doesn't locking down CORS break them? <details><summary>Answer</summary>Non-browser clients (HttpClient, curl, other servers) send no `Origin` header, so the `CorsFilter` never engages — CORS is a browser mechanism, not an access control; the JWT remains the real gate.</details>
+
 ## 🛡️ Security Lens: BOLA, the #1 API risk — and it's in our code
 
 **Broken Object Level Authorization** (OWASP API1:2023; the classic name is IDOR — Insecure Direct Object Reference) is when an endpoint takes an object identifier from the request and acts on it **without checking the caller is entitled to that object**. Look at our v1 transfer handler as it exists right now (from `TransferController`, unchanged this step):
@@ -221,6 +240,8 @@ public ResponseEntity<TransferResponse> transferV1(
 ## 🧵 Thread-safety note
 
 Everything this step adds is **shared, immutable state** — the safe kind. The `SecurityFilterChain`, the `HeaderWriterFilter`'s writer list, and the `CorsConfiguration` inside our `corsConfigurationSource` bean are all built **once** at startup and then only *read* by every request thread; no request mutates them. That's the standard Spring pattern from Step 11's rules: share immutable objects freely, confine mutable ones. (Contrast the `SecurityContextHolder`, which *is* per-request mutable state — it's safe because it's `ThreadLocal`-confined, one context per request thread.)
+
+> 🔋 **Stopping here?** You have the theory: STRIDE, trust boundaries, BOLA, and how headers/CORS/parameterized queries actually work. Next: C 🛠️ sub-step 1 (threat model §1–2 — assets, DFD, trust boundaries); first action: create `security/threat-model.md`.
 
 ---
 
@@ -292,7 +313,7 @@ docker OK
 
 ---
 
-### Sub-step 1 of 11 — Threat model §1–2: assets, the DFD & trust boundaries 🧭 *(you are here: **model the system** → STRIDE → trees → OWASP → register → harden → test → prove)*
+### Sub-step 1 of 11 — Threat model §1–2: assets, the DFD & trust boundaries · ⏱️ ~45 min 🧭 *(you are here: **model the system** → STRIDE → trees → OWASP → register → harden → test → prove)*
 
 🎯 **Goal:** answer Shostack question #1 — *what are we building?* — precisely enough to attack it on paper: the element inventory, the assets ranked by value, the data-flow diagram, and the five trust boundaries. This is *thinking made durable*.
 
@@ -432,7 +453,7 @@ git commit -m "docs(security): threat model — system, assets, DFD, trust bound
 
 ---
 
-### Sub-step 2 of 11 — Threat model §3: STRIDE-per-element 🧭 *(model ✅ → **STRIDE tables** → trees → OWASP → register …)*
+### Sub-step 2 of 11 — Threat model §3: STRIDE-per-element · ⏱️ ~1 h 🧭 *(model ✅ → **STRIDE tables** → trees → OWASP → register …)*
 
 🎯 **Goal:** answer Shostack question #2 — *what can go wrong?* — by interrogating every element with all six STRIDE letters and recording an honest status for each: ✅ mitigated, 🟡 partial, 🔴 **open**.
 
@@ -556,7 +577,7 @@ git commit -m "docs(security): STRIDE-per-element tables for all six elements"
 
 ---
 
-### Sub-step 3 of 11 — Threat model §4: attack trees 🧭 *(STRIDE ✅ → **attack trees** → OWASP → register …)*
+### Sub-step 3 of 11 — Threat model §4: attack trees · ⏱️ ~45 min 🧭 *(STRIDE ✅ → **attack trees** → OWASP → register …)*
 
 🎯 **Goal:** complement STRIDE's *breadth* with goal-first *depth*: for the two crown-jewel attacker goals — steal money, forge a webhook — enumerate every path and mark each closed (❌/✅) or open (🔴/🟡).
 
@@ -634,6 +655,8 @@ grep -n 'OPEN (R-001 BOLA)' security/threat-model.md
 
 ✋ **Checkpoint:** both trees render (preview the Mermaid), every leaf carries a verdict, and the money tree has exactly **one** 🔴 leaf.
 
+> 🔋 **Stopping here?** You have `threat-model.md` through §4 — assets, DFD + trust boundaries, six STRIDE tables, two attack trees — committed. Next: Sub-step 4 of 11 (the OWASP Top 10 ×2 walkthrough); first action: reopen `security/threat-model.md` and append §5.
+
 💾 **Commit:**
 
 ```bash
@@ -645,7 +668,7 @@ git commit -m "docs(security): attack trees — steal-money and forge-webhook go
 
 ---
 
-### Sub-step 4 of 11 — Threat model §5–6: the OWASP Top 10 ×2 walkthrough 🧭 *(trees ✅ → **OWASP lenses** → capstone → register …)*
+### Sub-step 4 of 11 — Threat model §5–6: the OWASP Top 10 ×2 walkthrough · ⏱️ ~45 min 🧭 *(trees ✅ → **OWASP lenses** → capstone → register …)*
 
 🎯 **Goal:** audit the bank against the industry's two standard checklists — the **OWASP Top 10 (2021)** for web apps and the **OWASP API Security Top 10 (2023)** for APIs — one honest row per category, each citing our actual code or our actual gap.
 
@@ -726,7 +749,7 @@ git commit -m "docs(security): OWASP Top 10 (2021) + API Security Top 10 (2023) 
 
 ---
 
-### Sub-step 5 of 11 — Threat model §7–8: the Phase-C capstone walk + secure-defaults checklist 🧭 *(OWASP ✅ → **capstone & checklist** → register → harden …)*
+### Sub-step 5 of 11 — Threat model §7–8: the Phase-C capstone walk + secure-defaults checklist · ⏱️ ~45 min 🧭 *(OWASP ✅ → **capstone & checklist** → register → harden …)*
 
 🎯 **Goal:** finish the model with the 🎓 **Phase-C capstone** — STRIDE applied end-to-end to **one feature** (the v1 transfer), element by element along its data flow — and the **secure-defaults checklist** that says, in one screen, what this bank ships by default.
 
@@ -823,7 +846,7 @@ git commit -m "docs(security): capstone STRIDE of v1 transfer + secure-defaults 
 
 ---
 
-### Sub-step 6 of 11 — The risk register (`security/risk-register.md`) 🧭 *(model ✅ → **risk register** → harden → test → prove)*
+### Sub-step 6 of 11 — The risk register (`security/risk-register.md`) · ⏱️ ~45 min 🧭 *(model ✅ → **risk register** → harden → test → prove)*
 
 🎯 **Goal:** answer Shostack question #3 — *what are we going to do about it?* — by turning every open finding into a numbered, severity-ranked, **owned** entry with a concrete fix and a scheduled home. This file is the difference between "we found a bug" and "we manage risk."
 
@@ -947,7 +970,11 @@ grep -n '^### R-' security/risk-register.md
 61:### R-006 · No dependency / container vulnerability scanning gate — 🟡 MEDIUM · OPEN
 ```
 
+❓ **Knowledge-check:** why does this step *record* the critical BOLA finding in the risk register instead of shipping a quick fix alongside the headers and CORS? <details><summary>Answer</summary>A correct fix needs a full ownership model (Flyway migration for `owner_subject`, service-layer enforcement on every money/read path, reworked fixtures) — a half-enforced authz fix manufactures false confidence. Cheap, complete fixes ship now; deep ones get recorded with severity, owner, and a scheduled step. You never pretend an open risk is closed.</details>
+
 ✋ **Checkpoint:** the register's top item is **R-001 BOLA, CRITICAL**, with a concrete fix and an owning step; all six open entries have owners; the closed table cites proofs.
+
+> 🔋 **Stopping here?** You have the complete model + register on disk — the step's *thinking* half is done. Next: Sub-step 7 of 11 (security headers); first action: open `services/demand-account/src/main/java/com/buildabank/account/web/SecurityConfig.java`.
 
 💾 **Commit:**
 
@@ -960,7 +987,7 @@ git commit -m "docs(security): risk register — R-001..R-006 open (BOLA critica
 
 ---
 
-### Sub-step 7 of 11 — Harden the edge: security headers (`SecurityConfig.java`) 🧭 *(register ✅ → **headers** → CORS → hardening test …)*
+### Sub-step 7 of 11 — Harden the edge: security headers (`SecurityConfig.java`) · ⏱️ ~30 min 🧭 *(register ✅ → **headers** → CORS → hardening test …)*
 
 🎯 **Goal:** ship the first cheap, complete fix the model called for (A05 Security Misconfiguration): make demand-account emit **explicit secure response headers** on every response.
 
@@ -1041,7 +1068,7 @@ git commit -m "feat(demand-account): explicit secure response headers (nosniff, 
 
 ---
 
-### Sub-step 8 of 11 — Harden the edge: deny-by-default CORS 🧭 *(headers ✅ → **CORS** → hardening test → injection test …)*
+### Sub-step 8 of 11 — Harden the edge: deny-by-default CORS · ⏱️ ~45 min 🧭 *(headers ✅ → **CORS** → hardening test → injection test …)*
 
 🎯 **Goal:** no browser origin may call us unless explicitly allow-listed — an **empty-by-default** allow-list wired from configuration, so adding the React app later (Step 29) is one env var, not a code change.
 
@@ -1220,6 +1247,8 @@ public class SecurityConfig {
 
 ✋ **Checkpoint:** the file matches the listing above; `application.yml` has the `app.security.cors.allowed-origins` block; the module still compiles.
 
+> 🔋 **Stopping here?** You have the hardened `SecurityConfig` (headers + deny-by-default CORS) compiling and committed — but nothing proves it yet. Next: Sub-step 9 of 11 (the hardening test); first action: create `services/demand-account/src/test/java/com/buildabank/account/web/SecurityHardeningTest.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -1232,7 +1261,7 @@ git commit -m "feat(demand-account): deny-by-default CORS (config-driven allow-l
 
 ---
 
-### Sub-step 9 of 11 — Test the hardening (`SecurityHardeningTest`) 🧭 *(hardening ✅ → **prove it with a slice test** → injection test → harness)*
+### Sub-step 9 of 11 — Test the hardening (`SecurityHardeningTest`) · ⏱️ ~1 h 🧭 *(hardening ✅ → **prove it with a slice test** → injection test → harness)*
 
 🎯 **Goal:** prove all three properties with a fast web-slice test: ① the headers appear on responses, ② a preflight from an un-listed origin is rejected with 403 and **no** ACAO header, ③ authentication is still the real gate (401 without a token).
 
@@ -1389,6 +1418,8 @@ The evil origin is now reflected (`Access-Control-Allow-Origin:"*"` appears in t
 
 ✋ **Checkpoint:** 3/3 green; the mutation made exactly one test fail and you reverted it.
 
+> 🔋 **Stopping here?** You have the hardening plus a green, mutation-checked 3-test proof committed. Next: Sub-step 10 of 11 (injection-safety on cif); first action: start Docker, then create `services/cif/src/test/java/com/buildabank/cif/domain/SqlInjectionSafetyTest.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -1400,13 +1431,13 @@ git commit -m "test(demand-account): prove security headers + deny-by-default CO
 
 ---
 
-### Sub-step 10 of 11 — Prove injection-safety with a contrast (`SqlInjectionSafetyTest`) 🧭 *(hardening test ✅ → **injection test** → harness & ADR)*
+### Sub-step 10 of 11 — Prove injection-safety with a contrast (`SqlInjectionSafetyTest`) · ⏱️ ~45 min 🧭 *(hardening test ✅ → **injection test** → harness & ADR)*
 
 🎯 **Goal:** prove cif's queries are parameterized (injection-safe) against a **real Postgres** — and prove the proof has teeth by running the *same payload* through a deliberately vulnerable concatenated query and watching it succeed there.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/domain/SqlInjectionSafetyTest.java`
 
-⌨️ **Type-it-yourself first:** before reading the file — you know `@DataJpaTest`, `ContainersConfig`, and `CustomerRepository` from Step 8. Try writing just the *first* test: seed one customer, call `findByCustomerNumber("' OR '1'='1")`, assert empty. Then compare below.
+⌨️ **Type-it-yourself first (+~10 min):** before reading the file — you know `@DataJpaTest`, `ContainersConfig`, and `CustomerRepository` from Step 8. Try writing just the *first* test: seed one customer, call `findByCustomerNumber("' OR '1'='1")`, assert empty. Then compare below.
 
 ⌨️ **Code** — the complete file:
 
@@ -1564,7 +1595,7 @@ git commit -m "test(cif): prove parameterized queries are injection-safe (with v
 
 ---
 
-### Sub-step 11 of 11 — ADR-0010 + the play/verify harness 🧭 *(everything built → **record the decision & wire the proof**)*
+### Sub-step 11 of 11 — ADR-0010 + the play/verify harness · ⏱️ ~45 min 🧭 *(everything built → **record the decision & wire the proof**)*
 
 🎯 **Goal:** record *why* we hardened what we hardened and deferred what we deferred (ADR-0010), and ship the step's hands-on harness: `requests.http`, `smoke.sh`, and `make play-18`.
 
@@ -1843,7 +1874,7 @@ curl -i -X OPTIONS http://localhost:8082/api/v1/transfers \
 #   → HTTP/1.1 403 ... (no Access-Control-Allow-Origin)
 ```
 
-🧪 **Little experiments:**
+🧪 **Little experiments (+~15 min):**
 
 - **Open the door for one origin:** set `APP_CORS_ALLOWED_ORIGINS=http://localhost:5173`, restart demand-account, re-run the preflight with `Origin: http://localhost:5173` → now allowed (`Access-Control-Allow-Origin` present). Re-run with `https://evil.example` → still 403. One env var, surgical allow-list.
 - **Feel the BOLA (R-001) live:** log in as `alice`, open `ACC-A` and `ACC-B`, then `GET /api/accounts/ACC-B` with alice's token → **200** 😱 even though "alice" never owned anything. That's the #1 finding running in your own bank — now read R-001's fix and you'll see exactly why it needs its own step.
@@ -1863,6 +1894,8 @@ curl -i -X OPTIONS http://localhost:8082/api/v1/transfers \
 - [ ] `bash steps/step-18/smoke.sh` prints `✅ Step 18 smoke test PASSED`.
 - [ ] The §12.3 mutation (`setAllowedOrigins(["*"])`) fails exactly one test, and you reverted it.
 - [ ] You've committed and tagged `step-18-end`.
+
+> 🔋 **Stopping here?** You have the whole build green, committed, and tagged `step-18-end` — model, register, hardening, six new tests, ADR, harness. Next: D 🔬 the Verification Log (read the evidence, then reproduce it); first action: `bash steps/step-18/smoke.sh`.
 
 ---
 
@@ -1935,26 +1968,26 @@ And `bash steps/step-18/smoke.sh` re-run live the same day → all three gates �
 
 # E · 🎓 Apply
 
-## 🚀 Go Deeper (Optional)
+## 🚀 Go Deeper (Optional · +~20 min total)
 
-<details><summary>Why CORS is not a security control</summary>
+<details><summary>Why CORS is not a security control (+~5 min)</summary>
 
 CORS only constrains *browsers* (they honor the preflight). curl, Postman, and other servers ignore it entirely. So a locked-down CORS policy prevents a malicious *website* from scripting your API in a victim's browser, but does nothing against a direct attacker. Your real access control is the JWT + (eventually) object-level authz. Treat CORS as one layer, never *the* layer.
 
 Corollary worth internalizing: the *dangerous* direction is the opposite one — a **too-permissive** CORS policy (`*`, or worse, reflecting any `Origin` with `Allow-Credentials: true`) actively *donates* your users' authenticated sessions to any website they visit. Deny-by-default costs you nothing (server-to-server traffic has no `Origin`) and removes that whole class.
 </details>
 
-<details><summary>STRIDE per element vs attack trees</summary>
+<details><summary>STRIDE per element vs attack trees (+~5 min)</summary>
 
 STRIDE-per-element is *breadth* — it sweeps every box/arrow for all six categories so you don't forget a class of bug. Attack trees are *depth* — pick one attacker goal ("move funds out") and enumerate the paths, marking which are closed. Use both: STRIDE to find candidate issues, an attack tree to reason about whether a specific crown-jewel goal is reachable. (Our "steal money" tree shows every branch closed *except* BOLA.)
 </details>
 
-<details><summary>Why the fix for BOLA is a *data model* change, not an annotation</summary>
+<details><summary>Why the fix for BOLA is a *data model* change, not an annotation (+~5 min)</summary>
 
 It's tempting to think `@PreAuthorize` solves BOLA the way it solved the admin endpoint. It can't, by itself: `hasRole('ADMIN')` is a fact about the *caller*; "owns ACC-A" is a fact about the *caller × object pair* — and today the `account` table has no owner column, so there is nothing to check against. That's why R-001's specified fix starts with a Flyway migration (`owner_subject`), then sets it at open time from `jwt.getSubject()`, and only *then* can an enforcement point (`@PreAuthorize("@accountGuard.owns(#from, authentication)")`-style SpEL, or a plain service-layer check) exist. General rule: **function-level authz is annotation-shaped; object-level authz is schema-shaped.**
 </details>
 
-<details><summary>Where threat modeling lives in a real team's lifecycle</summary>
+<details><summary>Where threat modeling lives in a real team's lifecycle (+~5 min)</summary>
 
 The model you wrote is a *point-in-time* artifact with a re-review trigger ("when Phase D adds Kafka"). Mature teams wire it deeper: a "security-relevant change?" checkbox in the PR template (touching authz, parsers, crypto, new external input → update the model), lightweight per-feature STRIDE in design docs (exactly your §7 capstone), and CI gates for the mechanical parts (dependency scanning — our Step 40). The model finds *design* flaws; the gates catch *regression* flaws; the register keeps both honest. None of the three replaces the other two.
 </details>
@@ -1973,10 +2006,12 @@ The model you wrote is a *point-in-time* artifact with a re-review trigger ("whe
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-- **Quick:** add a `Permissions-Policy` header; assert it in `SecurityHardeningTest`. <details><summary>Hint</summary>Spring Security 6+ doesn't have a dedicated DSL method for it on all versions — use `.headers(h -> h.addHeaderWriter(new StaticHeadersWriter("Permissions-Policy", "geolocation=()")))`, then `header().string("Permissions-Policy", "geolocation=()")` in the test.</details>
-- **Quick:** STRIDE one element we *didn't* table in §3 — the **Maven build itself** (inputs: dependencies; output: the artifact). <details><summary>Sketch</summary>S: typosquatted dependency; T: compromised dependency (supply chain → A08, R-006); R: unsigned artifacts; I: secrets baked into the jar; D: registry outage; E: build plugin runs arbitrary code. Two are already tracked: R-006 (scanning gate, Step 40) and pinned versions (`VERSIONS.md`).</details>
-- **Quick:** make cif a resource server too (close **R-002**) — reuse Step 17's `jwk-set-uri` config and a slice test.
-- 🎓 **Phase-C Capstone — STRIDE one feature end-to-end + secure it.** Take the **v1 transfer** and walk every element of its data flow with STRIDE (client→gateway→controller→service→DB→webhook), as in `security/threat-model.md §7`. Then **implement the BOLA fix (R-001)** as a stretch reference solution: add `owner_subject` to `account` (Flyway migration), set it from `jwt.getSubject()` on open, enforce ownership on `transfer`/`balance`/`entries` (non-owner → 403, admin override), and add tests (owner 200 / non-owner 403 / admin 200). Reference solution lives in `solutions/step-18/` (or the `solutions` branch). *This is the real capstone — you'll have threat-modeled a feature and closed the system's #1 risk.*
+- **Quick (+~20 min):** add a `Permissions-Policy` header; assert it in `SecurityHardeningTest`. <details><summary>Hint</summary>Spring Security 6+ doesn't have a dedicated DSL method for it on all versions — use `.headers(h -> h.addHeaderWriter(new StaticHeadersWriter("Permissions-Policy", "geolocation=()")))`, then `header().string("Permissions-Policy", "geolocation=()")` in the test.</details>
+- **Quick (+~15 min):** STRIDE one element we *didn't* table in §3 — the **Maven build itself** (inputs: dependencies; output: the artifact). <details><summary>Sketch</summary>S: typosquatted dependency; T: compromised dependency (supply chain → A08, R-006); R: unsigned artifacts; I: secrets baked into the jar; D: registry outage; E: build plugin runs arbitrary code. Two are already tracked: R-006 (scanning gate, Step 40) and pinned versions (`VERSIONS.md`).</details>
+- **Quick (+~30 min):** make cif a resource server too (close **R-002**) — reuse Step 17's `jwk-set-uri` config and a slice test.
+- 🎓 **Phase-C Capstone (~2 h · BOLA-fix stretch +~2–3 h) — STRIDE one feature end-to-end + secure it.** Take the **v1 transfer** and walk every element of its data flow with STRIDE (client→gateway→controller→service→DB→webhook), as in `security/threat-model.md §7`. Then **implement the BOLA fix (R-001)** as a stretch reference solution: add `owner_subject` to `account` (Flyway migration), set it from `jwt.getSubject()` on open, enforce ownership on `transfer`/`balance`/`entries` (non-owner → 403, admin override), and add tests (owner 200 / non-owner 403 / admin 200). Reference solution lives in `solutions/step-18/` (or the `solutions` branch). *This is the real capstone — you'll have threat-modeled a feature and closed the system's #1 risk.*
+
+> 🔋 **Stopping here?** You have the Apply work — go-deeper asides, interview answers, and (if you took it) the Phase-C capstone. Next: F 🏆 Review (troubleshooting, recap, flashcards); first action: skim the 🩺 troubleshooting list below.
 
 ---
 

@@ -11,14 +11,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | versioning · idempotency · pagination · webhook signing/delivery |
-| **C** | [🛠️ Build](#build) | versioned + idempotent transfers, paginated entries, signed outbound webhooks |
-| **D** | [🔬 Prove](#prove) | the Verification Log — 25 tests, idempotent retry, signed delivery + replay, §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~0.5h |
+| **B** | [🧠 Understand](#understand) | versioning · idempotency · pagination · webhook signing/delivery | ~2.5h |
+| **C** | [🛠️ Build](#build) | versioned + idempotent transfers, paginated entries, signed outbound webhooks | ~13h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — 25 tests, idempotent retry, signed delivery + replay, §12.3 mutation | ~1h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~2h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~1h |
 
 ---
 
@@ -113,6 +113,25 @@ Money APIs live or die on three properties this step builds. **Idempotency** is 
 
 > **Depends on: Steps 13, 12, 10.**
 
+## 🗓️ Session Plan
+
+≈20 hours won't fit one sitting. Eight sittings of ~2–3h, each ending at a real ✋ checkpoint or commit — stop at the end of any sitting and you resume clean:
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| **S1 · The contract** | A · Orient + B · Understand (Big Idea → Thread-safety note) | ~3h | the B/C boundary — nothing typed yet |
+| **S2 · Key store + idempotent service** | Sub-steps 0–1 (V2 migration, `IdempotencyRecord` + repository, `IdempotentTransferService`) | ~2.5h | sub-step 1's ✋ checkpoint + commit |
+| **S3 · Pagination + envelopes** | Sub-steps 2–3 (paged finder, `entriesOf`, `PageResponse`, `LedgerEntryResponse`) | ~2h | sub-step 3's ✋ checkpoint — pagination complete end-to-end |
+| **S4 · The signer** | Sub-step 4 (`WebhookSigner` + `WebhookSignerTest`) | ~2.5h | sub-step 4's ✋ checkpoint — 4 green webhook tests |
+| **S5 · Sender + publisher** | Sub-steps 5–6 (`WebhookSender` retries + `WebhookDeliveryTest`, config-gated `WebhookPublisher`) | ~2.5h | sub-step 6's ✋ checkpoint — the webhook trio complete, 6 tests |
+| **S6 · The v1 controller** | Sub-step 7 (`/api/v1` idempotent transfer + paginated entries + deprecation headers) | ~2h | sub-step 7's ✋ checkpoint + commit |
+| **S7 · Tests + proof** | Sub-step 8 (`IdempotencyTest`, slice + integration edits, ADR-0006) + 🎮 Play With It + D · Prove | ~2.5h | ✅ Definition of Done · 25 green tests |
+| **S8 · Apply + Review** | E · Apply (go deeper, interview prep, challenges) + F · Review | ~3h | flashcards + sign-off |
+
+*Optional routes:* the ⏭️ skip-test above costs ~5 min (experienced API designers who pass it can compress S1–S7 to ~4h); each 🚀 Go Deeper aside is +~10 min; sub-step 7's live curl Run & See and 🎮 Play With It's live webhook demo are +~10 min each; each 🏋️ Your Turn challenge is +~20–40 min.
+
+✋ Stopping here? You have the step's map — effort (≈20h), prerequisites, and the sitting plan. Next: B · Understand (🧠 The Big Idea); first action: `docker info` (confirm Docker is up for later sittings), then read `## 🧠 The Big Idea`.
+
 ---
 
 <a id="understand"></a>
@@ -158,17 +177,21 @@ flowchart LR
 
 > **Implementation (here).** `IdempotencyRecord` (key PK), `IdempotentTransferService` (lookup-or-execute-and-store in one transaction), and `POST /api/v1/transfers` reading the `Idempotency-Key` header. `IdempotencyTest` proves a retry moves money once.
 
+❓ **Quick check:** the service does a lookup before executing — so why is the PRIMARY KEY (not the lookup) the real concurrency guard? <details><summary>answer</summary>Two racing duplicates can *both* miss the lookup (neither has committed yet). Only the PK's uniqueness stops the second insert — one commits, the other's whole transaction rolls back.</details>
+
 ## 🌱 Under the Hood: How It Really Works
 
-**Versioning & deprecation headers.** `/api/v1/...` is just a path prefix mapped by `@RequestMapping`. Deprecation uses standard headers (RFC 8594): `Deprecation: true` (it's deprecated), `Sunset: <HTTP-date>` (when it'll be removed), and a `Link: </api/v1/transfers>; rel="successor-version"` pointing at the replacement. Clients (and gateways, Step 15) can detect these and warn/migrate. You keep the old endpoint working until the sunset date — **never** a flag-day break.
+**Versioning & deprecation headers.** `/api/v1/...` is just a path prefix mapped by `@RequestMapping`. Deprecation uses standard headers: `Sunset: <HTTP-date>` (**RFC 8594** — when it'll be removed), `Deprecation` (**RFC 9745**, 2025 — it's deprecated; the standardized value is a structured-field date like `Deprecation: @1761955199`, while `Deprecation: true` is the older draft form still widely seen in the wild — and what our code sends, since most tooling recognizes it), and a `Link: </api/v1/transfers>; rel="successor-version"` pointing at the replacement. Clients (and gateways, Step 15) can detect these and warn/migrate. You keep the old endpoint working until the sunset date — **never** a flag-day break.
 
-**Idempotency under concurrency.** Our `IdempotentTransferService.transfer(...)` runs `@Transactional`: it joins (REQUIRED) the transfer's transaction, so the key-insert and the transfer commit **atomically**. Sequential retry (the common case — client retries after a timeout): the second call finds the stored record and returns its `transactionId` with no re-execution. Concurrent duplicates (both miss the lookup): both attempt the transfer + key-insert in **separate** transactions; the PRIMARY KEY lets only one commit — the other gets a unique-constraint violation and its transaction rolls back entirely (no double transfer). The DB is the coordination point (as in Step 12's pessimistic lock).
+**Idempotency under concurrency.** Our `IdempotentTransferService.transfer(...)` runs `@Transactional`: it joins (REQUIRED) the transfer's transaction, so the key-insert and the transfer commit **atomically**. Sequential retry (the common case — client retries after a timeout): the second call finds the stored record and returns its `transactionId` with no re-execution. Concurrent duplicates (both miss the lookup): both attempt the transfer + key-insert in **separate** transactions; the PRIMARY KEY lets only one commit — the other gets a unique-constraint violation and its transaction rolls back entirely (no double transfer). The DB is the coordination point (as in Step 12's pessimistic lock). One honest caveat: the **losing** client of a concurrent duplicate sees an **error** (an HTTP 500 here) — not the stored `transactionId`; its *next* retry then hits the stored key and gets the original result, so money still moves exactly once, but "a retry returns the stored result" only holds sequentially. Production hardening catches the violation, re-reads the key in a fresh transaction, and returns the stored `transactionId` (or a 409) — see 🚀 Go Deeper ②.
 
 **Pagination with Spring Data.** A controller parameter of type `Pageable` is bound from `?page=&size=&sort=field,dir` by Spring Data's `PageableHandlerMethodArgumentResolver` (auto-configured). The repository method `Page<LedgerEntry> findByAccountId(Long, Pageable)` runs a `LIMIT/OFFSET` query **plus** a `COUNT` for the total. We map the `Page` into our own **`PageResponse`** record — *not* serialize Spring Data's `Page` directly, whose JSON shape is an internal detail Spring explicitly warns against exposing (it even logs a warning). Owning the envelope means the API contract is ours.
 
 **Webhook signing (HMAC-SHA256).** A keyed hash: `signature = HMAC-SHA256(secret, timestamp + "." + body)`, hex-encoded. Only someone with the shared `secret` can produce a signature that matches a given `(timestamp, body)`. The receiver recomputes it and compares — in **constant time** (`MessageDigest.isEqual`) so an attacker can't learn, from response timing, how many leading bytes of a guessed signature were right. Including the **timestamp** in the signed material and rejecting timestamps outside a tolerance window (e.g. ±300s) gives **replay protection**: a captured-but-still-valid request can't be re-sent hours later. This is precisely Stripe's/GitHub's webhook scheme.
 
 **Delivery is at-least-once.** Networks and receivers fail, so `WebhookSender` **retries** (bounded, with backoff). That means a receiver might get the **same event twice** → receivers must be **idempotent** (dedupe by event id). We send *after* the DB transaction commits — which exposes the **dual-write problem**: if the commit succeeds but the send permanently fails, the partner never hears; if we sent inside the transaction and the transaction rolled back, we'd have lied. The correct fix is the **Outbox pattern** (persist the event in the same transaction as the transfer; a separate process delivers it) — that's **Step 20**. We flag this honestly rather than pretend a direct send is complete.
+
+❓ **Quick check:** your retry logic works perfectly — so why must the *partner* still dedupe by event id? <details><summary>answer</summary>A retry can fire after the partner processed the event but before their 200 reached you (lost response). At-least-once delivery means duplicates are possible even when nothing is buggy.</details>
 
 **Spring Boot 4 & Jackson (a real gotcha).** Boot 4's web stack defaults to **Jackson 3** (package `tools.jackson`), so a Jackson-2 `com.fasterxml.jackson.databind.ObjectMapper` **bean** isn't auto-created — injecting one fails (the class is still on the classpath, so code compiles, then the context fails to start). Our `WebhookPublisher` therefore **owns** a `new ObjectMapper()` instead of injecting one. (See 🩺.)
 
@@ -187,14 +210,16 @@ flowchart LR
 | **Idempotency** | Ad-hoc dedupe, or none (double-charges). | Standard **`Idempotency-Key`** header + key store (Stripe-style). | A documented, client-driven contract for safe retries. |
 | **Webhook auth** | Shared secret in the URL / no verification. | **HMAC signature + timestamp** (replay window), constant-time verify. | URL secrets leak in logs; signatures prove authenticity + integrity + freshness. |
 | **Pagination** | Return everything, or leak the ORM `Page` object. | `Pageable` + a **stable DTO envelope**; Spring warns against exposing `Page`. | Bounded responses + a contract the API owns. |
-| **API docs/versioning tooling** | springfox + URI versioning by hand. | springdoc (Step 13) + explicit `/v1` + RFC 8594 deprecation headers. | Maintained tooling; standardized deprecation signaling. |
+| **API docs/versioning tooling** | springfox + URI versioning by hand. | springdoc (Step 13) + explicit `/v1` + RFC 8594 `Sunset` / RFC 9745 `Deprecation` headers. | Maintained tooling; standardized deprecation signaling. |
 
 > [!NOTE]
-> *Verify, don't guess.* `Deprecation`/`Sunset` are RFC 8594; the `Idempotency-Key` + HMAC-timestamp webhook scheme is the de-facto industry standard (Stripe). HMAC-SHA256 is `javax.crypto.Mac` (JDK). The Boot-4 Jackson-3 default (no Jackson-2 `ObjectMapper` bean) is a real change we hit and worked around (🩺). No new dependencies were added this step.
+> *Verify, don't guess.* `Sunset` is RFC 8594; `Deprecation` is RFC 9745 (2025 — its standardized value is an `@<unix-timestamp>` date; our code sends the widely-deployed legacy draft `true`). The `Idempotency-Key` + HMAC-timestamp webhook scheme is the de-facto industry standard (Stripe). HMAC-SHA256 is `javax.crypto.Mac` (JDK). The Boot-4 Jackson-3 default (no Jackson-2 `ObjectMapper` bean) is a real change we hit and worked around (🩺). No new dependencies were added this step.
 
 ## 🧵 Thread-safety note
 
 Two shared-state hazards here, both already in your toolkit. (1) **Concurrent duplicate idempotency keys** — resolved at the database by the key's **PRIMARY KEY** (Step 10's unique constraint + Step 12's "the DB is the coordination point"): only one of two racing duplicates can commit. (2) The webhook components (`WebhookSigner`/`WebhookSender`/`WebhookPublisher`) are **singletons** with **no mutable state** — the signer is pure, the sender holds only an immutable `HttpClient` (itself thread-safe), so they're safe to share across request threads (Step 11's "stateless singletons" rule). Per-request data (timestamp, body) is passed as arguments, never stored in fields.
+
+✋ Stopping here? You have the four contracts in your head — versioning, idempotency, pagination, signed webhooks — nothing typed yet (end of sitting S1). Next: C · Build, sub-step 0 (the idempotency key store); first action: `./mvnw -q -pl services/demand-account -am verify` to confirm the 13-test start, then create `services/demand-account/src/main/resources/db/migration/V2__idempotency_keys.sql`.
 
 ---
 
@@ -297,7 +322,7 @@ steps/step-14/{requests.http, smoke.sh} · adr/0006-api-versioning-and-idempoten
 
 ---
 
-### Sub-step 0 of 8 — The idempotency key store 🧭 *(you are here: **key store** → idempotent service → pagination plumbing → envelopes → signer → sender → publisher → controller → tests)*
+### Sub-step 0 of 8 — The idempotency key store · ~1h 🧭 *(you are here: **key store** → idempotent service → pagination plumbing → envelopes → signer → sender → publisher → controller → tests)*
 
 🎯 **Goal:** give the database a place to remember `Idempotency-Key → transactionId`, so a retry can return the original result instead of moving money again. The PRIMARY KEY on the key is what makes this concurrency-safe.
 
@@ -463,7 +488,7 @@ git commit -m "feat(demand-account): IdempotencyRecord repository"
 
 ---
 
-### Sub-step 1 of 8 — `IdempotentTransferService` 🧭 *(key store ✅ → **idempotent service** → pagination plumbing → …)*
+### Sub-step 1 of 8 — `IdempotentTransferService` · ~1.5h 🧭 *(key store ✅ → **idempotent service** → pagination plumbing → …)*
 
 🎯 **Goal:** wrap the existing `TransferService.transfer` in a *lookup-or-execute-and-store* that runs in one transaction — the heart of "safe to retry".
 
@@ -549,9 +574,11 @@ git commit -m "feat(demand-account): idempotent transfer (Idempotency-Key lookup
 
 ⚠️ **Pitfall:** the short-circuit must happen **before** `transfers.transfer` is called. If you reorder it (execute, then check the key), the retry executes a second transfer before the lookup ever runs — a double-spend. The `return existing.get()…` line is load-bearing.
 
+✋ Stopping here? You have the key store (V2 migration + `IdempotencyRecord` + repository) and the lookup-or-execute `IdempotentTransferService` committed, compiling green (end of sitting S2). Next: sub-step 2 (pagination plumbing); first action: open `services/demand-account/src/main/java/com/buildabank/account/domain/LedgerEntryRepository.java` and add the paged finder.
+
 ---
 
-### Sub-step 2 of 8 — Pagination plumbing 🧭 *(idempotent service ✅ → **pagination plumbing** → envelopes → …)*
+### Sub-step 2 of 8 — Pagination plumbing · ~1h 🧭 *(idempotent service ✅ → **pagination plumbing** → envelopes → …)*
 
 🎯 **Goal:** add a *paged* finder to the ledger repository and a service method that maps an account number to its paged entries — so we can return one page of a long ledger instead of the whole thing.
 
@@ -645,7 +672,7 @@ git commit -m "feat(demand-account): TransferService.entriesOf paged by account 
 
 ---
 
-### Sub-step 3 of 8 — The envelopes we own: `PageResponse` + `LedgerEntryResponse` 🧭 *(pagination plumbing ✅ → **envelopes** → signer → …)*
+### Sub-step 3 of 8 — The envelopes we own: `PageResponse` + `LedgerEntryResponse` · ~1h 🧭 *(pagination plumbing ✅ → **envelopes** → signer → …)*
 
 🎯 **Goal:** define a **stable pagination envelope** the API owns (never Spring's `Page` JSON), plus the per-entry DTO it carries.
 
@@ -746,9 +773,11 @@ git commit -m "feat(demand-account): LedgerEntryResponse DTO for paged entries"
 
 ⚠️ **Pitfall:** if you map the entity but accidentally include a lazy association, Jackson triggers a fetch outside the (now-closed) session → `LazyInitializationException`. Keeping the DTO to scalar fields (as here) sidesteps it entirely.
 
+✋ Stopping here? You have pagination complete end-to-end — paged finder, `entriesOf(...)`, and the `PageResponse`/`LedgerEntryResponse` envelope — committed (end of sitting S3). Next: sub-step 4 (`WebhookSigner`); first action: create `services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookSigner.java`.
+
 ---
 
-### Sub-step 4 of 8 — `WebhookSigner` (HMAC + replay window) 🧭 *(envelopes ✅ → **signer** → sender → …)*
+### Sub-step 4 of 8 — `WebhookSigner` (HMAC + replay window) · ~2.5h 🧭 *(envelopes ✅ → **signer** → sender → …)*
 
 🎯 **Goal:** the cryptographic core — sign a payload with HMAC-SHA256 so a partner can verify it, and reject tampered, wrong-secret, or **replayed** deliveries. This is the security-critical piece of the step.
 
@@ -863,9 +892,11 @@ git commit -m "feat(demand-account): HMAC-SHA256 webhook signing + replay-window
 
 ⚠️ **Pitfall:** comparing signatures with `equals`/`==` is a real **timing-attack** vector — an attacker measures response time to brute-force the signature one byte at a time. Always `MessageDigest.isEqual`. (And never sign the body *without* the timestamp — you'd lose replay protection.)
 
+✋ Stopping here? You have a signing/verifying `WebhookSigner` with 4 green `WebhookSignerTest` tests committed (end of sitting S4). Next: sub-step 5 (`WebhookSender`); first action: create `services/demand-account/src/main/java/com/buildabank/account/webhook/WebhookSender.java`.
+
 ---
 
-### Sub-step 5 of 8 — `WebhookSender` (bounded retries) 🧭 *(signer ✅ → **sender** → publisher → …)*
+### Sub-step 5 of 8 — `WebhookSender` (bounded retries) · ~1.5h 🧭 *(signer ✅ → **sender** → publisher → …)*
 
 🎯 **Goal:** actually deliver the signed payload over HTTP, retrying a few times on failure — making delivery **at-least-once**.
 
@@ -999,7 +1030,7 @@ git commit -m "feat(demand-account): webhook sender with bounded retries (at-lea
 
 ---
 
-### Sub-step 6 of 8 — `WebhookPublisher` (builds the event, config-gated) 🧭 *(sender ✅ → **publisher** → controller → tests)*
+### Sub-step 6 of 8 — `WebhookPublisher` (builds the event, config-gated) · ~1h 🧭 *(sender ✅ → **publisher** → controller → tests)*
 
 🎯 **Goal:** turn a "transfer completed" into the event JSON and hand it to the sender — but **only if a webhook URL is configured**, so local runs and tests aren't affected.
 
@@ -1089,9 +1120,11 @@ git commit -m "feat(demand-account): config-gated transfer.completed webhook pub
 
 ⚠️ **Pitfall:** if you `@Autowired`/inject `com.fasterxml.jackson.databind.ObjectMapper` here, the app compiles (the class is on the classpath) but the **context fails to start** on Boot 4: `No qualifying bean of type 'ObjectMapper'`. Own the mapper, or use the Jackson-3 (`tools.jackson`) mapper bean. (🩺)
 
+✋ Stopping here? You have the complete webhook trio — signer, sender with bounded retries, config-gated publisher — committed, with 6 green webhook tests (end of sitting S5). Next: sub-step 7 (the `/api/v1` controller); first action: open `services/demand-account/src/main/java/com/buildabank/account/web/TransferController.java`.
+
 ---
 
-### Sub-step 7 of 8 — Controller: `/api/v1` + deprecate the old 🧭 *(publisher ✅ → **controller** → tests)*
+### Sub-step 7 of 8 — Controller: `/api/v1` + deprecate the old · ~2h 🧭 *(publisher ✅ → **controller** → tests)*
 
 🎯 **Goal:** wire it all together at the web layer — the versioned idempotent transfer (with webhook), the paginated entries, and the graceful deprecation of the old transfer.
 
@@ -1267,7 +1300,7 @@ public class TransferController {
 
 🔍 **Line-by-line (the new parts):**
 - **Constructor** now takes three collaborators — `TransferService` (the original), `IdempotentTransferService` (v1's transfer), and `WebhookPublisher`. All `final`, all constructor-injected.
-- **Deprecated `/api/transfers`** — unchanged behavior (still does a real transfer), but now returns via `ResponseEntity.ok().header(...).body(...)` with three RFC 8594 headers: `Deprecation: true` (it's deprecated), `Sunset: <HTTP-date>` (a fixed removal date in RFC 1123 format), and `Link: </api/v1/transfers>; rel="successor-version"` (the standard link relation pointing at the replacement). Note the escaped quotes `\"` inside the Java string.
+- **Deprecated `/api/transfers`** — unchanged behavior (still does a real transfer), but now returns via `ResponseEntity.ok().header(...).body(...)` with the three standard deprecation headers: `Deprecation: true` (it's deprecated), `Sunset: <HTTP-date>` (a fixed removal date in RFC 1123 format), and `Link: </api/v1/transfers>; rel="successor-version"` (the standard link relation pointing at the replacement). Note the escaped quotes `\"` inside the Java string. (The inline code comment says RFC 8594 — precisely, RFC 8594 defines `Sunset`; `Deprecation` is RFC 9745, whose standardized value is a date — `true` is the widely-deployed legacy draft form. See 🌱.)
 - **`@PostMapping("/api/v1/transfers")`** — the versioned endpoint, mapped purely by the URL prefix.
 - `@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey` — bind the request header into a parameter. **`required = false`** means a request without the header is fine (`idempotencyKey` is `null` → the service falls through to a plain transfer). Idempotency is opt-in.
 - `@Valid @RequestBody TransferRequest request` — same validated body as the old endpoint (so `@Positive` etc. still apply, returning a 400 Problem Detail on a bad amount).
@@ -1279,9 +1312,11 @@ public class TransferController {
 
 💭 **Under the hood:** the `Pageable` parameter is materialized by Spring Data's `PageableHandlerMethodArgumentResolver`, which Boot auto-registers when Spring Data web support is on the classpath. It reads `page`/`size`/`sort` from the query string (defaults from `@PageableDefault`), builds a `PageRequest`, and injects it. That resolver lives in the **full** application context — a point that matters for the slice test (sub-step 8).
 
+❓ **Quick check:** why is the webhook published from the *controller* rather than from inside the `@Transactional` service? <details><summary>answer</summary>So it fires only after the transfer's transaction has committed — publishing inside the transaction could announce a transfer that later rolls back. (The remaining gap — commit succeeds but the send fails — is the dual-write problem the Outbox pattern closes in Step 20.)</details>
+
 🔮 **Predict:** before you run it — `POST /api/v1/transfers` *without* an `Idempotency-Key`: does it succeed, and does it dedupe? <details><summary>answer</summary>It **succeeds** (header is optional) and does **not** dedupe — `idempotencyKey` is `null`, so `IdempotentTransferService` does a plain transfer. `IdempotencyTest.noKeyMeansNoDeduplication` proves two no-key calls both apply.</details>
 
-▶️ **Run & See** (live, optional — needs Docker + the service running):
+▶️ **Run & See** (live, optional, +~10 min — needs Docker + the service running):
 ```bash
 docker compose -f services/demand-account/compose.yaml up -d
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run
@@ -1305,9 +1340,11 @@ git commit -m "feat(demand-account): /api/v1 idempotent transfer + paginated ent
 
 ⚠️ **Pitfall:** adding two new constructor collaborators **breaks the `@WebMvcTest` slice** until you mock them — the slice only instantiates the controller, so `IdempotentTransferService` and `WebhookPublisher` must be `@MockitoBean`s or the context won't load (next sub-step).
 
+✋ Stopping here? You have all three v1 behaviors wired — idempotent transfer + webhook, paginated entries, deprecation headers — committed (end of sitting S6; the slice tests are red until the next sub-step's mocks). Next: sub-step 8 (tests + ADR); first action: create `services/demand-account/src/test/java/com/buildabank/account/service/IdempotencyTest.java`.
+
 ---
 
-### Sub-step 8 of 8 — Tests + ADR 🧭 *(controller ✅ → **tests**)*
+### Sub-step 8 of 8 — Tests + ADR · ~1.5h 🧭 *(controller ✅ → **tests**)*
 
 🎯 **Goal:** prove idempotency (money moves once), webhook signing/delivery/retry (done in sub-steps 4–5), pagination/versioning/deprecation over real HTTP, and the slice with mocked collaborators — then record the design in an ADR.
 
@@ -1565,7 +1602,7 @@ sequenceDiagram
 1. **Idempotency:** start the service (`make run-demand-account`), open `steps/step-14/requests.http`, and send the `POST /api/v1/transfers` with `Idempotency-Key: demo-key-001` **twice**. Then `GET /api/accounts/ACC-A` — it only dropped by 50 once.
 2. **Pagination:** `GET /api/v1/accounts/ACC-A/entries?page=0&size=2&sort=createdAt,desc` → a `PageResponse` with `content`, `totalElements`, `size`.
 3. **Deprecation:** `POST /api/transfers` and inspect the response headers — `Deprecation`, `Sunset`, `Link`.
-4. **Webhooks (optional, live):** set `BANK_WEBHOOK_URL` to a [webhook.site](https://webhook.site) URL + `BANK_WEBHOOK_SECRET`, do a v1 transfer, and watch the signed `transfer.completed` arrive (with `X-Webhook-Signature`/`X-Webhook-Timestamp`). Verify it with `hmac_sha256(secret, ts + "." + body)`.
+4. **Webhooks (optional, live, +~10 min):** set `BANK_WEBHOOK_URL` to a [webhook.site](https://webhook.site) URL + `BANK_WEBHOOK_SECRET`, do a v1 transfer, and watch the signed `transfer.completed` arrive (with `X-Webhook-Signature`/`X-Webhook-Timestamp`). Verify it with `hmac_sha256(secret, ts + "." + body)`.
 5. 🧪 **Little experiments:**
    - change the **amount** on a same-key retry → still returns the original result (the key, not the body, decides);
    - send `Idempotency-Key: a` then `b` → two transfers;
@@ -1582,6 +1619,8 @@ You're at **`step-14-end`** (== `step-15-start`). demand-account's API is now ve
 - [ ] Webhooks are HMAC-signed, replay-protected, and retried; the old transfer advertises its successor.
 - [ ] `bash steps/step-14/smoke.sh` prints `✅ Step 14 smoke test PASSED`.
 - [ ] You've committed and tagged `step-14-end`.
+
+✋ Stopping here? You have all 25 tests green, the live API played with, ADR-0006 committed, and `step-14-end` tagged — the build is done (sitting S7's build half). Next: D · Prove (compare your run to the Verification Log); first action: `bash steps/step-14/smoke.sh`.
 
 ---
 
@@ -1647,25 +1686,25 @@ Fresh `git clone` at `step-14-end` → `make doctor` + `./mvnw verify` → **BUI
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① The dual-write problem and the Outbox pattern (Step 20)</summary>
+<summary>① The dual-write problem and the Outbox pattern (Step 20) · +~10 min</summary>
 
 We send the webhook *after* the DB commit. If the process dies between commit and send, the partner never hears — the DB and the outside world disagree (a **dual write**). The **Outbox pattern** fixes it: in the *same* transaction as the transfer, insert an `outbox` row describing the event; a separate poller (or CDC, Step 54) reads the outbox and delivers, marking it sent. Now the event is durable iff the transfer committed, and delivery is retried independently. That's Step 20 — here we deliberately keep it simple and flag the gap.
 </details>
 
 <details>
-<summary>② Idempotency edge cases</summary>
+<summary>② Idempotency edge cases · +~10 min</summary>
 
 What if the *same key* arrives with a *different body* (a client bug)? Stripe returns a 422 "key reused with different parameters". A robust store also records a request fingerprint and a status (`in-progress`/`done`) so a concurrent duplicate can 409 instead of double-running. And keys need a TTL (e.g. 24h) — you don't remember them forever. We kept the core; these are the hardening steps.
 </details>
 
 <details>
-<summary>③ Cursor vs offset pagination</summary>
+<summary>③ Cursor vs offset pagination · +~10 min</summary>
 
 `page`/`size` (offset) is simple but degrades on deep pages (`OFFSET 1000000` scans and discards a million rows) and can skip/duplicate rows if data changes between pages. **Cursor** (keyset) pagination — "give me 20 after id X / createdAt T" — is stable and fast at any depth, at the cost of no random page access. For high-volume ledgers, prefer cursors.
 </details>
 
 <details>
-<summary>④ Why HMAC and not just HTTPS, or a plain hash, or an asymmetric signature?</summary>
+<summary>④ Why HMAC and not just HTTPS, or a plain hash, or an asymmetric signature? · +~10 min</summary>
 
 HTTPS protects the channel in transit, but the receiver still can't prove *who* sent the body once it arrives — HMAC authenticates the **payload** end-to-end (and survives a proxy that re-terminates TLS). A *plain* `hash(secret ∥ body)` is vulnerable to **length-extension** attacks; HMAC's nested construction isn't. An **asymmetric** signature (RSA/Ed25519) lets the receiver verify without holding a shared secret (better for many untrusted partners) but is heavier and overkill for a per-partner shared secret — which is why Stripe/GitHub use HMAC. We match the industry default.
 </details>
@@ -1696,6 +1735,8 @@ HTTPS protects the channel in transit, but the receiver still can't prove *who* 
 4. **Stretch — Outbox preview.** Persist the webhook event in the transfer transaction (an `outbox` table) and deliver from a `@Scheduled` poller; delete on success. (You'll formalize this in Step 20.)
 5. **Stretch — key TTL.** Add `created_at`-based expiry and a cleanup that deletes keys older than 24h.
 
+✋ Stopping here? You have the concepts applied — interview answers rehearsed and a challenge or two attempted (sitting S8, halfway). Next: F · Review (🩺 troubleshooting → recap → flashcards → sign-off); first action: read the 🩺 table's first row (the Boot-4 Jackson-3 gotcha).
+
 ---
 
 <a id="review"></a>
@@ -1719,12 +1760,12 @@ HTTPS protects the channel in transit, but the receiver still can't prove *who* 
 
 ## 📚 Learn More: Resources & Glossary
 
-- **RFC 8594** (Deprecation/Sunset), **RFC 9457** (ProblemDetail, Step 13).
+- **RFC 8594** (`Sunset`), **RFC 9745** (`Deprecation` — standardized 2025; its value is an `@<unix-timestamp>` date, `true` is the legacy draft form), **RFC 9457** (ProblemDetail, Step 13).
 - Stripe's API docs — the reference for idempotency keys and webhook signatures (the schemes we built).
 - Spring Data — `Pageable`/`Page`; the "don't expose `Page`" guidance.
 - `javax.crypto.Mac` / `MessageDigest.isEqual` — the JDK HMAC + constant-time-compare APIs.
 
-**Glossary:** **URI/header/media-type versioning** · **`Deprecation`/`Sunset`/`Link`** (RFC 8594) · **idempotency / `Idempotency-Key`** · **HMAC-SHA256** · **replay protection** · **constant-time compare** · **at-least-once / idempotent receiver** · **dual-write / Outbox** · **`Pageable` / `PageResponse`** · **offset vs cursor pagination**. *(Full definitions in `docs/glossary.md`.)*
+**Glossary:** **URI/header/media-type versioning** · **`Deprecation`/`Sunset`/`Link`** (RFC 9745 / RFC 8594) · **idempotency / `Idempotency-Key`** · **HMAC-SHA256** · **replay protection** · **constant-time compare** · **at-least-once / idempotent receiver** · **dual-write / Outbox** · **`Pageable` / `PageResponse`** · **offset vs cursor pagination**. *(Full definitions in `docs/glossary.md`.)*
 
 ## 🏆 Recap & Study Notes
 
@@ -1750,7 +1791,7 @@ HTTPS protects the channel in transit, but the receiver still can't prove *who* 
 - **Forward:** Step 15 (API Gateway/BFF can enforce versioning/deprecation centrally); Step 20 (**Outbox** + Kafka fixes the dual-write and makes events first-class); Step 21 (Saga + idempotent consumers for cross-service money).
 
 **(e) 🏆 Résumé line / interview talking point earned**
-> *"Designed a partner-grade banking API — URI versioning with RFC 8594 deprecation, Stripe-style idempotency keys for safe retries, stable pagination, and HMAC-signed outbound webhooks with replay protection and retries — all test-proven, including a concurrency-safe idempotency guard."*
+> *"Designed a partner-grade banking API — URI versioning with RFC 8594/9745 deprecation headers, Stripe-style idempotency keys for safe retries, stable pagination, and HMAC-signed outbound webhooks with replay protection and retries — all test-proven, including a concurrency-safe idempotency guard."*
 
 **(f) ✅ You can now…**
 - [ ] Version and deprecate an API gracefully.
@@ -1763,7 +1804,7 @@ HTTPS protects the channel in transit, but the receiver still can't prove *who* 
 - Q: Secure a webhook? · A: HMAC-SHA256 over timestamp.body + constant-time verify + reject stale timestamps (replay).
 - Q: Webhook delivery semantics? · A: at-least-once → receivers must be idempotent.
 - Q: Why not expose Spring's Page? · A: unstable internal JSON; own a PageResponse envelope.
-- Q: Deprecate an endpoint? · A: Deprecation/Sunset/Link headers (RFC 8594) + a migration window.
+- Q: Deprecate an endpoint? · A: Deprecation/Sunset/Link headers (RFC 9745 / RFC 8594) + a migration window.
 > 🔁 **Revisit in ~6 steps** (Step 20 Outbox makes webhook/event delivery durable).
 
 **(h) ✍️ One-line reflection:** *Which felt more "senior" to build — the idempotency guard or the webhook signature — and why?*

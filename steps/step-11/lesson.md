@@ -360,6 +360,18 @@ And in the root `pom.xml` `<modules>` block, add:
 
 ⚠️ **Pitfall:** an `&` inside `<description>` is invalid XML — write `and` or `&amp;`. (Ask me how I know.)
 
+▶️ **Run & See** *(fresh capture 2026-07-02, worktree at `step-11-end`)*:
+```bash
+./mvnw -pl playground/concurrency-lab -am compile
+```
+✅ **Expected output** — the reactor now knows the module (the proof the `<module>` line landed):
+```
+[INFO] Building Build-a-Bank :: Parent 0.1.0-SNAPSHOT                     [1/2]
+[INFO] Building Build-a-Bank :: Playground :: Concurrency Lab 0.1.0-SNAPSHOT [2/2]
+[INFO] BUILD SUCCESS
+[INFO] Total time:  0.883 s
+```
+
 💾 **Commit:** `git add playground/concurrency-lab/pom.xml pom.xml && git commit -m "build(concurrency-lab): add Step 11 module"`
 
 ---
@@ -507,6 +519,17 @@ public class LongAdderBalance implements Balance {
 💭 **Under the hood (the answer):** visibility. `synchronized` on `get()` too isn't paranoia — deposits would still happen one at a time (atomicity intact), but without the monitor's happens-before edge a reader could see a stale `balance`. The atomic/adder reads are already safe.
 
 ❓ **Quick check** — cover the code above: which implementation is lock, which is CAS, which is striped, which is broken? <details><summary>answer</summary>`SynchronizedBalance` = lock (the monitor), `AtomicBalance` = CAS (`addAndGet` retry loop), `LongAdderBalance` = striped cells (`sum()` on read), `UnsafeBalance` = broken (`+=` is a non-atomic read-modify-write).</details>
+
+▶️ **Run & See** *(fresh capture 2026-07-02, worktree at `step-11-end`)*:
+```bash
+./mvnw -pl playground/concurrency-lab clean compile
+```
+✅ **Expected output** — all five files compile:
+```
+[INFO] Compiling 5 source files with javac [debug parameters release 25] to target\classes
+[INFO] BUILD SUCCESS
+[INFO] Total time:  1.463 s
+```
 
 ✋ **Checkpoint:** five files compile (`./mvnw -pl playground/concurrency-lab -am compile`).
 
@@ -866,6 +889,38 @@ Reverted; the suite is green again. The "exact" assertions genuinely depend on t
 ==> Run the Step-11 concurrency labs (pure JVM, no Docker)
 ✅ Step 11 smoke test PASSED
 ```
+
+### 6 · Re-run — re-verified 2026-07-02 (aids pass)
+
+Fresh run in an isolated worktree at the `step-11-end` tag (Maven 3.9.12 / Java 25.0.3, Windows; pure JVM, no Docker). **Drift check:** `git diff step-11-end..HEAD -- playground/concurrency-lab` is **empty** — the module at HEAD is byte-identical to the tag (only `steps/step-11/` lesson docs changed since).
+
+`./mvnw -pl playground/concurrency-lab -am test`:
+```
+[INFO] Running com.buildabank.concurrency.ConcurrencyToolsTest
+[tools] semaphore(3) capped concurrency at 3
+[tools] virtual threads completed 10000 / 10000 tasks
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.279 s -- in com.buildabank.concurrency.ConcurrencyToolsTest
+[INFO] Running com.buildabank.concurrency.LostUpdateRaceTest
+[race] UnsafeBalance under 8×100000: expected=800000 actual=158020  (lost 641980)
+[race] two +1 deposits, interleaved read-modify-write → balance = 1
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.132 s -- in com.buildabank.concurrency.LostUpdateRaceTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+[INFO] Total time:  3.102 s
+```
+This run's loss: **641,980 of 800,000** deposits lost by `UnsafeBalance` (vs 609,058 recorded in §1 — the loss varies run to run; the three fixed implementations were exactly 800000 again).
+
+`bash steps/step-11/smoke.sh` (from the worktree root):
+```
+==> Run the Step-11 concurrency labs (pure JVM, no Docker)
+[tools] semaphore(3) capped concurrency at 3
+[tools] virtual threads completed 10000 / 10000 tasks
+[race] UnsafeBalance under 8×100000: expected=800000 actual=162076  (lost 637924)
+[race] two +1 deposits, interleaved read-modify-write → balance = 1
+✅ Step 11 smoke test PASSED
+```
+
+**Not re-run (per §12.8):** the §12.3 mutation check (it requires editing `SynchronizedBalance` — code is frozen this pass; the recorded failure in §3 stands) and the full-repo `verify`/clean-room of §4 (Docker-bound modules, out of scope for a module-level re-verify; the tag-time result stands).
 
 ---
 

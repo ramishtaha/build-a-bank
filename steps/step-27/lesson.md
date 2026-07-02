@@ -19,14 +19,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | architecture fitness functions · ArchUnit (bytecode rules) · Spring Modulith (derived modules, cycles, docs) · which tool when |
-| **C** | [🛠️ Build](#build) | wire the deps → the ArchUnit hexagon test (built rule-by-rule) → the Modulith verify + docs test → the §12.3 break-it → the harness |
-| **D** | [🔬 Prove](#prove) | the Verification Log — both suites green; §12.3 inject a real violation → red → revert; generated docs; re-run-today evidence |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~Time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~30 min |
+| **B** | [🧠 Understand](#understand) | architecture fitness functions · ArchUnit (bytecode rules) · Spring Modulith (derived modules, cycles, docs) · which tool when | ~90 min |
+| **C** | [🛠️ Build](#build) | wire the deps → the ArchUnit hexagon test (built rule-by-rule) → the Modulith verify + docs test → the §12.3 break-it → the harness | ~4 h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — both suites green; §12.3 inject a real violation → red → revert; generated docs; re-run-today evidence | ~45 min |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~45 min |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~30 min |
 
 ---
 
@@ -102,6 +102,18 @@ A clean architecture (Step 26) decays the moment someone adds `@Component` to a 
 - **Prereqs:** bank builds green (`git describe` → `step-26-end`). The new tests need **no Docker**; the full-repo `verify` does (existing integration tests).
 - **Connects to what you know:** ArchUnit enforces exactly the prose rules from **Step 26 / ADR-0017**. Spring Modulith applies to **demand-account** (Steps 12–24) — its packages *are* the modules.
 - **Depends on:** Step **26** (the hexagon).
+
+## 🗓️ Session Plan — ≈ 8 h as three sittings
+
+| Sitting | Covers | ~Time | Ends at (save point) |
+|---|---|---|---|
+| **S1 · Map the terrain & wire the deps** | A · Orient + B · Understand + Build sub-steps 0–3 (green baseline · parent Modulith BOM · ArchUnit dep · Modulith test-scope deps) | ~3 h | sub-step 3's ✋ — both Modulith artifacts resolve at the BOM's `2.0.6`, all test scope, build still green |
+| **S2 · Write the two fitness functions** | Sub-step 4 (`HexagonalArchitectureTest`, built 4a→4c) + sub-step 5 (`ModularityTest`, 5a→5c) + sub-step 6 (inspect the living docs) | ~2.5 h | sub-step 6's ✋ — 4/4 + 3/3 green, 19 files under `target/spring-modulith-docs/` |
+| **S3 · Break it & ship** | Sub-step 7 (§12.3 break-it-on-purpose) + sub-step 8 (`smoke.sh` · `make play-27` · ADR-0018 · commit) + 🎮 Play With It + D · Prove + E · Apply + F · Review | ~2.5 h | sub-step 8's ✋ — smoke `PASSED`, committed, tagged `step-27-end` |
+
+Optional routes: the ⏭️ skip-test (5 min) can send you straight to Step 28; the five 🚀 Go Deeper asides in E add ~5 min each; 🏋️ Your Turn adds ~10 min per Quick and ~30–45 min for the 🎯 Stretch; the 🧪 Little experiments in 🎮 Play add ~10 min each.
+
+✋ **Stopping here?** You have nothing changed yet — just the map and a plan. Next: [B · Understand](#understand); first action: read "🧠 The Big Idea — architecture as a fitness function".
 
 ---
 
@@ -199,6 +211,8 @@ No arrow ever points back — no cycle. (Add one `event → outbox` edge and it'
 to prove the guard works.) The same model drives `Documenter`: a C4 component diagram + a per-module **canvas**
 (its API, the beans it references, events it publishes/listens to) — docs that regenerate from code, never drifting.
 
+❓ **Knowledge-check:** where do ArchUnit's rules come from, and where do Spring Modulith's come from? <details><summary>Answer</summary>**You write** ArchUnit's rules by hand as a fluent Java DSL — bespoke rules for a specific design (our hexagon). Modulith **derives** its module model from the package structure and applies the universal rules automatically: no cycles, no access to another module's `internal` packages.</details>
+
 ## 🛡️ Security Lens & 🧵 Thread-safety note
 
 No runtime behaviour changes — these are test-time analyses. We keep Spring Modulith at **test scope** (verification
@@ -222,6 +236,8 @@ notification (a hexagon)            ArchUnit          bespoke layer rules + 1 al
 demand-account (9 features)         Spring Modulith   derived modules, cycle detection, living docs
                                                       (test scope: verify + docs, no runtime change)
 ```
+
+✋ **Stopping here?** You have the concepts but haven't touched any code yet. Next: Build sub-step 0 (pin a green baseline); first action: run `git describe --tags` at the repo root.
 
 <a id="build"></a>
 
@@ -306,7 +322,7 @@ adr/0018-archunit-and-spring-modulith.md                            (NEW)
 
 ---
 
-## Sub-step 0 — pin a GREEN baseline before adding any guard 🧭 *(you are here: **baseline** → deps → ArchUnit → Modulith → break-it → ship)*
+## Sub-step 0 — pin a GREEN baseline before adding any guard · ~10 min 🧭 *(you are here: **baseline** → deps → ArchUnit → Modulith → break-it → ship)*
 
 🎯 **Goal:** a fitness function only has meaning relative to a passing baseline. Confirm both services are green
 *before* you add a single rule, so when a rule later goes red you know it's the *rule* talking, not a pre-existing
@@ -340,7 +356,7 @@ prove the **shape** is sound.
 
 ---
 
-## Sub-step 1 — wire Spring Modulith into the parent BOM 🧭 *(baseline ✅ → **deps** → ArchUnit → Modulith → break-it → ship)*
+## Sub-step 1 — wire Spring Modulith into the parent BOM · ~20 min 🧭 *(baseline ✅ → **deps** → ArchUnit → Modulith → break-it → ship)*
 
 🎯 **Goal:** add a single `spring-modulith.version` property and import the **Spring Modulith BOM** in the parent, so
 every Modulith artifact a child declares gets its version from one curated place (the BOM pattern you met with the
@@ -404,7 +420,7 @@ no "Modulith built against a different Spring version" surprises.
 
 ---
 
-## Sub-step 2 — add ArchUnit to the notification module (test scope)
+## Sub-step 2 — add ArchUnit to the notification module (test scope) · ~15 min
 
 🎯 **Goal:** give the `notification` module the ArchUnit JUnit-5 integration so `@AnalyzeClasses` / `@ArchTest` work.
 Test scope only — ArchUnit never ships in the jar.
@@ -441,9 +457,11 @@ Test scope only — ArchUnit never ships in the jar.
 
 ⚠️ **Pitfall:** grabbing plain `archunit` (no `-junit5`) gives you the engine but **not** the `@ArchTest` extension — your rules would compile but never run. Use `archunit-junit5`.
 
+✋ **Stopping here?** You have the Modulith BOM imported in the parent and `archunit-junit5:1.4.2` on notification's test classpath (deps only — zero new tests yet). Next: Sub-step 3 (Modulith deps for demand-account); first action: open `services/demand-account/pom.xml`.
+
 ---
 
-## Sub-step 3 — add Spring Modulith to demand-account (test scope — the deliberate decision)
+## Sub-step 3 — add Spring Modulith to demand-account (test scope — the deliberate decision) · ~20 min
 
 🎯 **Goal:** give demand-account `spring-modulith-starter-test` (for `ApplicationModules.verify()`) and
 `spring-modulith-docs` (for `Documenter`) — **at test scope only**. This is a design decision worth saying out loud:
@@ -506,9 +524,13 @@ org.springframework.modulith:spring-modulith-core:jar:2.0.6:test
 
 ⚠️ **Pitfall:** writing `<version>` on these would defeat the BOM and risk a version skew. Leave them version-less and let the BOM curate. And if you *accidentally* used `spring-modulith-starter-core` (no `-test`), you'd quietly change the runtime — exactly what we chose not to do.
 
+❓ **Knowledge-check:** why does ADR-0018 §3 keep Spring Modulith at **test scope** in demand-account? <details><summary>Answer</summary>Because we only want verification + living docs, which are test-time bytecode analyses. Keeping it out of `main` (no `spring-modulith-starter-core`) means demand-account's runtime autoconfiguration is untouched — no behaviour change, no module events/observability autoconfig, no new attack surface.</details>
+
+✋ **Stopping here?** (end of sitting **S1**) You have both tools wired at test scope — Modulith BOM in the parent, `archunit-junit5` in notification, `spring-modulith-starter-test` + `-docs` in demand-account — and a still-green build. Next: Sub-step 4 (the ArchUnit hexagon test); first action: create `services/notification/src/test/java/com/buildabank/notification/HexagonalArchitectureTest.java`.
+
 ---
 
-## Sub-step 4 — ArchUnit: enforce the notification hexagon 🧭 *(deps ✅ → **ArchUnit** → Modulith → break-it → ship)*
+## Sub-step 4 — ArchUnit: enforce the notification hexagon · ~1 h 🧭 *(deps ✅ → **ArchUnit** → Modulith → break-it → ship)*
 
 🎯 **Goal:** write `HexagonalArchitectureTest` — four `@ArchTest` rules that encode ADR-0017's hexagon over the
 compiled bytecode of `com.buildabank.notification`. We build it rule by rule, smallest-blast-radius first, so each
@@ -713,9 +735,13 @@ class HexagonalArchitectureTest {
 
 ⚠️ **Pitfall:** forgetting `DoNotIncludeTests` — then ArchUnit scans `HexagonalArchitectureTest` itself (which imports `com.tngtech.archunit..`) and other test classes, producing confusing violations on code that was never meant to obey the hexagon.
 
+❓ **Knowledge-check:** the web adapter (`adapter/in/web`) calls the SSE push adapter (`adapter/out/push`) directly. Why doesn't `hexagonal_layering` flag it? <details><summary>Answer</summary>Because Adapter is modelled as **one** layer, an adapter→adapter edge is *within-layer* and always allowed — that's the deliberate design call for ADR-0017's documented web→push SSE coupling. Only edges that cross rings the wrong way (core→adapter, domain→application) fail.</details>
+
+✋ **Stopping here?** You have the hexagon enforced — 4 ArchUnit rules, `Tests run: 4`, BUILD SUCCESS, no Docker. Next: Sub-step 5 (`ModularityTest` for demand-account); first action: create `services/demand-account/src/test/java/com/buildabank/account/ModularityTest.java`.
+
 ---
 
-## Sub-step 5 — Spring Modulith: verify demand-account's modules + generate living docs 🧭 *(ArchUnit ✅ → **Modulith** → break-it → ship)*
+## Sub-step 5 — Spring Modulith: verify demand-account's modules + generate living docs · ~45 min 🧭 *(ArchUnit ✅ → **Modulith** → break-it → ship)*
 
 🎯 **Goal:** write `ModularityTest` — derive demand-account's module model from its packages, `verify()` there are no
 cycles / no internal-access violations, print the discovered model, and generate living docs. We build it test-by-test.
@@ -894,7 +920,7 @@ class ModularityTest {
 
 ---
 
-## Sub-step 6 — inspect the living docs you just generated
+## Sub-step 6 — inspect the living docs you just generated · ~15 min
 
 🎯 **Goal:** see that the docs are real, generated artifacts — and meet the C4 diagram + a module canvas.
 
@@ -959,9 +985,11 @@ for exactly this reason. *(Verified today: `grep -c Client components.puml` → 
 
 ⚠️ **Pitfall:** `Documenter` wrote nothing? It writes under `target/`, which `clean` wipes — re-run the test, and check `target/spring-modulith-docs`, not `src`.
 
+✋ **Stopping here?** (end of sitting **S2**) You have both suites green (4/4 + 3/3, no Docker) and 19 generated doc files under `target/spring-modulith-docs/`. Next: Sub-step 7 (§12.3 break-it-on-purpose); first action: reopen `services/notification/src/main/java/com/buildabank/notification/domain/Notification.java` (you'll annotate it with `@Component` to watch the guard go red).
+
 ---
 
-## Sub-step 7 — prove the guards actually fail (§12.3 break-it-on-purpose) 🧭 *(Modulith ✅ → **break-it** → ship)*
+## Sub-step 7 — prove the guards actually fail (§12.3 break-it-on-purpose) · ~25 min 🧭 *(Modulith ✅ → **break-it** → ship)*
 
 🎯 **Goal:** a fitness function you've never seen fail is worthless. Inject a *real* violation into each, watch it go
 **red**, then revert. This is the verification mindset (§12.3) and the single most convincing thing you can show.
@@ -990,7 +1018,7 @@ for exactly this reason. *(Verified today: `grep -c Client components.puml` → 
 ```
 → Framework in the pure domain fails the build, naming the exact class. **Revert** the three lines; 4/4 green again.
 
-> 🔬 **Try the "unused import" variant yourself:** add only `import org.springframework.stereotype.Component;` (no
+> 🔬 **Try the "unused import" variant yourself (+~2 min):** add only `import org.springframework.stereotype.Component;` (no
 > `@Component`) and re-run. **It stays green** — the compiler erased the unused import, so ArchUnit never sees it.
 > That's the bytecode semantics from the Pattern Spotlight made tangible. (Then remove the import.)
 
@@ -1030,7 +1058,7 @@ fail the build — different mechanisms, same outcome: red.
 
 ---
 
-## Sub-step 8 — ship it: `smoke.sh`, `make play-27`, ADR-0018
+## Sub-step 8 — ship it: `smoke.sh`, `make play-27`, ADR-0018 · ~30 min
 
 🎯 **Goal:** the one-command proof + the decision record. No `requests.http` this step (see the note below).
 
@@ -1139,7 +1167,7 @@ ls services/demand-account/target/spring-modulith-docs/    # components.puml + m
 cat services/demand-account/target/spring-modulith-docs/module-service.adoc   # the "service" module canvas
 ```
 
-🧪 **Little experiments (change X → see Y):**
+🧪 **Little experiments (change X → see Y · +~10 min each):**
 - **Add `@Component` to `notification`'s `domain/Notification`** → re-run the ArchUnit test → `domain_is_framework_free` goes red, naming the class. Revert.
 - **Add only an *unused* `import org.springframework...`** to the domain → re-run → **still green** (bytecode erases unused imports). This is the §12.3 surprise, hands-on.
 - **Add a quick ArchUnit rule** that `*Controller` classes must reside in `..adapter.in.web..` → green → move/rename one to watch it fail.
@@ -1151,6 +1179,8 @@ cat services/demand-account/target/spring-modulith-docs/module-service.adoc   # 
 of Done:** both architecture suites pass (4 + 3 tests), the §12.3 mutation goes red then green again on revert,
 `./mvnw verify` is green, `bash steps/step-27/smoke.sh` passes, ADR-0018 recorded, and you've committed/tagged
 `step-27-end`.
+
+✋ **Stopping before the Verification Log?** You have the whole step built, proven red-then-green, committed and tagged `step-27-end`. Next: D · Prove (~45 min of reading real pasted evidence); first action: reopen this lesson at [🔬 Prove](#prove).
 
 ---
 
@@ -1245,17 +1275,19 @@ demand-account's production sources are unchanged since the tag — so the green
 
 # E · 🎓 Apply
 
+✋ **Re-entering here?** You have everything built, proven, and tagged `step-27-end` — this movement is pure reading + practice (~45 min). Next: the asides below; first action: pick a 🚀 Go Deeper aside or jump straight to 💼 Interview Prep.
+
 ## 🚀 Go Deeper (Optional)
 
-<details><summary>ArchUnit vs Spring Modulith — do I need both?</summary>They overlap (both analyse bytecode; Modulith uses ArchUnit internally) but solve different problems. ArchUnit = <strong>you author bespoke rules</strong> (this layer may import that one; this annotation is required) — ideal for a specific design like a hexagon. Spring Modulith = <strong>derived module model + the universal rules</strong> (no cycles, no internal access) + docs + (if you opt into runtime) module events/observability — ideal for a modular monolith. Use ArchUnit for custom rules, Modulith for module hygiene + docs.</details>
+<details><summary>ArchUnit vs Spring Modulith — do I need both? (+~5 min)</summary>They overlap (both analyse bytecode; Modulith uses ArchUnit internally) but solve different problems. ArchUnit = <strong>you author bespoke rules</strong> (this layer may import that one; this annotation is required) — ideal for a specific design like a hexagon. Spring Modulith = <strong>derived module model + the universal rules</strong> (no cycles, no internal access) + docs + (if you opt into runtime) module events/observability — ideal for a modular monolith. Use ArchUnit for custom rules, Modulith for module hygiene + docs.</details>
 
-<details><summary>Why model Adapter as ONE layer instead of separate in/out layers?</summary>Because ADR-0017 documents a deliberate intra-adapter coupling: the web adapter reuses the SSE push adapter (shared SSE transport). If <code>adapter/in</code> and <code>adapter/out</code> were separate layers, that legitimate coupling would fail the layered rule. Collapsing Adapter into one ring allows intra-adapter edges while still forbidding any adapter→application/domain-inward violation — which is the rule that actually matters.</details>
+<details><summary>Why model Adapter as ONE layer instead of separate in/out layers? (+~5 min)</summary>Because ADR-0017 documents a deliberate intra-adapter coupling: the web adapter reuses the SSE push adapter (shared SSE transport). If <code>adapter/in</code> and <code>adapter/out</code> were separate layers, that legitimate coupling would fail the layered rule. Collapsing Adapter into one ring allows intra-adapter edges while still forbidding any adapter→application/domain-inward violation — which is the rule that actually matters.</details>
 
-<details><summary>Making <code>verify()</code> part of CI</summary>It already is — it's a JUnit test, so <code>./mvnw verify</code> runs it. For a real product you'd also fail the build on Modulith's <em>open</em> (undocumented) module dependencies by declaring <code>@ApplicationModule(allowedDependencies = ...)</code> and tightening from there.</details>
+<details><summary>Making <code>verify()</code> part of CI (+~5 min)</summary>It already is — it's a JUnit test, so <code>./mvnw verify</code> runs it. For a real product you'd also fail the build on Modulith's <em>open</em> (undocumented) module dependencies by declaring <code>@ApplicationModule(allowedDependencies = ...)</code> and tightening from there.</details>
 
-<details><summary>Why does the §12.3 <em>Error</em> (Modulith) differ from the <em>Failure</em> (ArchUnit)?</summary>ArchUnit's <code>noClasses()</code> rule evaluates an assertion and reports a JUnit <strong>Failure</strong> when it doesn't hold. Modulith's <code>verify()</code> <em>throws</em> a <code>Violations</code> exception, which JUnit records as an <strong>Error</strong>. Both fail the build — but if you parse surefire reports, that's why one shows <code>Failures: 1</code> and the other <code>Errors: 1</code>.</details>
+<details><summary>Why does the §12.3 <em>Error</em> (Modulith) differ from the <em>Failure</em> (ArchUnit)? (+~5 min)</summary>ArchUnit's <code>noClasses()</code> rule evaluates an assertion and reports a JUnit <strong>Failure</strong> when it doesn't hold. Modulith's <code>verify()</code> <em>throws</em> a <code>Violations</code> exception, which JUnit records as an <strong>Error</strong>. Both fail the build — but if you parse surefire reports, that's why one shows <code>Failures: 1</code> and the other <code>Errors: 1</code>.</details>
 
-<details><summary>What is a "named interface" in Spring Modulith, and how does it relate to <code>internal</code>?</summary>By default every type in a module is API. To <em>hide</em> internals, put them under an <code>internal</code> sub-package — then other modules referencing them fail <code>verify()</code>. To expose a <em>curated</em> API you can mark types with <code>@NamedInterface</code> and declare allowed dependencies against named interfaces. We left demand-account at the default (all-API) this step; tightening is the stretch goal.</details>
+<details><summary>What is a "named interface" in Spring Modulith, and how does it relate to <code>internal</code>? (+~5 min)</summary>By default every type in a module is API. To <em>hide</em> internals, put them under an <code>internal</code> sub-package — then other modules referencing them fail <code>verify()</code>. To expose a <em>curated</em> API you can mark types with <code>@NamedInterface</code> and declare allowed dependencies against named interfaces. We left demand-account at the default (all-API) this step; tightening is the stretch goal.</details>
 
 ## 💼 Interview Prep
 
@@ -1270,9 +1302,11 @@ demand-account's production sources are unchanged since the tag — so the green
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-- **Quick:** add an ArchUnit rule to `HexagonalArchitectureTest` that classes named `*Controller` must reside in `..adapter.in.web..`. Run it (green), then move/rename to see it fail. <details><summary>hint</summary><code>classes().that().haveSimpleNameEndingWith("Controller").should().resideInAPackage("..adapter.in.web..")</code></details>
-- **Quick:** open a generated `module-*.adoc` canvas (e.g. `module-service.adoc`) and read its "Bean references" — it lists exactly which other modules `service` touches. Compare to the `components.puml` diagram.
-- 🎯 **Stretch (design hints below):** declare `@ApplicationModule(allowedDependencies = {...})` on one demand-account module (e.g. `payment`) and re-run `verify()` — see it fail on an *undeclared* dependency, then add it. This tightens Modulith from "no cycles" to "only the dependencies I declared." <details><summary>design hints</summary>Add a <code>package-info.java</code> in <code>com.buildabank.account.payment</code> annotated <code>@org.springframework.modulith.ApplicationModule(allowedDependencies = "domain")</code>. Re-run <code>ModularityTest</code>: if <code>payment</code> touches anything beyond <code>domain</code>, <code>verify()</code> now reports an <em>undeclared</em>-dependency violation (stricter than the cycle check). Add the missing names to the array until green — you've moved from "no cycles" to "exactly these edges." There is no <code>solutions/step-27/</code> directory in this repo; treat these hints as the reference.</details>
+- **Quick (+~10 min):** add an ArchUnit rule to `HexagonalArchitectureTest` that classes named `*Controller` must reside in `..adapter.in.web..`. Run it (green), then move/rename to see it fail. <details><summary>hint</summary><code>classes().that().haveSimpleNameEndingWith("Controller").should().resideInAPackage("..adapter.in.web..")</code></details>
+- **Quick (+~10 min):** open a generated `module-*.adoc` canvas (e.g. `module-service.adoc`) and read its "Bean references" — it lists exactly which other modules `service` touches. Compare to the `components.puml` diagram.
+- 🎯 **Stretch (+~30–45 min · design hints below):** declare `@ApplicationModule(allowedDependencies = {...})` on one demand-account module (e.g. `payment`) and re-run `verify()` — see it fail on an *undeclared* dependency, then add it. This tightens Modulith from "no cycles" to "only the dependencies I declared." <details><summary>design hints</summary>Add a <code>package-info.java</code> in <code>com.buildabank.account.payment</code> annotated <code>@org.springframework.modulith.ApplicationModule(allowedDependencies = "domain")</code>. Re-run <code>ModularityTest</code>: if <code>payment</code> touches anything beyond <code>domain</code>, <code>verify()</code> now reports an <em>undeclared</em>-dependency violation (stricter than the cycle check). Add the missing names to the array until green — you've moved from "no cycles" to "exactly these edges." There is no <code>solutions/step-27/</code> directory in this repo; treat these hints as the reference.</details>
+
+✋ **Stopping before Review?** You have the step done end-to-end; only recap material remains (~30 min). Next: F · Review; first action: skim the 🩺 troubleshooting list so you know what's in it before you ever need it.
 
 ---
 

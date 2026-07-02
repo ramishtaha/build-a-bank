@@ -9,14 +9,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-A one-line map of where we're going. Click to jump.
+A one-line map of where we're going. Click to jump. (~times sum to the step's ≈ 16 h.)
 
-1. **[A · 🧭 Orient](#orient)** — what this step covers, level badge, effort estimate, run parameters, skip self-check, and cheat card.
-2. **[B · 🧠 Understand](#understand)** — the core concepts: mutation testing (score vs coverage), property-based testing, custom starter anatomy, and compile-time gates.
-3. **[C · 🛠️ Build](#build)** — the heart: 11 detailed, hands-on build sub-steps covering domain tests, use case tests, property tests, PITest config, custom starter creation, auto-config, context runners, starter consumption, MockMvcTester web slices, and Spotless/Checkstyle.
-4. **[D · 🔬 Prove](#prove)** — the Verification Log (🔴 Full tier) with real un-invented command outputs, mutation checks, and the §12.3 break-it mutation proof.
-5. **[E · 🎓 Apply](#apply)** — go-deeper asides, interview prep (5 Q&As), and practice challenges.
-6. **[F · 🏆 Review](#review)** — stuck troubleshooting, glossary, recap study notes, and flashcards.
+1. **[A · 🧭 Orient](#orient)** — what this step covers, level badge, effort estimate, run parameters, skip self-check, and cheat card. *(≈ ½ h)*
+2. **[B · 🧠 Understand](#understand)** — the core concepts: mutation testing (score vs coverage), property-based testing, custom starter anatomy, and compile-time gates. *(≈ 1 h)*
+3. **[C · 🛠️ Build](#build)** — the heart: 11 detailed, hands-on build sub-steps covering domain tests, use case tests, property tests, PITest config, custom starter creation, auto-config, context runners, starter consumption, MockMvcTester web slices, and Spotless/Checkstyle. *(≈ 11 h)*
+4. **[D · 🔬 Prove](#prove)** — the Verification Log (🔴 Full tier) with real un-invented command outputs, mutation checks, and the §12.3 break-it mutation proof. *(≈ 2 h)*
+5. **[E · 🎓 Apply](#apply)** — go-deeper asides, interview prep (5 Q&As), and practice challenges. *(≈ 1 h)*
+6. **[F · 🏆 Review](#review)** — stuck troubleshooting, glossary, recap study notes, and flashcards. *(≈ ½ h)*
 
 ---
 
@@ -107,6 +107,28 @@ Coverage tools only check if a test *touched* a line. Mutation testing (PITest) 
 
 ---
 
+<a id="session-plan"></a>
+## 🗓️ Session Plan — eight sittings, ≈ 16 h total
+
+Sixteen hours is not one heroic evening. Each sitting ends at a real ✋ checkpoint, 💾 commit, or movement boundary, and the ✋ re-entry lines in the text tell you what you have and where to pick up.
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| **S1 · Frame it** | A Orient + B Understand + the B→C bridge | 1.5 h | the 🗺️/🌳 bridge (nothing built yet) |
+| **S2 · First fast tests** | Sub-steps 1–2 — `NotificationTest` + Mockito `NotificationServiceTest` | 2 h | sub-step 2's ✋ checkpoint + 💾 commit |
+| **S3 · Property + mutation capstone** | Sub-steps 3–5 — jqwik property, the `-Pmutation` PITest profile, run it + the break-it sanity check | 3 h | sub-step 5's ✋ checkpoint (build back green) |
+| **S4 · Starter, part 1** | Sub-steps 6–7 — `libs/common` pom + `MoneyFormatter`/`MoneyProperties`/`MoneyAutoConfiguration` + the imports file | 2 h | sub-step 7's ✋ checkpoint + 💾 commit |
+| **S5 · Starter, part 2** | Sub-steps 8–9 — `ApplicationContextRunner` tests + consume the starter in `hello` | 2 h | sub-step 9's ✋ checkpoint + 💾 commit |
+| **S6 · Slice + gates** | Sub-steps 10–11 + 🎮 Play With It + 🎯 The Finished Result | 2 h | end of movement C (the ✅ DoD checklist) |
+| **S7 · Prove it** | D — the Verification Log: unit/property runs, the 100% mutation check, §12.3, gates, `smoke.sh` | 2 h | end of the §12.8 honesty notes |
+| **S8 · Close out** | E Apply + F Review — go-deeper, interview prep, challenges, recap & flashcards | 1.5 h | end of lesson 🎉 |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can skip the whole step if you ace it; each 🚀 Go Deeper aside is +~5 min; the 🏋️ Your Turn quick challenge is +~30 min and the starter challenge +~1–2 h on top.
+
+✋ **Stopping here?** You have the map — nothing built yet. Next: [B · Understand](#understand); first action: reopen this lesson at "The Big Idea".
+
+---
+
 <a id="understand"></a>
 # B · 🧠 Understand
 
@@ -127,6 +149,8 @@ flowchart LR
     RUN -->|All tests pass| S["❌ SURVIVED\n(A gap in your tests)"]
 ```
 *Alt-text: A diagram showing how PITest works: Compiled classes are mutated in bytecode (negating conditions, returning null, removing calls) to produce mutants. Fast unit tests run against each mutant. If a test fails, the mutant is killed (green check). If all pass, the mutant survived (red cross), indicating a test gap.*
+
+❓ **Quick check:** every mutant PITest planted *survived*, yet line coverage is 100% — what does that tell you about the tests? <details><summary>Answer</summary>The tests **execute** the code but **assert nothing that would catch a change** — coverage says "ran", a surviving mutant says "nobody checked". The suite is participation, not protection; the mutation score (killed ÷ total) is the honest signal.</details>
 
 ---
 
@@ -195,6 +219,8 @@ build-a-bank/
             └── NotificationPropertyTest.java                    # jqwik property-based test
 ```
 
+✋ **Stopping here?** You have the concepts (mutation score, properties, starter discovery, gates) — no code yet. Next: [C · Build](#build) sub-step 1; first action: `git describe` → confirm `step-27-end`.
+
 ---
 
 <a id="build"></a>
@@ -206,7 +232,7 @@ build-a-bank/
 
 ---
 
-## Sub-step 1 — Write Example-Based Unit Tests for the Domain Model
+## Sub-step 1 — Write Example-Based Unit Tests for the Domain Model · ≈ 1 h
 
 🧭 *(You are here: **domain tests** ➡️ use case tests ➡️ property tests ➡️ PITest config ➡️ custom starter ➡️ web slices ➡️ parent gates)*
 
@@ -282,7 +308,7 @@ git commit -m "test(notification): add example-based unit test for Notification 
 
 ---
 
-## Sub-step 2 — Write Mockito-Backed Unit Tests for the Notification Use Case
+## Sub-step 2 — Write Mockito-Backed Unit Tests for the Notification Use Case · ≈ 1 h
 
 🧭 *(You are here: domain tests ➡️ **use case tests** ➡️ property tests ➡️ PITest config ➡️ custom starter ➡️ web slices ➡️ parent gates)*
 
@@ -394,9 +420,11 @@ git commit -m "test(notification): add mockito-backed unit test for Notification
 
 ⚠️ **Pitfall:** Do not autowire `NotificationService` in this class — keep it a pure unit test with constructor instantiation to avoid Spring startup overhead.
 
+✋ **Stopping here?** You have fast, Docker-free unit tests for the domain (`NotificationTest`) and the use case (`NotificationServiceTest`), both committed. Next: Sub-step 3 (the jqwik property test); first action: open `services/notification/pom.xml` to add the jqwik dependency.
+
 ---
 
-## Sub-step 3 — Write a Property-Based Test to Validate Domain Invariants
+## Sub-step 3 — Write a Property-Based Test to Validate Domain Invariants · ≈ 1 h
 
 🧭 *(You are here: domain tests ➡️ use case tests ➡️ **property tests** ➡️ PITest config ➡️ custom starter ➡️ web slices ➡️ parent gates)*
 
@@ -522,7 +550,7 @@ git commit -m "test(notification): add jqwik property-based test for Notificatio
 
 ---
 
-## Sub-step 4 — Configure PITest for Mutation Analysis on the Hexagon Core
+## Sub-step 4 — Configure PITest for Mutation Analysis on the Hexagon Core · ≈ 1 h
 
 🧭 *(You are here: domain tests ➡️ use case tests ➡️ property tests ➡️ **PITest config** ➡️ custom starter ➡️ web slices ➡️ parent gates)*
 
@@ -628,7 +656,7 @@ git commit -m "build(notification): configure PITest profile for core mutation c
 
 ---
 
-## Sub-step 5 — Run PITest and Perform the Mutation Sanity-Check
+## Sub-step 5 — Run PITest and Perform the Mutation Sanity-Check · ≈ 1 h
 
 🧭 *(You are here: domain tests ➡️ use case tests ➡️ property tests ➡️ PITest config ➡️ **PITest sanity check** ➡️ custom starter ➡️ web slices ➡️ parent gates)*
 
@@ -687,9 +715,11 @@ git checkout services/notification/src/test/java/com/buildabank/notification/app
 
 ⚠️ **Pitfall:** Always revert your experiments before committing code to keep the shared repository clean.
 
+✋ **Stopping here?** You have the mutation gate configured, run (5/5 mutants killed, 100%), and proven meaningful (break → build fails → revert) — the build is back green. Next: Sub-step 6 (scaffold the starter); first action: create `libs/common/pom.xml`.
+
 ---
 
-## Sub-step 6 — Scaffold the Custom Spring Boot Starter (`libs/common`)
+## Sub-step 6 — Scaffold the Custom Spring Boot Starter (`libs/common`) · ≈ ¾ h
 
 🧭 *(You are here: domain tests ➡️ use case tests ➡️ property tests ➡️ PITest config ➡️ PITest sanity check ➡️ **scaffold starter** ➡️ web slices ➡️ parent gates)*
 
@@ -789,7 +819,7 @@ git commit -m "build(common): create pom.xml scaffolding for libs/common starter
 
 ---
 
-## Sub-step 7 — Implement the Starter's Core Logic and Auto-Configuration
+## Sub-step 7 — Implement the Starter's Core Logic and Auto-Configuration · ≈ 1¼ h
 
 🧭 *(You are here: domain tests ➡️ use case tests ➡️ property tests ➡️ PITest config ➡️ PITest sanity check ➡️ scaffold starter ➡️ **auto-config implementation** ➡️ web slices ➡️ parent gates)*
 
@@ -933,6 +963,8 @@ com.buildabank.common.money.MoneyAutoConfiguration
 
 🔮 **Predict:** What happens if a consumer sets `buildabank.money.enabled=false`? <details><summary>Answer</summary>The `@ConditionalOnProperty` check fails, and no `MoneyFormatter` bean is created in the container context.</details>
 
+❓ **Quick check:** which file makes Boot find the auto-config — and what was it called in Boot 2? <details><summary>Answer</summary>`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`. Boot 2 used `spring.factories` (the `EnableAutoConfiguration` key); Boot 2.7+/3/4 use the dedicated `.imports` file — see 🕰️ Then vs. Now.</details>
+
 ▶️ **Run & See:**
 ```bash
 ./mvnw -pl libs/common compile
@@ -954,9 +986,11 @@ git commit -m "feat(common): implement MoneyFormatter, properties, and auto-conf
 
 ⚠️ **Pitfall:** Ensure the imports directory is exactly `src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`. A minor spelling mistake or misplaced directory will prevent Spring from finding your configuration.
 
+✋ **Stopping here?** You have the starter's four artifacts (`MoneyFormatter`, `MoneyProperties`, `MoneyAutoConfiguration`, the imports file) compiled and committed — but untested. Next: Sub-step 8 (`ApplicationContextRunner` tests); first action: create `libs/common/src/test/java/com/buildabank/common/money/MoneyAutoConfigurationTest.java`.
+
 ---
 
-## Sub-step 8 — Test Starter Auto-Configuration with ApplicationContextRunner
+## Sub-step 8 — Test Starter Auto-Configuration with ApplicationContextRunner · ≈ 1 h
 
 🧭 *(You are here: domain tests ➡️ use case tests ➡️ property tests ➡️ PITest config ➡️ PITest sanity check ➡️ scaffold starter ➡️ auto-config implementation ➡️ **starter tests** ➡️ web slices ➡️ parent gates)*
 
@@ -1095,7 +1129,7 @@ git commit -m "test(common): add unit and auto-configuration context runner test
 
 ---
 
-## Sub-step 9 — Consume the Starter in Hello Service and Verify Auto-Configuration
+## Sub-step 9 — Consume the Starter in Hello Service and Verify Auto-Configuration · ≈ 1 h
 
 🧭 *(You are here: domain tests ➡️ use case tests ➡️ property tests ➡️ PITest config ➡️ PITest sanity check ➡️ scaffold starter ➡️ auto-config implementation ➡️ starter tests ➡️ **starter consumption** ➡️ web slices ➡️ parent gates)*
 
@@ -1199,9 +1233,11 @@ git commit -m "feat(hello): consume common starter and verify autowired MoneyFor
 
 ⚠️ **Pitfall:** Ensure you run `./mvnw clean install` or build the whole reactor when running tests on another module after adding dependency links. Maven must resolve the starter from local output target blocks.
 
+✋ **Stopping here?** You have the starter tested (7 tests) and really consumed by `hello` (the `MoneyFormatter` bean autowires with no `@Import`), committed. Next: Sub-step 10 (the Boot-4 slice test); first action: open `services/hello/pom.xml` to add the `spring-boot-webmvc-test` dependency.
+
 ---
 
-## Sub-step 10 — Implement a Web Slice Test with MockMvcTester (Spring Boot 4)
+## Sub-step 10 — Implement a Web Slice Test with MockMvcTester (Spring Boot 4) · ≈ ¾ h
 
 🧭 *(You are here: domain tests ➡️ use case tests ➡️ property tests ➡️ PITest config ➡️ PITest sanity check ➡️ scaffold starter ➡️ auto-config implementation ➡️ starter tests ➡️ starter consumption ➡️ **web slice tests** ➡️ parent gates)*
 
@@ -1301,7 +1337,7 @@ git commit -m "test(hello): add WebMvcTest slice test using new MockMvcTester AP
 
 ---
 
-## Sub-step 11 — Configure Repo-wide Formatting and Quality Gates (Spotless + Checkstyle)
+## Sub-step 11 — Configure Repo-wide Formatting and Quality Gates (Spotless + Checkstyle) · ≈ 1 h
 
 🧭 *(You are here: domain tests ➡️ use case tests ➡️ property tests ➡️ PITest config ➡️ PITest sanity check ➡️ scaffold starter ➡️ auto-config implementation ➡️ starter tests ➡️ starter consumption ➡️ web slice tests ➡️ **parent gates**)*
 
@@ -1447,6 +1483,8 @@ index d3c7512..1d7a83d 100644
 
 🔮 **Predict:** What happens if you add a double semicolon (e.g. `int x = 1;;`) in a Java file and run checkstyle? <details><summary>Answer</summary>Checkstyle will throw an `EmptyStatement` error and fail the build during the verify phase.</details>
 
+❓ **Quick check:** why run `spotless:apply` once *before* letting `verify` enforce `spotless:check` — and why keep the ruleset lean? <details><summary>Answer</summary>`apply` normalizes the existing code once so `check` (bound to `verify`) has a clean baseline to enforce; a heavy ruleset (or a full reformatter) would dump thousands of violations / a huge diff on the existing codebase and the gate would just get switched off.</details>
+
 ▶️ **Run & See:**
 ```bash
 ./mvnw spotless:check checkstyle:check
@@ -1470,6 +1508,8 @@ git commit -m "build: configure spotless and checkstyle plugins as verify phase 
 
 ⚠️ **Pitfall:** Do not use Google Java Format or full code reformatters directly without team agreement; they reflow code structures, which can destroy the custom layouts of code blocks and comments in these step folders.
 
+✋ **Stopping here?** You have all 11 sub-steps done — the quality gates are live in `verify` and committed (0 violations). Next: 🎮 Play With It, then 🎯 The Finished Result; first action: run the PITest command from the 📇 Cheat Card and open `services/notification/target/pit-reports/index.html`.
+
 ---
 
 ## 🎮 Play With It
@@ -1491,6 +1531,8 @@ Ensure you have run `./mvnw spotless:apply` to automatically normalize your code
 - [ ] PITest reports 100% mutation score on the core classes.
 - [ ] `bash steps/step-28/smoke.sh` passes successfully.
 - [ ] Your code is committed and ready for the Phase F frontend introduction.
+
+✋ **Stopping here?** Everything is built; you have the ✅ Definition-of-Done checklist to verify against. Next: [D · Prove](#prove) — run the checks and compare against the real pasted output; first action: `./mvnw verify`.
 
 ---
 
@@ -1608,15 +1650,17 @@ $ bash steps/step-28/smoke.sh
 <a id="apply"></a>
 # E · 🎓 Apply
 
+✋ **Resuming here?** You have a verified step-28 build (DoD met, Verification Log matched). E + F are reading (~1.5 h): go-deeper asides, interview prep, challenges, recap.
+
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>Why is mutation testing so much slower than normal test coverage?</summary>
+<summary>Why is mutation testing so much slower than normal test coverage? (+~5 min)</summary>
 Normal coverage instruments code once to count which lines are touched. PITest executes your tests *repeatedly*: it spins up isolated JVM worker processes and runs the tests for every single mutant it creates. In large modules, this can mean running the suite thousands of times. To optimize performance, you must use target filters and exclude slow integration tests.
 </details>
 
 <details>
-<summary>How do you structure custom starters in commercial deployments?</summary>
+<summary>How do you structure custom starters in commercial deployments? (+~5 min)</summary>
 In production, a starter is split into two modules: `acme-spring-boot-autoconfigure` (containing the `@AutoConfiguration` and the `.imports` file) and `acme-spring-boot-starter` (a wrapper POM which pulls in the autoconfigure module and third-party libraries). We combined them into one module here to make the structure easier to follow.
 </details>
 
@@ -1639,8 +1683,8 @@ In production, a starter is split into two modules: `acme-spring-boot-autoconfig
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-- **Quick Challenge:** Change the `mutationThreshold` in `services/notification/pom.xml` to 100. Write a new, untested method in `NotificationService` that returns a string, and run PITest. Watch the build fail because of a surviving mutant, then write a test to kill it and bring the build back to green.
-- **Starter Challenge (Reference solution in `solutions/step-28/`):** Extend `libs/common` to configure a `CorrelationIdFilter` bean, but only if the consumer is a web application. Use `@ConditionalOnWebApplication` and write context runner tests using `WebApplicationContextRunner` to verify it registers in web contexts and backs off in non-web contexts.
+- **Quick Challenge (+~30 min):** Change the `mutationThreshold` in `services/notification/pom.xml` to 100. Write a new, untested method in `NotificationService` that returns a string, and run PITest. Watch the build fail because of a surviving mutant, then write a test to kill it and bring the build back to green.
+- **Starter Challenge (+~1–2 h; no reference solution yet — verify with your own context-runner tests):** Extend `libs/common` to configure a `CorrelationIdFilter` bean, but only if the consumer is a web application. Use `@ConditionalOnWebApplication` and write context runner tests using `WebApplicationContextRunner` to verify it registers in web contexts and backs off in non-web contexts.
 
 ---
 

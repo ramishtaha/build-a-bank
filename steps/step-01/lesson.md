@@ -13,12 +13,12 @@
 
 A one-line map of where we're going. Click to jump.
 
-1. **[A · 🧭 Orient](#orient)** — what this step is, why it matters, and whether you can skip it.
-2. **[B · 🧠 Understand](#understand)** — what a Spring Boot app *is*, what happens when you run one, secrets hygiene, and a real version-evolution story.
-3. **[C · 🛠️ Build](#build)** — the heart: toolchain → parent POM → hello module → `HelloApplication` → `HelloController` → `application.yml` → the test → `./mvnw verify`. Plus 🎮 Play With It and the 🏁 finished result.
-4. **[D · 🔬 Prove](#prove)** — the Verification Log with the real, pasted `verify` and run output.
-5. **[E · 🎓 Apply](#apply)** — interview prep and your-turn exercises.
-6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, and the recap/study notes.
+1. **[A · 🧭 Orient](#orient)** — what this step is, why it matters, and whether you can skip it. *(~45 min, plus one-time tool installs: 1–4 h if you're starting from a bare machine)*
+2. **[B · 🧠 Understand](#understand)** — what a Spring Boot app *is*, what happens when you run one, secrets hygiene, and a real version-evolution story. *(~1 h)*
+3. **[C · 🛠️ Build](#build)** — the heart: toolchain → parent POM → hello module → `HelloApplication` → `HelloController` → `application.yml` → the test → `./mvnw verify`. Plus 🎮 Play With It and the 🏁 finished result. *(~8–10 h across several sittings — see the 🗓️ Session Plan below)*
+4. **[D · 🔬 Prove](#prove)** — the Verification Log with the real, pasted `verify` and run output. *(~30 min)*
+5. **[E · 🎓 Apply](#apply)** — interview prep and your-turn exercises. *(~2 h)*
+6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, and the recap/study notes. *(~1 h)*
 
 ---
 
@@ -118,6 +118,23 @@ Every senior engineer's day starts at a terminal, in Git, on a JVM. You can't bu
 
 **Depends on:** — *(none)*
 
+## 🗓️ Session Plan
+
+This step is sized in **sittings of ~2–3 h** so you always stop at a real save point (a ✋ checkpoint) and know exactly where to resume. Each ✋ checkpoint below carries a 🔖 *Stopping here?* line telling you what you have and what to open next.
+
+| Sitting | Covers | ~Time | Ends at (save point) |
+|---|---|---|---|
+| 1 · Tools on, versions verified | Prerequisite installs (JDK 25, Git, Docker Desktop, an editor) + Sub-step 1 (verify your toolchain) | 2–3 h (less if tools are already installed) | Sub-step 1 ✋: `java -version` 25.0.3 + Maven 3.9.12 |
+| 2 · The mental model | A · Orient (30-seconds table, skip-test, cheat card) + B · Understand (Big Idea, Under the Hood, Security Lens, Then vs Now) | ~2 h | End of B · Understand (the ❓ knowledge-check answered) |
+| 3 · The two POMs | Sub-steps 2–3 (register the module in the parent POM — the *deliberately red* `validate`; then the module POM that turns it green) | ~2 h | Sub-step 3 ✋ + 💾 commit: `validate` ends in BUILD SUCCESS |
+| 4 · First boot | Sub-steps 4–5 (`HelloApplication` + the break-it experiment) | 2–3 h | Sub-step 5 ✋ + 💾 restore: Tomcat line back, `pom.xml` restored |
+| 5 · Endpoint → config → the gate | Sub-steps 6–8 (`HelloController`, `application.yml`, the test + `./mvnw verify`) | 2–3 h | Sub-step 8 ✋ + 💾 commit: BUILD SUCCESS, 2/2 tests |
+| 6 · Play, prove, apply | 🎮 Play With It + 🏁 Finished Result + D · Prove (`smoke.sh`) + E · Apply (interview Q&A, exercises) + F · Review (recap, flashcards) | 2–3 h | ✅ Definition of Done — all boxes checked |
+
+**Optional routes:** the ⏭️ skip-test above (5 min) can send you straight to Step 2; the 🚀 Go Deeper asides (+~10 min and +~5 min), the IntelliJ tip (+~5 min), and the 🧪 Little experiments (+~10 min) can all be deferred to a later sitting without breaking the chain.
+
+🔖 **Stopping here?** You have the map (30-seconds table, cheat card, session plan); nothing installed or built yet. Next: B · Understand (The Big Idea); first action: reopen this file at the **B · 🧠 Understand** header.
+
 ---
 
 <a id="understand"></a>
@@ -208,6 +225,8 @@ We feature the **real compile error** we got in the [🩺 Troubleshooting](#-stu
 > [!TIP]
 > When an interviewer asks "how do you test a Spring Boot web endpoint?", a strong answer names the slice options (`@WebMvcTest` + `MockMvcTester`) **and** the full-stack option (`@SpringBootTest(RANDOM_PORT)` + a real client like `RestClient`/`RestTestClient`), and notes that `TestRestTemplate` was removed in Boot 4. You'll have done all three by Step 28.
 
+🔖 **Stopping here?** You have the mental model (Boot app = embedded server in your process, secrets hygiene, the `TestRestTemplate` story) — no code written yet. Next: C · Build, sub-step 1 (verify your toolchain); first action: run `java -version` at the repo root.
+
 ---
 
 <a id="build"></a>
@@ -274,7 +293,7 @@ build-a-bank/
 
 ---
 
-### Sub-step 1 of 8 — Verify your toolchain 🧭 *(toolchain → parent POM → module POM → app → run → controller → config → test → verify)*
+### Sub-step 1 of 8 — Verify your toolchain 🧭 *(toolchain → parent POM → module POM → app → run → controller → config → test → verify)* · ≈30 min
 
 🎯 **Goal:** confirm — not assume — that JDK 25 and the Maven Wrapper are present and the right versions. **Verifying the toolchain is the whole spirit of this course.**
 
@@ -318,13 +337,15 @@ Java version: 25.0.3, vendor: Oracle Corporation
 
 ✋ **Checkpoint:** `java -version` shows **25.0.3** and `./mvnw -v` shows **Maven 3.9.12**. If not → 🩺.
 
+🔖 **Stopping here?** You have a verified toolchain (JDK 25.0.3 + Maven 3.9.12); nothing built yet. Next: sub-step 2 (register the module in the parent POM); first action: open `pom.xml` at the repo root.
+
 💾 **Commit:** nothing to commit yet — this was verification only.
 
 ⚠️ **Pitfall:** having multiple JDKs installed and the wrong one on the `PATH` is the #1 Day-1 snag. `JAVA_HOME` must point at your JDK 25.
 
 ---
 
-### Sub-step 2 of 8 — Register the hello-service module in the parent POM 🧭 *(toolchain ✅ → **parent POM** → …)*
+### Sub-step 2 of 8 — Register the hello-service module in the parent POM 🧭 *(toolchain ✅ → **parent POM** → …)* · ≈45 min
 
 🎯 **Goal:** Register the new `hello-service` module in the parent POM so Maven knows to aggregate, compile, and validate it as part of the project reactor.
 
@@ -446,6 +467,8 @@ The reactor validation fails exactly as predicted because the directory does not
 
 ✋ **Checkpoint:** Confirm you see the validation error mentioning that the child module `services/hello` does not exist.
 
+🔖 **Stopping here?** You have `services/hello` registered in the parent POM and a *deliberately red* `./mvnw validate` (child module missing — expected; commit below first). Next: sub-step 3 (the module POM, which turns it green); first action: create `services/hello/pom.xml`.
+
 💾 **Commit:** Let's commit the parent POM change (even though the build is temporarily broken; we'll fix it in the next sub-step):
 ```bash
 git add pom.xml
@@ -456,7 +479,7 @@ git commit -m "build(hello): register hello-service module in parent POM"
 
 ---
 
-### Sub-step 3 of 8 — The hello-service module POM 🧭 *(… parent POM ✅ → **module POM** → …)*
+### Sub-step 3 of 8 — The hello-service module POM 🧭 *(… parent POM ✅ → **module POM** → …)* · ≈1 h
 
 🎯 **Goal:** Create the module directory and its own `pom.xml` that imports the parent and declares the web, actuator, and test dependencies.
 
@@ -552,6 +575,8 @@ The build is now green and validates clean because the aggregator can find the c
 
 ✋ **Checkpoint:** Confirm `./mvnw -pl services/hello validate` ends with `BUILD SUCCESS`.
 
+🔖 **Stopping here?** You have a green reactor again — `services/hello/pom.xml` exists and `validate` passes (commit below first). Next: sub-step 4 (`HelloApplication`); first action: create `services/hello/src/main/java/com/buildabank/hello/HelloApplication.java`.
+
 💾 **Commit:**
 ```bash
 git add services/hello/pom.xml
@@ -560,9 +585,11 @@ git commit -m "build(hello): add hello-service module with web + actuator starte
 
 ⚠️ **Pitfall:** Forgetting the `spring-boot-maven-plugin` means `spring-boot:run` and the executable jar won't work — you'd see "no main manifest attribute" from `java -jar`. It's required for a runnable Boot app.
 
+> ◇ ❓ **Knowledge-check:** which dependency's *mere presence* triggers web auto-configuration — and why do our dependencies carry no version numbers? <details><summary>answer</summary>`spring-boot-starter-web` — auto-config sees servlet/web classes on the classpath and fires. Versions come from the Spring Boot BOM inherited via the parent POM, so each `groupId:artifactId` gets a tested-together version without declaring one.</details>
+
 ---
 
-### Sub-step 4 of 8 — Write `HelloApplication` (the entry point) 🧭 *(… module POM ✅ → **app class** → …)*
+### Sub-step 4 of 8 — Write `HelloApplication` (the entry point) 🧭 *(… module POM ✅ → **app class** → …)* · ≈1 h
 
 🎯 **Goal:** Create the `main` class that boots the whole thing — your first piece of Spring Boot code.
 
@@ -643,6 +670,8 @@ Press `Ctrl+C` in the first terminal to stop the app.
 
 ✋ **Checkpoint:** The banner prints, "Tomcat started on port 8080" appears, and the app stays running until `Ctrl+C`. You have a running (if empty) web server.
 
+🔖 **Stopping here?** You have a running (empty) server — commit below first. Next: sub-step 5 (the 30-second break-it experiment); first action: open `services/hello/pom.xml` and comment out the web starter.
+
 💾 **Commit:**
 ```bash
 git add services/hello/src/main/java/com/buildabank/hello/HelloApplication.java
@@ -653,7 +682,7 @@ git commit -m "feat(hello): add Spring Boot application entry point"
 
 ---
 
-### Sub-step 5 of 8 — Break it on purpose (30s), then restore 🧭 *(a tiny experiment to make startup *stick*)*
+### Sub-step 5 of 8 — Break it on purpose (30s), then restore 🧭 *(a tiny experiment to make startup *stick*)* · ≈30 min
 
 🎯 **Goal:** Prove to yourself that auto-configuration is classpath-driven (no magic) by temporarily commenting out the web starter and observing how the application's runtime behavior changes.
 
@@ -709,11 +738,13 @@ Notice there is **no** "Tomcat started" log, and the process terminates immediat
 git checkout services/hello/pom.xml
 ```
 
+🔖 **Stopping here?** You have the same running server as sub-step 4 — confirm `git diff services/hello/pom.xml` is empty (starter restored). Next: sub-step 6 (`HelloController`); first action: create `services/hello/src/main/java/com/buildabank/hello/HelloController.java`.
+
 ⚠️ **Pitfall:** Forgetting to restore the web starter will break subsequent steps, causing compile errors in the controller (since Spring Web annotations will not compile) and failures in tests.
 
 ---
 
-### Sub-step 6 of 8 — Add `HelloController` (your first endpoint) 🧭 *(… app class ✅ → **controller** → …)*
+### Sub-step 6 of 8 — Add `HelloController` (your first endpoint) 🧭 *(… app class ✅ → **controller** → …)* · ≈1 h
 
 
 🎯 **Goal:** expose `GET /api/hello` returning a small JSON greeting and the server time (UTC) — the first HTTP surface your bank exposes.
@@ -790,6 +821,8 @@ Content-Type: application/json
 
 ✋ **Checkpoint:** `curl -i http://localhost:8080/api/hello` returns **HTTP 200**, `Content-Type: application/json`, and the welcome JSON. Stop the app with `Ctrl+C`.
 
+🔖 **Stopping here?** You have `GET /api/hello` returning JSON 200 — commit below first. Next: sub-step 7 (`application.yml`); first action: create `services/hello/src/main/resources/application.yml`.
+
 💾 **Commit:**
 
 ```bash
@@ -799,9 +832,11 @@ git commit -m "feat(hello): add GET /api/hello endpoint returning JSON greeting"
 
 ⚠️ **Pitfall:** putting the controller in a package *outside* `com.buildabank.hello` (e.g. `com.buildabank.web`) means component scan misses it → 404. Keep beans at or below the application class's package.
 
+> ◇ ❓ **Knowledge-check:** what two annotations does `@RestController` combine, and what does the second one change about return values? <details><summary>answer</summary>`@Controller` + `@ResponseBody`. The latter means return values are serialized straight to the HTTP response body (JSON via Jackson) instead of being resolved to a view template.</details>
+
 ---
 
-### Sub-step 7 of 8 — Add `application.yml` (config: port, health, virtual threads) 🧭 *(… controller ✅ → **config** → …)*
+### Sub-step 7 of 8 — Add `application.yml` (config: port, health, virtual threads) 🧭 *(… controller ✅ → **config** → …)* · ≈45 min
 
 🎯 **Goal:** externalize configuration — pin the port, enable graceful shutdown and virtual threads, and expose the actuator health/info endpoints.
 
@@ -872,6 +907,8 @@ GET /actuator/health  ->  {"status":"UP", ... ,"groups":["liveness","readiness"]
 
 ✋ **Checkpoint:** `/actuator/health` returns `"status":"UP"`. The app still serves `/api/hello`. Stop with `Ctrl+C`.
 
+🔖 **Stopping here?** You have config in place — `/actuator/health` UP and `/api/hello` still serving — commit below first. Next: sub-step 8 (the test + the `verify` gate); first action: create `services/hello/src/test/java/com/buildabank/hello/HelloApplicationTests.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -883,7 +920,7 @@ git commit -m "feat(hello): add application.yml (port, graceful shutdown, virtua
 
 ---
 
-### Sub-step 8 of 8 — Write the test, then `./mvnw verify` 🧭 *(… config ✅ → **test** → **verify** ✅ — you're at the finish line)*
+### Sub-step 8 of 8 — Write the test, then `./mvnw verify` 🧭 *(… config ✅ → **test** → **verify** ✅ — you're at the finish line)* · ≈1 h
 
 🎯 **Goal:** write a test that *proves* the app works — not that it merely compiles — then run the full gate, `./mvnw verify`.
 
@@ -980,6 +1017,8 @@ o.s.boot.tomcat.TomcatWebServer : Tomcat started on port 55373 (http) with conte
 
 ✋ **Checkpoint:** `./mvnw verify` ends in **BUILD SUCCESS** with **Tests run: 2, Failures: 0**. You did it — your first Spring Boot service builds, runs, and is proven.
 
+🔖 **Stopping here?** You have a green `./mvnw verify` — the step's gate is passed (commit below first). Next: 🎮 Play With It; first action: `./mvnw -pl services/hello spring-boot:run`.
+
 💾 **Commit:**
 
 ```bash
@@ -988,6 +1027,8 @@ git commit -m "test(hello): add @SpringBootTest verifying context + GET /api/hel
 ```
 
 ⚠️ **Pitfall (the famous one):** if you *had* used `TestRestTemplate` (the pre-Boot-4 habit), `verify` would fail at **compile time** with `package org.springframework.boot.test.web.client does not exist` — exactly the error we hit and feature in 🩺. The fix is what you just wrote: `RestClient` against the live port.
+
+> ◇ ❓ **Knowledge-check:** why `RANDOM_PORT` instead of a fixed 8080 in the test? <details><summary>answer</summary>A random OS-assigned port avoids clashes (CI machines, parallel test classes, a dev server already on 8080) and still boots a *real* server, proving the full HTTP path; `@LocalServerPort` injects whatever port was chosen so the test knows where to connect.</details>
 
 ---
 
@@ -1027,7 +1068,7 @@ Make it tangible. Start the app, then poke it every way you like.
 make run-hello                                # if you have make — same thing
 ```
 
-> 💡 **In IntelliJ (optional):** open the committed run config `.run/hello-service.run.xml` → press ▶ Run, or set a breakpoint in `HelloController.hello()` and press ▶ Debug. The CLI command above is the canonical equivalent.
+> 💡 **In IntelliJ (optional, +~5 min):** open the committed run config `.run/hello-service.run.xml` → press ▶ Run, or set a breakpoint in `HelloController.hello()` and press ▶ Debug. The CLI command above is the canonical equivalent.
 
 **Poke the endpoints — `curl`:**
 
@@ -1071,7 +1112,7 @@ GET /actuator/health:
 {"status":"UP",...}
 ```
 
-> 🧪 **Little experiments — change X → see Y:**
+> 🧪 **Little experiments — change X → see Y (+~10 min, optional):**
 > - In `application.yml`, set `server.port: 9090`, restart, then `curl http://localhost:9090/api/hello`. (Remember to change it back.)
 > - Add `"step", 1` to the controller's `Map.of(...)` and watch the JSON grow — confirming returns serialize automatically.
 > - Hit a path that doesn't exist (`curl -i http://localhost:8080/nope`) and read the clean Spring 404 JSON.
@@ -1091,6 +1132,8 @@ You've reached **`step-01-end`** — which is also **`step-02-start`** (the chai
 > - [ ] Your `.env` is gitignored; only `.env.example` (fake values) is committed.
 
 *(This is your learner self-check. The author's stricter proof-of-execution is the Verification Log below.)*
+
+🔖 **Stopping here?** You have `step-01-end`: a green `./mvnw verify`, `/api/hello` serving JSON, and health `UP`. Next: D · Prove (the Verification Log read-through + the smoke test); first action: `bash steps/step-01/smoke.sh`.
 
 ---
 
@@ -1148,7 +1191,7 @@ GET /actuator/health  ->  {"status":"UP", ... ,"groups":["liveness","readiness"]
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>What's actually inside the executable "fat jar"?</summary>
+<summary>What's actually inside the executable "fat jar"? (+~10 min)</summary>
 
 Run `./mvnw -pl services/hello package`, then peek:
 
@@ -1160,7 +1203,7 @@ You'll see Spring Boot's nested-jar layout: your classes under `BOOT-INF/classes
 </details>
 
 <details>
-<summary>Virtual threads: what they change (and what they don't)</summary>
+<summary>Virtual threads: what they change (and what they don't) (+~5 min read)</summary>
 
 `spring.threads.virtual.enabled=true` makes Tomcat serve each request on a **virtual thread** (Project Loom). Virtual threads are scheduled by the JVM onto a small pool of OS carrier threads, so blocking I/O (a DB call, an HTTP call) no longer pins a precious OS thread — you can have *millions* cheaply. What they **don't** change: your code is still ordinary blocking, synchronous Java (that's the point — simplicity at scale), and they don't make a CPU-bound task faster or magically fix thread-safety bugs. We go deep — including a balance race shown failing then fixed — in **Step 11**.
 </details>
@@ -1219,6 +1262,8 @@ Because claims aren't evidence. This course's prime directive is *verify, don't 
 **Stretch goal:** add a third test asserting `/actuator/health` returns `"UP"` using `RestClient`, and a `GET /actuator/info` check.
 
 > Step 1 has **no stretch-goal reference solution** (it's setup + first app). The reference end-state is the tag itself — in the course repo, `git checkout step-01-end` (see `solutions/step-01/README.md`).
+
+🔖 **Stopping here?** You have the interview answers rehearsed and the exercises done (your `verify` still green). Next: F · Review (troubleshooting, recap, flashcards); first action: reopen this file at the **F · 🏆 Review** header.
 
 ---
 

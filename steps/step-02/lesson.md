@@ -13,12 +13,12 @@
 
 A one-line map of where we're going. Click to jump.
 
-1. **[A · 🧭 Orient](#orient)** — what this step is, why a language primer matters for a banking platform, and whether you can skip it.
-2. **[B · 🧠 Understand](#understand)** — the big idea (model the domain as types), how records/sealed/streams really work under the hood, the money-and-time security lens, the Java 8→25 evolution, the Repository pattern, and a thread-safety note.
-3. **[C · 🛠️ Build](#build)** — the heart: the `java-basics` module → `Money` → `Customer` → the sealed `Account` family → the pattern-match `switch` → `Transaction`/enum → the generic `Repository` + in-memory impl → `TransactionAnalytics` streams → `TimeExamples` → the `Step2Demo`. Plus 🎮 Play With It and the 🏁 finished result.
-4. **[D · 🔬 Prove](#prove)** — the Verification Log with the real, pasted `verify`, test, and demo output.
-5. **[E · 🎓 Apply](#apply)** — go-deeper asides, interview prep (with version-evolution + concurrency questions), and your-turn exercises.
-6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, and the recap/study notes.
+1. **[A · 🧭 Orient](#orient)** — what this step is, why a language primer matters for a banking platform, and whether you can skip it. *(~45 min)*
+2. **[B · 🧠 Understand](#understand)** — the big idea (model the domain as types), how records/sealed/streams really work under the hood, the money-and-time security lens, the Java 8→25 evolution, the Repository pattern, and a thread-safety note. *(~2h)*
+3. **[C · 🛠️ Build](#build)** — the heart: the `java-basics` module → `Money` → `Customer` → the sealed `Account` family → the pattern-match `switch` → `Transaction`/enum → the generic `Repository` + in-memory impl → `TransactionAnalytics` streams → `TimeExamples` → the `Step2Demo`. Plus 🎮 Play With It and the 🏁 finished result. *(~13–14h)*
+4. **[D · 🔬 Prove](#prove)** — the Verification Log with the real, pasted `verify`, test, and demo output. *(~30 min)*
+5. **[E · 🎓 Apply](#apply)** — go-deeper asides, interview prep (with version-evolution + concurrency questions), and your-turn exercises. *(~2h)*
+6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, and the recap/study notes. *(~1h)*
 
 ---
 
@@ -116,6 +116,23 @@ In Step 1 you stood up a pinned **Java 25 / Spring Boot 4.0.6** multi-module bui
 
 > **Depends on:** Step 1.
 
+## 🗓️ Session Plan
+
+~20 hours is a campaign, not a sitting. Here's the partition into eight sittings of ~2–2.5h; every sitting ends at a real commit or section boundary, so you can stop clean and resume cold. (The ✋ checkpoints in the build carry matching 🛑 re-entry notes.)
+
+| Sitting | Covers | ~Time | Ends at (save point) |
+|---|---|---|---|
+| **S1** | A · Orient + B · Understand (big idea → thread-safety note) | ~2.5h | end of Movement B — nothing to save |
+| **S2** | Sub-steps 1–3: module `pom.xml` (+ root-POM registration) → `Money` → `Customer` | ~2.5h | commit `feat(java-basics): add Customer record with LocalDate birth date and age helper` |
+| **S3** | Sub-steps 4–5: sealed `Account` family → pattern-match `switch` (+ exhaustiveness break-it) | ~2h | commit `feat(java-basics): describe accounts via exhaustive pattern-matching switch` |
+| **S4** | Sub-steps 6–8: `Transaction` + enum → exception → generic `Repository` | ~2.5h | commit `feat(java-basics): add generic Repository + thread-safe in-memory Customer impl` |
+| **S5** | Sub-steps 9–10: `TransactionAnalytics` streams → `TimeExamples` | ~2.5h | commit `feat(java-basics): add TimeExamples (Instant UTC, ZonedDateTime at the edge, Duration)` |
+| **S6** | Sub-step 11: `Step2Demo` (+ the `double`-drift break-it) | ~2h | demo prints the report; commit `feat(java-basics): add Step2Demo runnable tour of the language primer` |
+| **S7** | Sub-step 12: four test classes + `verify` (+ rounding break-it) → 🔁 Flow → 🎮 Play With It → 🏁 Finished Result → D · Prove | ~2.5h | `Tests run: 16` green; tag `step-02-end`; Verification Log compared |
+| **S8** | E · Apply (go-deepers, interview prep, exercises) + F · Review (recap, flashcards) | ~2.5h | end of step |
+
+**Optional routes:** experienced Java devs can ⏭️ skip-test out (~1–2h total, see above); the four 🚀 Go Deeper asides cost ~25 min combined; the 💡 IntelliJ tip ~2 min; each 🔬 break-it experiment is 60–90 seconds and worth every one of them; the 🏋️ Your Turn quick exercises run ~30–45 min and each stretch goal ~1–2h.
+
 ---
 
 <a id="understand"></a>
@@ -178,6 +195,8 @@ flowchart TD
 **Streams are lazy pipelines.** `txns.stream().filter(...).map(...).reduce(...)` builds a description of work; nothing iterates until the **terminal operation** (`reduce`, `collect`, `toList`, `max`) runs. `filter`/`map` are *intermediate* (return a new stream); `reduce`/`collect` are *terminal* (produce a value). A **lambda** like `t -> t.type() == type` is just a compact implementation of a functional interface (`Predicate<Transaction>` here).
 
 **`Optional<T>` is a tiny container** — zero or one element — with a typed API (`map`, `filter`, `ifPresent`, `orElseGet`) so the "absent" branch is impossible to forget. It is a *return type*, not a field type; we use it where a value may legitimately be missing (`findById`, `largest`).
+
+❓ **Knowledge-check:** you add a third permitted type to the sealed `Account` interface — what happens to every existing exhaustive `switch` over `Account`? <details><summary>answer</summary>They stop compiling until each one handles the new type — the compiler proves exhaustiveness from the <code>permits</code> list, so a forgotten case is a build error, not a runtime surprise.</details>
 
 ## 🛡️ Security Lens: What Could Go Wrong
 
@@ -242,6 +261,8 @@ This step has shared mutable state in exactly one place — the repository's map
 - **Why `ConcurrentHashMap`, not `HashMap`?** Even a toy store can be touched by more than one thread (a web request handler pool, later). A plain `HashMap` under concurrent writes can corrupt its internal buckets (historically even spin into an infinite loop). `ConcurrentHashMap` is the **safe default map** for shared state: concurrent reads, and writes that lock only a small slice. We use the `ConcurrentMap` interface type for the field to advertise that contract.
 - **Why records make this easy.** The *values* in the map — `Customer`, `Money` — are **immutable records**. An immutable object is automatically thread-safe to *share*: there's no state to race on, no need to copy or lock when you hand it to another thread. So the only thing we had to make thread-safe is the *container*, not its contents. (`findAll()` also returns `List.copyOf(...)` — an immutable snapshot — so a caller can't mutate our internals or trip over a concurrent modification.)
 - **The honest caveat.** `ConcurrentHashMap` makes each *operation* atomic; it does **not** make a *read-modify-write sequence* (like "check balance, then debit") atomic. That gap is exactly the balance-race bug we'll show **failing, then fix and prove** in Step 11/12. For now: shared container → concurrent map; shared values → immutable records.
+
+🛑 **Stopping here?** (end of sitting **S1**) You have the mental model — types as forms, records/sealed/streams under the hood, and the two ground rules (money = `BigDecimal`, time = UTC `Instant`). Nothing to save. Next: C · Build, Sub-step 1 (the module `pom.xml`) — first action: create `playground/java-basics/pom.xml`.
 
 ---
 
@@ -314,7 +335,7 @@ playground/java-basics/
 
 ---
 
-### Sub-step 1 of 12 — Create the module `pom.xml` and register it in the root POM 🧭 *(you are here: **module pom** → Money → Customer → …)*
+### Sub-step 1 of 12 — Create the module `pom.xml` and register it in the root POM *(≈ 30 min)* 🧭 *(you are here: **module pom** → Money → Customer → …)*
 
 🎯 **Goal:** declare a new Maven module that inherits the pinned Java 25 / Spring Boot 4 parent, register it in the root `pom.xml`'s modules list so Maven builds it, and pull in JUnit 5 + AssertJ for tests. This is plain Java — **no Spring dependency at all** — because Step 2 is about the *language*.
 
@@ -396,13 +417,16 @@ playground/java-basics/
 
 - `-pl playground/java-basics` = build **just this module** (`-pl` = "projects list").
 - `-am` = "also make" the modules this one depends on (the parent), so it resolves cleanly.
+- `-q` = quiet mode: Maven prints **only errors** — a successful run prints *nothing at all*.
 - `validate` = the lightest Maven phase; just checks the POM is well-formed.
 
-✅ **Expected output:** a quiet `BUILD SUCCESS` (with `-q`, you mostly see just the success line and timing).
+✅ **Expected output:** **nothing** — with `-q`, silence IS success. Any red `[ERROR]` lines mean failure (re-run without `-q` to see the full log). This convention holds for every `-q` compile in this step.
 
 ❌ **If you see `Could not find artifact com.buildabank:build-a-bank-parent`:** you're not at the repo root, or the parent isn't installed — run from the root and include `-am`. See 🩺.
 
 ✋ **Checkpoint:** `playground/java-basics/pom.xml` exists and `validate` passes. The directory `src/main/java/com/buildabank/basics/` is ready for code.
+
+🛑 **Stopping here?** You have the module pom validated, registered in the root POM, and committed (💾 below). Next: Sub-step 2 (`Money`) — first action: create `playground/java-basics/src/main/java/com/buildabank/basics/money/Money.java`.
 
 💾 **Commit:**
 
@@ -415,7 +439,7 @@ git commit -m "feat(java-basics): add Step 2 language-primer module (plain Java 
 
 ---
 
-### Sub-step 2 of 12 — `Money`: the most important type in the bank 🧭 *(pom ✅ → **Money** → Customer → …)*
+### Sub-step 2 of 12 — `Money`: the most important type in the bank *(≈ 90 min)* 🧭 *(pom ✅ → **Money** → Customer → …)*
 
 🎯 **Goal:** build the value object every account balance and every transaction is made of — exact decimal money, currency-aware, immutable, self-validating. This is **the first rule of banking code** made into a type.
 
@@ -518,11 +542,13 @@ public record Money(BigDecimal amount, Currency currency) {
 ./mvnw -B -q -pl playground/java-basics -am -DskipTests compile
 ```
 
-✅ **Expected output:** a quiet `BUILD SUCCESS`. (`compile` produces `target/classes/.../Money.class`.)
+✅ **Expected output:** silence — success prints nothing under `-q`; any `[ERROR]` line means failure. (`compile` produces `target/classes/.../Money.class`.)
 
 ❌ **If you see `cannot find symbol: method formatted(...)`:** you're on a very old JDK. `String.formatted` is Java 15+; this course pins Java 25, so check `java -version`. See 🩺.
 
 ✋ **Checkpoint:** `Money.java` compiles. You now have an immutable, currency-safe money type.
+
+🛑 **Stopping here?** You have the pom + `Money` committed. Next: Sub-step 3 (`Customer`) — first action: create `.../basics/customer/Customer.java`.
 
 💾 **Commit:**
 
@@ -535,7 +561,7 @@ git commit -m "feat(java-basics): add immutable Money value object (BigDecimal, 
 
 ---
 
-### Sub-step 3 of 12 — `Customer`: a record with a `LocalDate` and a little behavior 🧭 *(Money ✅ → **Customer** → Account → …)*
+### Sub-step 3 of 12 — `Customer`: a record with a `LocalDate` and a little behavior *(≈ 45 min)* 🧭 *(Money ✅ → **Customer** → Account → …)*
 
 🎯 **Goal:** model a bank customer, and meet the *second* `java.time` type — `LocalDate` for a birth date (a date with no time and no zone), contrasting with `Instant` for transaction timestamps. Records can carry small behavior, too.
 
@@ -593,9 +619,11 @@ public record Customer(Long id, String firstName, String lastName, LocalDate dat
 ./mvnw -B -q -pl playground/java-basics -am -DskipTests compile
 ```
 
-✅ **Expected output:** quiet `BUILD SUCCESS`.
+✅ **Expected output:** silence — under `-q`, success prints nothing; any `[ERROR]` line means failure.
 
 ✋ **Checkpoint:** `Customer.java` compiles. You've now used two `java.time` types deliberately (`LocalDate` here, `Instant` is coming in `Transaction`).
+
+🛑 **Stopping here?** (end of sitting **S2**) You have pom + `Money` + `Customer` committed and compiling. Next: Sub-step 4 (the sealed `Account` family) — first action: `./mvnw -B -q -pl playground/java-basics -am -DskipTests compile` (silence = still green).
 
 💾 **Commit:**
 
@@ -608,7 +636,7 @@ git commit -m "feat(java-basics): add Customer record with LocalDate birth date 
 
 ---
 
-### Sub-step 4 of 12 — the sealed `Account` family 🧭 *(Customer ✅ → **Account (sealed)** → AccountInfo → …)*
+### Sub-step 4 of 12 — the sealed `Account` family *(≈ 60 min)* 🧭 *(Customer ✅ → **Account (sealed)** → AccountInfo → …)*
 
 🎯 **Goal:** define the set of account kinds as a **closed** hierarchy the compiler understands — a `sealed interface` with exactly two permitted record implementations. This is what makes the next sub-step's `switch` provably exhaustive.
 
@@ -685,11 +713,13 @@ public record SavingsAccount(String id, String owner, Money balance, BigDecimal 
 ./mvnw -B -q -pl playground/java-basics -am -DskipTests compile
 ```
 
-✅ **Expected output:** quiet `BUILD SUCCESS` — all three account files compile.
+✅ **Expected output:** silence (under `-q`, success prints nothing) — all three account files compiled; any `[ERROR]` line means failure.
 
 ❌ **If you see `sealed`/`permits` errors:** the permitted types must be **in the same module** (and, without a module-info, the same package or named explicitly) and must each be `final`/`sealed`/`non-sealed`. Records are `final` automatically, so the common cause is a typo in the `permits` list.
 
 ✋ **Checkpoint:** `Account`, `CheckingAccount`, `SavingsAccount` all compile. You have a closed hierarchy.
+
+🛑 **Stopping here?** You have the closed `Account` hierarchy committed. Next: Sub-step 5 (`AccountInfo`, the pattern switch) — first action: create `.../basics/account/AccountInfo.java`.
 
 💾 **Commit:**
 
@@ -702,7 +732,7 @@ git commit -m "feat(java-basics): add sealed Account interface with Checking/Sav
 
 ---
 
-### Sub-step 5 of 12 — `AccountInfo`: the exhaustive pattern-matching `switch` 🧭 *(Account ✅ → **AccountInfo** → Transaction → …)*
+### Sub-step 5 of 12 — `AccountInfo`: the exhaustive pattern-matching `switch` *(≈ 60 min)* 🧭 *(Account ✅ → **AccountInfo** → Transaction → …)*
 
 🎯 **Goal:** consume the sealed hierarchy with a modern `switch` that tests-and-binds each type in one move and needs **no `default`** — the compiler proves we covered every case. This is the payoff of sealing.
 
@@ -756,7 +786,7 @@ public final class AccountInfo {
 ./mvnw -B -q -pl playground/java-basics -am -DskipTests compile
 ```
 
-✅ **Expected output:** quiet `BUILD SUCCESS`.
+✅ **Expected output:** silence — under `-q`, success prints nothing; any `[ERROR]` line means failure.
 
 🔬 **Break-it on purpose (60s) — watch the compiler enforce exhaustiveness:** temporarily delete the entire `case SavingsAccount s -> ...` branch and recompile:
 
@@ -774,6 +804,8 @@ That error is the entire point of sealing + pattern matching: the bank *cannot* 
 
 ✋ **Checkpoint:** `AccountInfo.describe(...)` compiles and the break-it experiment is reverted to green.
 
+🛑 **Stopping here?** (end of sitting **S3**) You have the whole sealed `Account` family + exhaustive switch committed and green. Next: Sub-step 6 (`Transaction` + enum) — first action: `./mvnw -B -q -pl playground/java-basics -am -DskipTests compile` to confirm you're still green (silence = green).
+
 💾 **Commit:**
 
 ```bash
@@ -785,7 +817,7 @@ git commit -m "feat(java-basics): describe accounts via exhaustive pattern-match
 
 ---
 
-### Sub-step 6 of 12 — `Transaction` + the `TransactionType` enum 🧭 *(AccountInfo ✅ → **Transaction + enum** → Exception → …)*
+### Sub-step 6 of 12 — `Transaction` + the `TransactionType` enum *(≈ 60 min)* 🧭 *(AccountInfo ✅ → **Transaction + enum** → Exception → …)*
 
 🎯 **Goal:** model a single ledger movement — an amount (`Money`), a direction (an `enum`), and a UTC timestamp (`Instant`). Meet **enums** (a fixed set of constants) and the bank's time rule.
 
@@ -852,9 +884,11 @@ public record Transaction(String id, Money amount, TransactionType type, Instant
 ./mvnw -B -q -pl playground/java-basics -am -DskipTests compile
 ```
 
-✅ **Expected output:** quiet `BUILD SUCCESS`.
+✅ **Expected output:** silence — under `-q`, success prints nothing; any `[ERROR]` line means failure.
 
 ✋ **Checkpoint:** `TransactionType` and `Transaction` compile. You now have the third `java.time` usage (`Instant`) and your first enum.
+
+🛑 **Stopping here?** You have `Transaction` + `TransactionType` committed. Next: Sub-step 7 (the domain exception) — first action: create `.../basics/exception/InsufficientFundsException.java`.
 
 💾 **Commit:**
 
@@ -867,7 +901,7 @@ git commit -m "feat(java-basics): add Transaction record + TransactionType enum 
 
 ---
 
-### Sub-step 7 of 12 — `InsufficientFundsException`: checked vs unchecked 🧭 *(Transaction ✅ → **Exception** → Repository → …)*
+### Sub-step 7 of 12 — `InsufficientFundsException`: checked vs unchecked *(≈ 30 min)* 🧭 *(Transaction ✅ → **Exception** → Repository → …)*
 
 🎯 **Goal:** model a domain failure as an exception, and learn the **checked vs unchecked** distinction — a classic interview topic and a real design decision.
 
@@ -915,9 +949,11 @@ public class InsufficientFundsException extends RuntimeException {
 ./mvnw -B -q -pl playground/java-basics -am -DskipTests compile
 ```
 
-✅ **Expected output:** quiet `BUILD SUCCESS`.
+✅ **Expected output:** silence — under `-q`, success prints nothing; any `[ERROR]` line means failure.
 
 ✋ **Checkpoint:** the exception compiles. (We don't throw it in the demo this step — it seeds the real ledger's overdraft logic in Step 12 — but it's here as the canonical example of domain-error modeling.)
+
+🛑 **Stopping here?** You have the domain exception committed. Next: Sub-step 8 (the generic `Repository`) — first action: create `.../basics/repo/Repository.java`.
 
 💾 **Commit:**
 
@@ -930,7 +966,7 @@ git commit -m "feat(java-basics): add InsufficientFundsException (unchecked doma
 
 ---
 
-### Sub-step 8 of 12 — the generic `Repository<T, ID>` + an in-memory implementation 🧭 *(Exception ✅ → **Repository** → Analytics → …)*
+### Sub-step 8 of 12 — the generic `Repository<T, ID>` + an in-memory implementation *(≈ 75 min)* 🧭 *(Exception ✅ → **Repository** → Analytics → …)*
 
 🎯 **Goal:** build the [Repository pattern](#repository-pattern) by hand — a *generic* interface plus a thread-safe in-memory implementation — so that when Spring Data generates one for you in Step 8, it's not magic. Meet **generics**, **`Optional`**, and `ConcurrentHashMap`.
 
@@ -1026,9 +1062,11 @@ public class InMemoryCustomerRepository implements Repository<Customer, Long> {
 ./mvnw -B -q -pl playground/java-basics -am -DskipTests compile
 ```
 
-✅ **Expected output:** quiet `BUILD SUCCESS`.
+✅ **Expected output:** silence — under `-q`, success prints nothing; any `[ERROR]` line means failure.
 
 ✋ **Checkpoint:** both repo files compile. You have a swappable persistence boundary.
+
+🛑 **Stopping here?** (end of sitting **S4**) You have sub-steps 1–8 committed: every domain type plus a working repository. Next: Sub-step 9 (`TransactionAnalytics`, streams) — first action: `./mvnw -B -q -pl playground/java-basics -am -DskipTests compile` (silence = green).
 
 💾 **Commit:**
 
@@ -1041,7 +1079,7 @@ git commit -m "feat(java-basics): add generic Repository + thread-safe in-memory
 
 ---
 
-### Sub-step 9 of 12 — `TransactionAnalytics`: the Stream API, in five idioms 🧭 *(Repository ✅ → **Analytics** → TimeExamples → …)*
+### Sub-step 9 of 12 — `TransactionAnalytics`: the Stream API, in five idioms *(≈ 90 min)* 🧭 *(Repository ✅ → **Analytics** → TimeExamples → …)*
 
 🎯 **Goal:** turn a `List<Transaction>` into insight with **streams, lambdas, and collectors** — five tiny worked examples: `filter`+`map`+`reduce`, `groupingBy`+`counting`, `max`→`Optional`, and `filter`+`sorted`+`toList`.
 
@@ -1126,6 +1164,8 @@ public final class TransactionAnalytics {
 
 💭 **Under the hood:** intermediate ops (`filter`, `map`, `sorted`) return a new stream and do nothing yet; the terminal op (`reduce`, `collect`, `max`, `toList`) pulls elements through the whole pipeline once. A `Comparator.comparing(keyExtractor)` builds a comparator from a key; `.reversed()` flips it. Method references (`BigDecimal::add`, `Transaction::type`) are just compact lambdas the compiler turns into the same functional-interface instance.
 
+❓ **Knowledge-check:** in `totalAmount`, which operation is *terminal*, and why does nothing iterate before it runs? <details><summary>answer</summary><code>reduce</code>. <code>filter</code> and <code>map</code> are <em>intermediate</em> — they only describe the pipeline; the terminal op is what pulls elements through it, once.</details>
+
 🔮 **Predict:** for the three demo transactions (CREDIT 2000.00, DEBIT 750.00, DEBIT 125.50), what does `net(...)` return? <details><summary>answer</summary><code>1124.50</code> — credits (2000.00) minus debits (750.00 + 125.50 = 875.50). The test and the demo both confirm this.</details>
 
 ▶️ **Run & See:**
@@ -1134,11 +1174,13 @@ public final class TransactionAnalytics {
 ./mvnw -B -q -pl playground/java-basics -am -DskipTests compile
 ```
 
-✅ **Expected output:** quiet `BUILD SUCCESS`.
+✅ **Expected output:** silence — under `-q`, success prints nothing; any `[ERROR]` line means failure.
 
 ❓ **Knowledge-check:** why does `largest` return `Optional<Transaction>` instead of `Transaction`? <details><summary>answer</summary>An empty list has no largest element. <code>Optional</code> encodes that possibility in the type so the caller must handle "no transactions" — no risk of an NPE.</details>
 
 ✋ **Checkpoint:** `TransactionAnalytics` compiles. You've used five distinct stream idioms.
+
+🛑 **Stopping here?** You have all five stream idioms committed. Next: Sub-step 10 (`TimeExamples`) — first action: create `.../basics/time/TimeExamples.java`.
 
 💾 **Commit:**
 
@@ -1151,7 +1193,7 @@ git commit -m "feat(java-basics): add stream-based TransactionAnalytics (reduce,
 
 ---
 
-### Sub-step 10 of 12 — `TimeExamples`: `Instant` vs `ZonedDateTime` vs `Duration` 🧭 *(Analytics ✅ → **TimeExamples** → Step2Demo → …)*
+### Sub-step 10 of 12 — `TimeExamples`: `Instant` vs `ZonedDateTime` vs `Duration` *(≈ 60 min)* 🧭 *(Analytics ✅ → **TimeExamples** → Step2Demo → …)*
 
 🎯 **Goal:** make the bank's time rule concrete — **store `Instant` (UTC), convert to a zone only at the display edge** — and meet `Duration` for elapsed time.
 
@@ -1217,9 +1259,11 @@ public final class TimeExamples {
 ./mvnw -B -q -pl playground/java-basics -am -DskipTests compile
 ```
 
-✅ **Expected output:** quiet `BUILD SUCCESS`.
+✅ **Expected output:** silence — under `-q`, success prints nothing; any `[ERROR]` line means failure.
 
 ✋ **Checkpoint:** `TimeExamples` compiles. All four `java.time` types you'll meet repeatedly (`Instant`, `LocalDate`, `ZonedDateTime`, `Duration`) are now in your toolkit.
+
+🛑 **Stopping here?** (end of sitting **S5**) Sub-steps 1–10 are committed and compile — every main class except the demo. Next: Sub-step 11 (`Step2Demo` — the step's first *visible* output!) — first action: `./mvnw -B -q -pl playground/java-basics -am -DskipTests compile` to confirm you're still green.
 
 💾 **Commit:**
 
@@ -1232,7 +1276,7 @@ git commit -m "feat(java-basics): add TimeExamples (Instant UTC, ZonedDateTime a
 
 ---
 
-### Sub-step 11 of 12 — `Step2Demo`: tie it together and RUN it 🧭 *(TimeExamples ✅ → **Step2Demo** → tests + verify)*
+### Sub-step 11 of 12 — `Step2Demo`: tie it together and RUN it *(≈ 90 min)* 🧭 *(TimeExamples ✅ → **Step2Demo** → tests + verify)*
 
 🎯 **Goal:** assemble everything into a runnable `main` that prints a tiny bank report — so you *see* records, the sealed switch, streams, `Optional`, `BigDecimal`, and `Instant` produce real output. This is the step's payoff surface.
 
@@ -1393,6 +1437,8 @@ The `double` is off by a penny's fraction — and over millions of transactions 
 
 ✋ **Checkpoint:** the demo prints the report above, byte-for-byte (notably `net movement : 1124.50 USD` and `@ 3.25% APR`). If yours differs, re-check `Money`/`AccountInfo`/`TransactionAnalytics`.
 
+🛑 **Stopping here?** (end of sitting **S6**) The demo runs and prints the full report, committed (💾 below). Next: Sub-step 12 (tests + `verify`) — first action: create `src/test/java/com/buildabank/basics/money/MoneyTest.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -1404,7 +1450,7 @@ git commit -m "feat(java-basics): add Step2Demo runnable tour of the language pr
 
 ---
 
-### Sub-step 12 of 12 — tests: prove every claim, then `verify` 🧭 *(Step2Demo ✅ → **tests + verify** — done!)*
+### Sub-step 12 of 12 — tests: prove every claim, then `verify` *(≈ 2h)* 🧭 *(Step2Demo ✅ → **tests + verify** — done!)*
 
 🎯 **Goal:** back the lesson's claims with executable proof. Four small JUnit 5 + AssertJ test classes assert the behaviors we described (money rounding, the pattern switch, the repository's `Optional`, the stream analytics) — 16 tests total.
 
@@ -1632,6 +1678,8 @@ class TransactionAnalyticsTest {
 
 ✋ **Checkpoint:** `Tests run: 16, Failures: 0, Errors: 0` and `BUILD SUCCESS`. The module is complete and proven.
 
+🛑 **Stopping here?** The build is done: 16 tests green, all commits in. Next: the 🔁 flow recap + 🎮 Play With It, then the 🏁 Finished Result — first action: `bash steps/step-02/smoke.sh`.
+
 💾 **Commit:**
 
 ```bash
@@ -1700,7 +1748,7 @@ bash steps/step-02/smoke.sh
 It builds, runs the demo, greps for `net movement   : 1124.50 USD` and `3.25% APR`, and prints `✅ Step 2 smoke test PASSED`.
 
 > [!TIP]
-> 💡 **Faster in IntelliJ (optional):** open `Step2Demo.java` and click the green ▶ gutter arrow next to `main` to run it; click the arrow next to a test class to run just those tests with the coverage/rerun toolbar. (CLI users: the commands above are the canonical path and run identically.)
+> 💡 **Faster in IntelliJ (optional, +~2 min):** open `Step2Demo.java` and click the green ▶ gutter arrow next to `main` to run it; click the arrow next to a test class to run just those tests with the coverage/rerun toolbar. (CLI users: the commands above are the canonical path and run identically.)
 
 ### 🧪 Little Experiments — "change X → see Y"
 
@@ -1710,6 +1758,8 @@ It builds, runs the demo, greps for `net movement   : 1124.50 USD` and `3.25% AP
 - **Delete a `case` from `AccountInfo`'s switch** → the build **won't compile** (`does not cover all possible input values`). Put it back. (Exhaustiveness, enforced.)
 - **Try cross-currency** `Money.of("1.00","USD").plus(Money.of("1.00","EUR"))` → `IllegalArgumentException: Currency mismatch: USD vs EUR`.
 - **The `double` drift demo** from sub-step 11 → `0.9999999999999999` vs `BigDecimal`'s `1.00`.
+
+❓ **Knowledge-check:** the experiments show `Money.of("2.125","USD")` printing `2.12`, not `2.13` — why does the bank round that way? <details><summary>answer</summary><code>HALF_EVEN</code> (banker's rounding) rounds a half to the nearest <em>even</em> last digit; unlike "round half up" it doesn't bias totals upward across millions of transactions.</details>
 
 ## 🏁 The Finished Result
 
@@ -1729,6 +1779,8 @@ You're done when:
 # Tag the verified end-state (matches the next step's start).
 git tag step-02-end
 ```
+
+🛑 **Stopping here?** You're at `step-02-end`: 16 tests green, demo verified, smoke test passed, tag placed. Next: Movement D (the Verification Log) — first action: re-run `./mvnw -B -pl playground/java-basics -am verify` and compare your tail against the log.
 
 ---
 
@@ -1792,7 +1844,7 @@ Every value is the deterministic output of the code you built: `36` (LocalDate/P
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>🔬 See what the compiler actually generated for a record (<code>javap</code>)</summary>
+<summary>🔬 See what the compiler actually generated for a record (<code>javap</code>) (+~10 min)</summary>
 
 After compiling, disassemble `Money` to see the generated members — proof a record is "just a class":
 
@@ -1804,7 +1856,7 @@ You'll see a `final class`, `private final` fields, accessor methods `amount()` 
 </details>
 
 <details>
-<summary>🧠 Records with extra invariants — beyond null checks</summary>
+<summary>🧠 Records with extra invariants — beyond null checks (+~5 min)</summary>
 
 A compact constructor can enforce *any* invariant. For example, you could reject a negative interest rate in `SavingsAccount` by adding a compact constructor:
 
@@ -1822,13 +1874,13 @@ The rule of thumb: validate/normalize in the compact constructor; keep derived v
 </details>
 
 <details>
-<summary>🌊 When NOT to use a stream (and parallel streams in banking)</summary>
+<summary>🌊 When NOT to use a stream (and parallel streams in banking) (+~5 min)</summary>
 
 Streams shine for declarative transforms, but a plain `for` loop is clearer for simple side-effecting iteration, and `parallelStream()` is rarely the right call in a banking service: the work per element is usually tiny, the data sets per request are small, and you're already running many requests concurrently (one per thread/virtual thread). Parallel streams share the common ForkJoinPool and can starve other work. Rule: reach for `parallelStream()` only for genuinely CPU-bound, large, independent batches — and measure (Step 55). For ordinary request handling, sequential streams.
 </details>
 
 <details>
-<summary>🧩 Why <code>Optional</code> is a return type, not a field type</summary>
+<summary>🧩 Why <code>Optional</code> is a return type, not a field type (+~5 min)</summary>
 
 `Optional` is designed to express "a method might not return a value." It is *not* meant for fields or method parameters (it adds an allocation and another null case — an `Optional` field can itself be null). So: return `Optional<Customer>` from `findById`; store a plain (possibly-null, or better, validated-non-null) field. This is exactly how we use it — `Repository.findById` returns it; no record *holds* one.
 </details>
@@ -1885,6 +1937,8 @@ Unchecked (`extends RuntimeException`). Checked exceptions force every caller to
 - **B.** Generalize `InMemoryCustomerRepository` into a reusable `InMemoryRepository<T, ID>` that takes an id-extractor function (`Function<T, ID>`) in its constructor, so it works for any entity. Prove it with both `Customer` and a new `Account`-keyed test.
 
 > Reference solutions live in `solutions/step-02/` (or the `solutions` branch) — try first, then compare.
+
+🛑 **Stopping here?** You have the go-deepers, interview answers, and exercises under your belt (any exercise code committed on your own branch). Next: F · Review (troubleshooting, glossary, recap & flashcards) — first action: re-open `steps/step-02/lesson.md#review` and skim the 🩺 table.
 
 ---
 

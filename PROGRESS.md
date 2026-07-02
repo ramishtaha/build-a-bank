@@ -5,55 +5,56 @@
 
 ## Where we are
 - **Phase:** F — Full-Stack Frontend 🔵 **IN PROGRESS** (Steps 29–32). Phase E ✅ (25–28). Phase D ✅ (19–24). Phase C ✅ (13–18). Phase B ✅ (8–12).
-- **Step:** 30 of 67 — *Frontend pt.2 — state, data & forms (TanStack Query · RHF+Zod · SSE)* — ✅ **COMPLETE & VERIFIED** (🟠 Standard tier — frontend feature work + a small gateway route).
-- **Last verified tag:** `step-30-end` (== `step-31-start`) — full-repo `./mvnw verify` → BUILD SUCCESS (**14 modules**, 3:14; gates green; gateway **5 tests** incl. the new notification route) + the SPA's npm build/lint/**15 Vitest tests** green.
-  TanStack Query data layer (`useAccount`/`useEntries`/`useTransfer`) + RHF/Zod **TransferForm** + **SSE** `useNotificationStream`/`LiveNotifications`; gateway now fronts `/notifications/**`. smoke.sh PASSED; clean-room `npm ci` green; ADR-0021.
-  Full detail (deps pinned, §12.3 mutation, §12.8 verify-adjacent notes) → the `step-30-end` row in `docs/ai/VERIFICATION-LEDGER.md`.
+- **Step:** 31 of 67 — *Frontend pt.3 — testing, a11y & i18n (MSW · Playwright · axe · Intl)* — ✅ **COMPLETE & VERIFIED** (🟠 Standard tier; Lesson DoD: PASS — 9 sub-steps · 🔮 6 · ❓ 5 · 🔬 3 · ▶️ 9).
+- **Last verified tag:** `step-31-end` (== `step-32-start`) — full-repo `./mvnw verify` → BUILD SUCCESS (14 modules) + SPA: npm build (133 modules) / lint (0 errors) / **24 Vitest tests** (MSW floor) / **Playwright E2E 2/2 in real Chromium** / smoke.sh PASSED.
+  MSW network-floor mocking + axe a11y + i18n (en/es) + `Intl` multi-currency + **hermetic Playwright E2E** (login→balance→transfer→live SSE; Idempotency-Key asserted on the wire; §12.3 mutation both directions). ADR-0022.
+  Full detail → the `step-31-end` row in `docs/ai/VERIFICATION-LEDGER.md`.
 
 ## Next action
-**Step 31 — Frontend pt.3 (testing & accessibility)** 🔵 — per the step-31 row of `COURSE.md`: component tests (**Testing Library**, deepen), **E2E (Playwright)**, **API mocking (MSW)**, **WCAG accessibility basics**, **i18n + multi-currency formatting**. Build on the Step-30 `frontend/`: introduce **MSW** to mock the gateway at the network layer (replace the per-test `vi.mock('../api/client')` with realistic request handlers); add **Playwright** E2E (login → transfer → see balance/live update — note Playwright needs browsers; `npx playwright install` may be a sandbox capability question → check & document per §12.8, likely verify-adjacent for the actual browser run); **a11y** (labels/roles/focus, maybe `axe`/`jest-axe`); **i18n** (e.g. `react-i18next`) + `Intl.NumberFormat` multi-currency money formatting. Likely 🟠 Standard. **⚠️ Capability check:** Playwright browser download/run in this sandbox — if it can't launch a browser, write the E2E specs + document them as verify-adjacent, and fully verify the Testing-Library/MSW/a11y/i18n parts. Follow `docs/ai/LESSON-SPEC.md` (the distilled §8/§8.1/§12 contract — do not read the master prompt); resume from `step-31-start` (== `step-30-end`); keep `step-31-end == step-32-start`. Then Step 32 (token refresh + route-guard hardening, bundle/perf, **Dockerize the SPA + serve via gateway/CDN**, deploy). **Carry-forward security debt** (honor when relevant): R-001 BOLA, R-002 cif/notification/market-info/onboarding no app-auth, R-003 rate limiting (Step 37), R-005 key rotation (Phase H), R-006 scanning gates (Step 40) — all in `security/risk-register.md`. Frontend JWT-in-localStorage XSS hardening = **Step 32**.
+**Step 32 — Frontend pt.4 (hardening & ship)** 🔵 — per the step-32 row of `COURSE.md`: **token refresh & route guards** (move the JWT out of `localStorage` — httpOnly cookie or in-memory + refresh rotation; the security debt carried since Step 29), **bundle/perf optimization** (code-splitting, lazy routes, bundle analysis — current single chunk is 414.72 kB), **Dockerize the SPA + serve via gateway/CDN**, deploy, end-to-end demo. 🎓 **Phase-F capstone closes here**: the full money-transfer UI — form + validation → live balance via SSE → **Playwright E2E against the real stack behind the gateway** (browsers ARE installed — capability re-verified 2026-07-02; the hermetic Step-31 E2E graduates to full-stack). Likely 🔴 Full tier (security path + phase capstone + milestone Step 32). Follow `docs/ai/CONTEXT-PLAYBOOK.md` (read-set: this file → `steps/step-31/capsule.md` → COURSE row 32 → CAPABILITIES/VERSIONS → LESSON-SPEC/PROJECT-MAP). Keep `step-32-end == step-33-start`. **Carry-forward security debt** (honor when relevant): R-001 BOLA, R-002 cif/notification/market-info/onboarding no app-auth, R-003 rate limiting (Step 37), R-005 key rotation (Phase H), R-006 scanning gates (Step 40) — `security/risk-register.md`.
 
 ## Lesson metrics
-Measured 2026-07-02 after the pure-edit improvement pass (🔬 counts `🔬 **Break` break-its only; ▶️ counts run-and-see markers — zeros on steps 18–30 reflect the thin-build backlog in `docs/ai/audit/IMPROVEMENT-BACKLOG.md`, not a healthy state).
+Measured 2026-07-02 after full reconciliation (enrichment loops merged + ADHD layer + aids pass). 🔬 counts `🔬 **Break` break-its only; ▶️ counts run-and-see markers. Compare new steps against these — a dive below the neighborhood means decay.
 
 | Step | lesson lines | sub-steps | 🔮 | ❓ | 🔬 | ▶️ |
 |---|---|---|---|---|---|---|
-| 1 | 1319 | 8 | 6 | 5 | 1 | 7 |
-| 2 | 2043 | 12 | 12 | 4 | 3 | 13 |
-| 3 | 1357 | 6 | 5 | 3 | 1 | 6 |
-| 4 | 1391 | 7 | 7 | 3 | 0 | 3 |
-| 5 | 1664 | 11 | 10 | 3 | 1 | 4 |
-| 6 | 1435 | 6 | 6 | 3 | 4 | 7 |
-| 7 | 1587 | 7 | 7 | 3 | 3 | 8 |
-| 8 | 2038 | 12 | 7 | 3 | 2 | 7 |
-| 9 | 1671 | 6 | 6 | 3 | 2 | 3 |
-| 10 | 1502 | 7 | 7 | 3 | 2 | 6 |
-| 11 | 1010 | 4 | 3 | 3 | 1 | 2 |
-| 12 | 2363 | 7 | 4 | 3 | 1 | 2 |
-| 13 | 988 | 7 | 3 | 3 | 0 | 4 |
-| 14 | 1510 | 7 | 6 | 3 | 1 | 2 |
-| 15 | 1038 | 6 | 4 | 3 | 1 | 2 |
-| 16 | 1349 | 6 | 3 | 3 | 1 | 2 |
-| 17 | 1023 | 5 | 3 | 3 | 1 | 3 |
-| 18 | 804 | 5 | 3 | 3 | 2 | 0 |
-| 19 | 463 | 5 | 4 | 3 | 1 | 5 |
-| 20 | 1385 | 4 | 3 | 3 | 0 | 0 |
-| 21 | 483 | 5 | 4 | 3 | 0 | 0 |
-| 22 | 461 | 3 | 3 | 4 | 0 | 0 |
-| 23 | 435 | 3 | 3 | 3 | 0 | 0 |
-| 24 | 1056 | 7 | 3 | 3 | 0 | 3 |
-| 25 | 403 | 4 | 3 | 3 | 1 | 0 |
-| 26 | 770 | 4 | 3 | 3 | 0 | 0 |
-| 27 | 674 | 4 | 3 | 3 | 0 | 0 |
-| 28 | 583 | 6 | 4 | 3 | 1 | 0 |
-| 29 | 1364 | 6 | 6 | 3 | 1 | 0 |
-| 30 | 460 | 5 | 3 | 3 | 1 | 0 |
+| 1 | 1365 | 8 | 8 | 5 | 0 | 8 |
+| 2 | 2039 | 12 | 12 | 4 | 3 | 12 |
+| 3 | 1388 | 6 | 5 | 3 | 1 | 6 |
+| 4 | 1456 | 7 | 7 | 3 | 0 | 3 |
+| 5 | 1711 | 11 | 10 | 3 | 1 | 4 |
+| 6 | 1492 | 6 | 6 | 3 | 4 | 7 |
+| 7 | 1646 | 7 | 7 | 3 | 3 | 8 |
+| 8 | 2093 | 12 | 7 | 3 | 2 | 7 |
+| 9 | 1697 | 6 | 6 | 3 | 2 | 3 |
+| 10 | 1467 | 7 | 7 | 3 | 0 | 7 |
+| 11 | 1066 | 4 | 3 | 3 | 1 | 4 |
+| 12 | 2665 | 12 | 12 | 4 | 2 | 11 |
+| 13 | 1683 | 8 | 8 | 3 | 1 | 8 |
+| 14 | 1813 | 9 | 11 | 3 | 1 | 5 |
+| 15 | 1461 | 10 | 8 | 3 | 1 | 4 |
+| 16 | 1692 | 10 | 10 | 3 | 1 | 10 |
+| 17 | 2305 | 12 | 11 | 4 | 0 | 12 |
+| 18 | 2066 | 11 | 11 | 3 | 2 | 11 |
+| 19 | 1978 | 11 | 11 | 4 | 4 | 11 |
+| 20 | 3298 | 15 | 14 | 3 | 0 | 15 |
+| 21 | 2839 | 14 | 14 | 5 | 1 | 14 |
+| 22 | 2068 | 14 | 11 | 5 | 1 | 15 |
+| 23 | 2812 | 14 | 14 | 4 | 1 | 14 |
+| 24 | 2646 | 11 | 9 | 4 | 1 | 12 |
+| 25 | 2555 | 11 | 10 | 6 | 1 | 10 |
+| 26 | 2894 | 14 | 13 | 5 | 1 | 15 |
+| 27 | 1359 | 9 | 10 | 3 | 2 | 8 |
+| 28 | 1743 | 11 | 11 | 3 | 0 | 11 |
+| 29 | 1617 | 6 | 6 | 3 | 0 | 6 |
+| 30 | 1426 | 9 | 9 | 4 | 0 | 9 |
+| 31 | 2143 | 9 | 6 | 5 | 3 | 9 |
 
 ## Known watch-items (carried forward)
 - **Spring AI** is RC on the Boot-4 line → re-pin to GA at Phase I (Step 46+), or use the Python FastAPI sidecar path.
 - **Frontend JWT storage** (Step 29): JWT in `localStorage` (XSS-exposed) — teaching simplification; harden in **Step 32** (httpOnly cookie / in-memory + refresh rotation).
 - **Kubernetes/cloud** are verify-adjacent here (no local cluster) → learner installs `kind`; we lint/template/dry-run.
-- **Live browser** flows are verify-adjacent (no browser in sandbox) — headless CORS preflight + Vitest instead (§12.8).
+- **Playwright browsers ARE installed here** (re-verified 2026-07-02; hermetic E2E ran green in Step 31). The remaining verify-adjacent browser item is the *full-stack* flow through the real gateway — Step 32's capstone runs it for real.
 
 ## Pointers
 - Full verification history → `docs/ai/VERIFICATION-LEDGER.md`

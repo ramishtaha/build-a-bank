@@ -563,3 +563,193 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 
 
 
+
+## Step 3 — How the Internet & the Web Work
+
+- **TCP/IP model** — the 4-layer stack the internet actually runs: link (Ethernet/Wi-Fi) → internet (IP) → transport (TCP/UDP) → application (HTTP/DNS). Each layer does one job and trusts the one below.
+- **encapsulation** — each layer wraps the payload from the layer above in its own header: HTTP inside TCP inside IP inside an Ethernet frame.
+- **IP address** — the numeric machine address (IPv4 `127.0.0.1` / IPv6 `::1`); IP routes packets between machines but promises nothing about delivery or order.
+- **port** — a 16-bit number selecting a specific process on a host (HTTP 80, HTTPS 443, our app 8080). A URL with no port gets the scheme default.
+- **DNS** — Domain Name System; resolves a hostname to an IP address before any connection can open. Observed with `nslookup`.
+- **TCP 3-way handshake** — SYN → SYN-ACK → ACK; agrees on sequence numbers and confirms both sides before data, making TCP reliable and ordered.
+- **UDP** — connectionless, best-effort transport: no handshake, ordering, or retransmission. Fast — right for DNS and live media, wrong for money.
+- **HTTP request/response anatomy** — request line (method path version) + headers + blank line + optional body; response mirrors it with a status line. HTTP/1.1 is plain text with CRLF (`\r\n`) line endings.
+- **status-code families** — 2xx success, 3xx redirect, 4xx client error (400/401/403/404/429), 5xx server error (500/502/503).
+- **`Host` header** — mandatory in HTTP/1.1; lets one IP serve many sites (virtual hosting).
+- **case-insensitive header names** — per RFC 9110, `Content-Type` == `content-type`; asserting exact case is a bug (this step's real one). HTTP/2/3 lowercase all names on the wire.
+- **`Connection: close`** — asks the server to close the socket after responding, so a raw `readAllBytes()` sees end-of-stream; HTTP/1.1 otherwise defaults to keep-alive.
+- **keep-alive** — reusing one TCP connection for multiple HTTP requests (the HTTP/1.1 default).
+- **HTTPS** — HTTP carried over a TLS-encrypted connection; the only acceptable plaintext HTTP is localhost during development.
+- **TLS handshake** — ClientHello/ServerHello, certificate, key exchange, ALPN; establishes confidentiality, integrity, and server authentication before any HTTP flows (TLS 1.3 needs one round trip).
+- **ALPN** — Application-Layer Protocol Negotiation; picks the application protocol (`h2` vs `http/1.1`) *inside* the TLS handshake.
+- **head-of-line blocking** — a stalled item blocking everything behind it: HTTP/1.1 has it per connection; HTTP/2 fixes that but keeps TCP-level HOL; HTTP/3/QUIC removes both.
+- **QUIC** — the UDP-based transport under HTTP/3; re-adds reliability/ordering per stream and builds in TLS 1.3.
+- **load balancer (L4/L7)** — one front address spreading traffic across a server pool with health checks; L4 = connection-level and protocol-blind, L7 = HTTP-aware (path routing, TLS termination) — the API Gateway is an L7.
+- **loopback** — the `localhost` (`127.0.0.1` / `::1`) interface; packets never leave the machine — how `LoopbackHttpTest` proves a real HTTP round trip with no network.
+- **ephemeral port** — an OS-chosen free port (bind to port `0`, read it back with `getAddress().getPort()`); kills "address already in use" flakiness.
+- **`java.net.URI`** — the JDK's RFC 3986 parser: pure text-splitting into scheme/host/port/path/query (`-1` when the port is absent); zero I/O.
+- **`java.net.Socket`** — a Java handle over an OS TCP socket; constructing it performs DNS + the 3-way handshake. HTTP is just the text you choose to write into it.
+- **`java.net.http.HttpClient`** — the modern JDK client (Java 11+) built on sockets: manages connections, TLS, HTTP/1.1 & 2, and returns a typed `HttpResponse` — the layer Spring's `RestClient` wraps.
+
+---
+
+## Step 4 — How Java Runs: the JVM Up Close
+
+- **bytecode** — portable instructions for the JVM's abstract stack machine, produced by `javac` into `.class` files; the same bytecode runs unchanged on any OS/CPU with a JVM.
+- **operand stack / stack machine** — bytecode has no named registers: instructions push/pop values on a per-frame operand stack (`iload_0`, `iadd`, `ireturn`); the JIT later maps these onto real CPU registers.
+- **constant pool** — the `.class` file's table of strings, type names, and method/field references that bytecode instructions index into.
+- **`javap`** — the JDK class-file disassembler; `-c` prints each method's bytecode, `-p` includes private members.
+- **classloader delegation model** — classes load lazily via parent-first delegation (application → platform → bootstrap); the trusted bootstrap loader gets first refusal, so core `java.*` classes can't be impersonated — a trust boundary.
+- **bootstrap / platform / application classloaders** — the three-loader chain: core runtime classes (`java.lang`) / JDK modules (`java.sql`) / your classpath classes and dependency JARs.
+- **CDS ("shared objects file")** — Class Data Sharing: a pre-parsed, memory-mapped archive of common core classes; speeds startup and shares memory across JVMs (`source: shared objects file` in `-Xlog:class+load`).
+- **heap** — the shared region where all objects and arrays live; maximum size set by `-Xmx`; generational (young + old).
+- **young generation (Eden + survivor spaces)** — where new objects are born; collected cheaply and often because most objects die young (the weak generational hypothesis).
+- **old generation** — where long-lived survivors are promoted; collected less often and more expensively.
+- **evacuation pause** — a G1 young collection: stop-the-world, copy the live objects out of young regions, free the regions wholesale — typically ~1 ms (e.g. `35M->1M(64M) 1.063ms`).
+- **Metaspace** — class metadata (loaded classes, methods, constant pools) in **native** memory, auto-growing; replaced the fixed-size PermGen in Java 8, retiring `OutOfMemoryError: PermGen space`.
+- **thread stack** — per-thread stack of frames (locals + operand stack), one frame per active call; thread-confined (why locals are thread-safe) and the source of `StackOverflowError`.
+- **PC register** — per-thread pointer to the bytecode instruction currently executing.
+- **interpreter** — executes bytecode directly, correct from the first instruction with no warm-up; where every method starts (tier 0).
+- **JIT (Just-In-Time compiler)** — compiles *hot* bytecode to optimized native code at runtime, guided by live profiling data.
+- **tiered compilation (C1/C2)** — interpreter → C1 (level 3: fast compile + profiling) → C2 (level 4: slow compile, maximum profile-guided optimization).
+- **OSR (On-Stack Replacement)** — compiling a long-running loop and swapping the compiled code onto the stack *mid-execution* (the `%` flag in `-XX:+PrintCompilation`), since the method may never be re-entered.
+- **deoptimization / uncommon trap** — discarding compiled code ("made not entrant") when a speculative assumption is violated; execution falls back to the interpreter and may recompile.
+- **escape analysis / scalar replacement** — a C2 proof that an object never escapes its method → don't allocate it at all, keep its fields in registers; can erase allocations (and GC) entirely for non-escaping temporaries.
+- **G1 (Garbage-First)** — the default collector since Java 9: region-based, pause-goal-driven, collects the most-garbage regions first via evacuation pauses.
+- **ZGC / Shenandoah** — low-pause collectors that do most work concurrently with the application; sub-millisecond pauses even on huge heaps.
+- **JFR (Java Flight Recorder)** — the JVM's built-in, near-zero-overhead event profiler (allocations, GC, compilation, I/O); open-sourced in Java 11; summarize recordings with the `jfr` CLI.
+- **unified JVM logging (`-Xlog`)** — the Java 9+ logging framework for JVM internals, selected by tags (`-Xlog:gc`, `-Xlog:class+load=info`); superseded `-verbose:gc`/`-XX:+PrintGC`.
+- **JAR** — a ZIP of `.class` files plus `META-INF/MANIFEST.MF`; `java -jar` launches the manifest's `Main-Class`.
+
+---
+
+## Step 5 — Spring Core & IoC Deep
+
+- **IoC (Inversion of Control)** — the principle where a container, not your code, controls object creation, wiring, and lifecycle; your classes declare what they need instead of building it.
+- **DI (Dependency Injection)** — the mechanism that realizes IoC: the container supplies ("injects") a class's collaborators via constructor, setter, or field instead of the class constructing or looking them up.
+- **`ApplicationContext`** — Spring's IoC container: it reads bean definitions, instantiates and wires beans, publishes events, and manages the full bean lifecycle from refresh to close.
+- **bean** — any object whose lifecycle is managed by the Spring container, registered via component scanning or a `@Bean` factory method.
+- **`BeanDefinition`** — the container's internal *recipe* for a bean (class, scope, dependencies, init/destroy callbacks); conditions like `@ConditionalOnProperty` decide which definitions survive before any instantiation happens.
+- **component scanning** — the startup process that walks the classpath under the application's base package and registers a `BeanDefinition` for every stereotype-annotated class it finds.
+- **stereotype annotation** — `@Component` and its specializations (`@Service`, `@Repository`, `@Controller`, `@Configuration`) that mark a class for component scanning and document its architectural role.
+- **constructor injection** — supplying dependencies as constructor parameters so fields can be `final`, missing dependencies fail at startup, and the class is unit-testable with plain `new`; the recommended injection style (no `@Autowired` needed on a single constructor since Spring 4.3).
+- **field injection** — injecting via `@Autowired` on a private field; considered an anti-pattern because the field can't be `final`, dependencies are hidden, and testing requires reflection or a container.
+- **`@Bean` factory method** — a method inside a `@Configuration` class whose return value the container registers as a bean; the way to wire types you can't annotate (e.g., third-party classes like `java.time.Clock`).
+- **`proxyBeanMethods` (full vs lite `@Configuration`)** — full mode (default) CGLIB-proxies the config class so inter-`@Bean` calls return the container singleton; lite mode (`false`) skips the proxy for faster startup but makes inter-`@Bean` calls plain Java calls that create new instances.
+- **CGLIB proxy** — a runtime-generated subclass Spring uses to intercept method calls (e.g., on full-mode `@Configuration` classes) so container semantics apply to what looks like a normal call.
+- **bean lifecycle** — the ordered phases a bean passes through: instantiation (constructor) → dependency injection → BPP before-init → init callbacks (`@PostConstruct`) → BPP after-init → in service → destroy callbacks (`@PreDestroy`) on context close.
+- **`BeanPostProcessor` (BPP)** — a container hook invoked around *every* bean's initialization (`postProcessBeforeInitialization` / `postProcessAfterInitialization`); the after-init hook is where Spring swaps beans for AOP/`@Async` proxies.
+- **`@PostConstruct` / `@PreDestroy`** — lifecycle callback annotations: run once after dependency injection completes, and once as the context shuts down gracefully (never called for prototype beans).
+- **bean scope** — how many instances of a bean the container creates and shares: `singleton` (default, one per container), `prototype` (new instance per request to the container), plus web scopes (`request`, `session`) later.
+- **singleton scope** — one shared instance per `ApplicationContext` used by all threads, which is why singleton beans must be stateless or immutable to be thread-safe.
+- **prototype scope** — a scope where every `getBean()`/injection point receives a fresh instance; the container does not manage its destruction, and injecting one directly into a singleton freezes a single instance (fix with `ObjectProvider` or a scoped proxy).
+- **`ObjectProvider<T>`** — a lazy, per-use handle to a bean; calling `getObject()` inside a singleton fetches a genuinely fresh prototype (or an optional dependency) each time.
+- **`@ConditionalOnProperty`** — a Spring Boot condition that keeps a `BeanDefinition` only when a configuration property has a given value (`havingValue`), with `matchIfMissing` electing the default implementation when the property is absent.
+- **`@Profile`** — a condition that activates beans for named environment groups (`spring.profiles.active=prod`); environment-shaped, versus the feature-shaped `@ConditionalOnProperty`.
+- **`@Value`** — injects a property or SpEL expression result into a bean parameter/field, e.g. `@Value("${bank.rates.annual-percent}")`; externalizes configuration out of code.
+- **SpEL (Spring Expression Language)** — the `#{…}` expression language usable inside `@Value` and bean definitions for computation over properties and beans at wiring time.
+- **`ApplicationContextRunner`** — a test utility that builds a minimal application context per test with chosen configurations and property values, letting you assert which conditional bean wins in milliseconds without a full `@SpringBootTest` boot.
+- **Strategy pattern** — a design pattern where interchangeable implementations sit behind one interface (`RateProvider` ← fixed/market) and the caller is unaware which one it holds; DI + conditions select the strategy by configuration.
+- **Dependency Inversion Principle (DIP)** — the SOLID "D": high-level policy (interest calculation) depends on an abstraction, and low-level details (rate sources) depend on that same abstraction — the container plugs the two together at runtime.
+
+## Step 6 — Spring Boot Internals & Config (Auto-configuration, @ConfigurationProperties & Actuator)
+
+- **auto-configuration** — Spring Boot's opinionated, conditional bean registration applied automatically at startup based on classpath contents and configuration, discovered via `AutoConfiguration.imports` files.
+- **`@EnableAutoConfiguration`** — the annotation (included in `@SpringBootApplication`) that triggers reading every `AutoConfiguration.imports` file on the classpath to build the candidate list of auto-configuration classes.
+- **`AutoConfiguration.imports`** — the file at `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` listing one fully-qualified auto-configuration class per line; the modern (Boot 2.7+/3/4) replacement for the `spring.factories` `EnableAutoConfiguration` key.
+- **`@AutoConfiguration`** — the marker for an auto-configuration class: a specialized `@Configuration(proxyBeanMethods = false)` carrying `before`/`after` ordering metadata, meant to be discovered via the `.imports` file rather than component scan.
+- **`proxyBeanMethods = false` (lite mode)** — a `@Configuration` setting that skips the CGLIB proxy on the config class (faster startup) because its `@Bean` methods never call each other; the default inside `@AutoConfiguration`.
+- **`@ConditionalOnClass`** — a condition that applies a configuration only when a given type is present on the classpath — the primary trigger behind "add a JAR, get beans."
+- **`@ConditionalOnMissingBean`** — a condition that registers a bean only if no bean of that type exists yet — the **override hook** that lets user-defined beans win over auto-configured defaults.
+- **`@ConditionalOnProperty`** — a condition gating a configuration or bean on a property value; `matchIfMissing = true` means "on by default unless explicitly turned off."
+- **positive / negative match** — an auto-configuration candidate whose conditions were satisfied (beans registered) / unsatisfied (class skipped), recorded with reasons in the `ConditionEvaluationReport`.
+- **`ConditionEvaluationReport`** — the startup record of every `@Conditional*` decision; serialized by `/actuator/conditions` and printed to the console when the app starts with `--debug`.
+- **`@ConfigurationProperties`** — binds every property under a prefix (e.g. `bank.*`) into one typed object, replacing scattered `@Value` strings with a single, validated, IDE-completable bean.
+- **constructor binding** — the binding mode Boot uses when a `@ConfigurationProperties` type has a single canonical constructor (e.g. a `record`): property values are converted and passed to the constructor, yielding an immutable config object.
+- **relaxed binding** — Boot's tolerant property-name matching where `bank.rates.fixed`, `BANK_RATES_FIXED`, and `bank.rates.FIXED` all bind to the same target field.
+- **`@EnableConfigurationProperties`** — explicitly registers listed `@ConfigurationProperties` classes as beans and triggers their binding; without it (or a scan) the annotated class is never registered.
+- **`@ConfigurationPropertiesScan`** — the convention alternative that scans packages for `@ConfigurationProperties` classes and registers them all; starters prefer explicit `@EnableConfigurationProperties` inside their auto-config.
+- **`ApplicationContextRunner`** — a boot-free test harness that spins up a minimal context per test; with `AutoConfigurations.of(...)` it registers a class *as an auto-configuration* (conditions respected) — the idiomatic way to test back-off behavior, but it bypasses `.imports` discovery.
+- **Actuator** — Spring Boot's operational HTTP endpoints under `/actuator` (health, info, plus introspection like `conditions`, `beans`, `configprops`, `env`, `mappings`) for interrogating a live container.
+- **endpoint exposure (`management.endpoints.web.exposure.include`)** — the allow-list deciding which Actuator endpoint beans get web-mapped under `/actuator/**`; the beans exist regardless, so this list (default: `health`) is the security control.
+- **sanitization (Actuator)** — Boot's best-effort masking of values whose keys look secret (`password`, `secret`, `token`, `key` → `******`) in `/actuator/env` and `/actuator/configprops`; custom-named secrets can slip through.
+- **convention over configuration** — the design pattern where the framework ships opinionated, context-aware defaults (activated by conditions) and you write configuration only where you deviate — with `@ConditionalOnMissingBean` as the escape hatch.
+- **starter** — a dependency that bundles libraries plus auto-configuration so beans appear "for free" when it lands on the classpath; this step's `GreetingAutoConfiguration` + `.imports` file is the miniature skeleton of the real starter built in Step 28.
+
+## Step 7 — AOP & the Proxy Model (the Bank's Audit Aspect)
+
+- **AOP (aspect-oriented programming)** — a technique for modularizing *cross-cutting concerns* (auditing, transactions, security, metrics) so they're written once and applied declaratively instead of copy-pasted into every method.
+- **cross-cutting concern** — behavior needed across many otherwise-unrelated classes (log every service call, time every request); the code smell it fixes is the same boilerplate scattered everywhere.
+- **aspect** — the module bundling pointcuts + advice for one concern; in Spring a class annotated `@Aspect` **and** `@Component` (the second one is what makes it a bean).
+- **join point** — a point where extra behavior *could* attach. Spring AOP supports exactly one kind: **method execution** on Spring beans.
+- **pointcut** — the predicate selecting which join points to advise, e.g. `@annotation(...)` (opt-in marker) or `execution(* com.example.service..*.*(..))` (pattern match).
+- **advice** — the code that runs at matched join points: `@Before`, `@AfterReturning`, `@AfterThrowing`, `@After`, `@Around`.
+- **`@Around` / `ProceedingJoinPoint`** — the most powerful advice: it *replaces* the call and must invoke `proceed()` to run the real method (and re-throw its exceptions). Forgetting `proceed()` is the #1 `@Around` bug — the method silently never runs.
+- **weaving** — how aspect code gets connected to target code. Spring AOP weaves at **runtime via proxies**; full AspectJ can weave at compile- or load-time (bytecode modification), which also catches self-calls.
+- **proxy pattern** — a stand-in object with the same interface that intercepts calls to the real target; Spring registers the proxy as the bean, so every injection point gets the wrapper.
+- **JDK dynamic proxy** — `java.lang.reflect.Proxy`-based proxy that **implements the target's interfaces**; can't proxy a class without interfaces and exposes only interface methods.
+- **CGLIB proxy** — a runtime-generated **subclass** of the target class (class name like `AccountService$$SpringCGLIB$$0`); works on plain concrete classes but can't override `final` classes/methods or intercept `private` methods.
+- **`proxyTargetClass`** — the switch between the two: Spring Boot defaults to **CGLIB (`true`) since Boot 2.0** even when interfaces exist; `spring.aop.proxy-target-class=false` restores JDK proxies.
+- **auto-proxy creator** — the `BeanPostProcessor` that scans beans at startup and wraps advised ones in proxies — AOP is "just" the Step-6 BPP hook applied by the framework itself.
+- **self-invocation pitfall** — a `this.method()` call inside the same bean never crosses the proxy, so **no advice runs** (no audit, no transaction, no security check). Fixes: split the bean, inject the self-proxy, `AopContext.currentProxy()`, or AspectJ weaving.
+- **`@Audited` (marker annotation)** — a custom empty annotation used as an opt-in pointcut target; needs `@Retention(RUNTIME)` because the pointcut reads it reflectively at runtime (`CLASS`/`SOURCE` retention would never match).
+- **`AopUtils`** — Spring helper for runtime proxy forensics: `isAopProxy(bean)` / `isCglibProxy(bean)` / `isJdkDynamicProxy(bean)` — how the lesson *proves* the CGLIB proxy is real.
+- **`aspectjweaver`** — the AspectJ runtime jar Spring AOP needs to parse pointcut expressions; in Boot 4 you depend on it directly (`spring-boot-starter-aop` was removed), and `AopAutoConfiguration` enables `@AspectJ` proxying when it's present.
+- **`@AutoConfigureMockMvc` (Boot 4 location)** — moved to `org.springframework.boot.webmvc.test.autoconfigure` in the `spring-boot-webmvc-test` artifact, which is **not** transitive from `spring-boot-starter-test` — add it explicitly.
+- **MockMvc slice test** — a Spring test that drives the full MVC request pipeline (routing, JSON serialization, status codes) **without a real network socket** — how the slice's 200/404 behavior is asserted.
+- **vertical slice** — one feature cut through every layer (`Account` record → in-memory store → `@Audited` service → REST controller); the Phase-A capstone shape that later services repeat.
+- **`CopyOnWriteArrayList`** — thread-safe list where every write copies the backing array; ideal for the audit counter's low-write/read-mostly use, wrong for write-heavy hot paths (O(n) per write — reach for `LongAdder`/atomics, Step 11).
+- **target object** — the real, unproxied instance the proxy delegates to after running advice; inside it, `this` refers to the target — the mechanical reason self-invocation bypasses advice.
+
+## Step 8 — CIF Service (Spring Data JPA, Flyway & Testcontainers)
+
+- **CIF (Customer Information File)** — the bank's customer-master service; in Build-a-Bank, the first real microservice with its own PostgreSQL database.
+- **JPA (Jakarta Persistence API)** — the standard Java object-relational-mapping API; **Hibernate** is the implementation Spring Boot uses.
+- **ORM (object-relational mapping)** — the bridge between objects in code and rows in relational tables.
+- **entity** — a Java class mapped to a table (`@Entity`); must be a mutable class with a no-arg constructor (never a `record`) so Hibernate can instantiate and proxy it.
+- **`@GeneratedValue(strategy = IDENTITY)`** — the database generates the primary key (Postgres identity column); the id is only known after the `INSERT`, so Hibernate can't batch such inserts.
+- **`@Enumerated(EnumType.STRING)`** — persists an enum by its name (`"PENDING"`), not its ordinal — readable in the DB and stable when enum constants are added or reordered.
+- **`timestamptz`** — Postgres's timezone-aware timestamp type; the correct storage for a Java `Instant` (UTC), never a naive `timestamp`.
+- **derived query** — a Spring Data repository method (e.g. `findByCustomerNumber`, `existsByEmail`) whose SQL is generated from the method name at startup; typos fail fast at boot.
+- **`JpaRepository<T, ID>`** — the Spring Data interface that provides CRUD, paging, and sorting for an entity with zero implementation code.
+- **persistence context / 1st-level cache** — Hibernate's per-transaction map of managed entities: same row loaded twice in one transaction = same instance, one `SELECT`; changes are flushed at commit via dirty checking.
+- **Flyway** — the migration tool that owns the schema: versioned SQL files (`V1__create_customer.sql`) applied in order and recorded (with checksums) in the `flyway_schema_history` table.
+- **migration** — a versioned, append-only SQL change to the schema; you never edit an applied migration (checksums would break) — you add the next `V<n>`.
+- **`ddl-auto=validate`** — Hibernate checks at startup that its entity mapping matches the existing (Flyway-owned) schema and fails fast on drift; it never creates or alters tables.
+- **`spring-boot-flyway`** — the Spring Boot 4 integration module that carries `FlywayAutoConfiguration`; `flyway-core` alone compiles but Flyway never runs.
+- **OSIV (Open-Session-in-View)** — keeping the Hibernate session open for the whole web request; disabled here (`open-in-view: false`) so the session ends with the transactional service method.
+- **DTO (Data Transfer Object)** — the API-facing shape (a Java `record` here), deliberately separate from the entity so the DB schema never leaks into the HTTP contract.
+- **Bean Validation** — declarative constraints (`@NotBlank`, `@Email`, `@Size`, `@Past`) on a DTO; with `@Valid` on the controller parameter, violations become an automatic `400` before the handler runs.
+- **Testcontainers** — a library that runs real services (here a pinned `postgres:17-alpine`) in throwaway Docker containers for tests — the honest alternative to H2.
+- **`@ServiceConnection`** — the Spring Boot annotation that wires the application's DataSource to a Testcontainers container automatically (URL, credentials, random port) — no test JDBC config.
+- **`@DataJpaTest`** — the JPA slice test (entities + repositories only); in Boot 4 it lives in `spring-boot-data-jpa-test`, doesn't include Flyway (import `FlywayAutoConfiguration`), and needs `@AutoConfigureTestDatabase(replace = NONE)` to keep the real Postgres.
+- **`@WebMvcTest`** — the web slice test (one controller + MVC infra, no DB), driven by `MockMvc` with collaborators mocked via `@MockitoBean` (the Boot-4 replacement for `@MockBean`).
+- **`@SpringBootTest`** — the full-context integration test; here it boots the whole app on a Testcontainers Postgres and proves the POST→GET round-trip.
+- **Database-per-Service** — the microservice pattern where each service owns its database exclusively; other services go through its API, never its tables.
+- **KYC (Know Your Customer)** — the regulatory identity-verification process; mocked here as a `PENDING`/`VERIFIED`/`REJECTED` status enum.
+
+## Step 11 — Concurrency & Thread Safety
+
+- **JMM (Java Memory Model)** — the JLS contract defining what one thread is guaranteed to see of another's actions. It governs three things: atomicity, visibility, and ordering.
+- **Atomicity** — whether an operation happens "all at once" or can be interrupted partway by another thread. `balance += amount` is *not* atomic (it's read-modify-write).
+- **Visibility** — whether a write by one thread is guaranteed to be *seen* by another. Without coordination, a write may sit in a CPU cache/register and never (or only late) become visible.
+- **Ordering** — the compiler/JIT/CPU may reorder instructions for speed; another thread can observe a surprising order unless a happens-before edge forbids it.
+- **happens-before** — the JMM relation that, when it holds between actions A and B, guarantees A's writes are visible to B and A is ordered before B. Created by lock unlock→lock, `volatile` write→read, `start()`, `join()`, and final-field publication.
+- **race condition** — a bug whose outcome depends on the unpredictable timing/interleaving of threads.
+- **lost update** — a specific race where two read-modify-write operations interleave so one update overwrites (and discards) the other.
+- **`synchronized` / monitor** — Java's intrinsic lock. Entering a `synchronized` method/block acquires the object's monitor (mutual exclusion); the release→acquire pair creates a happens-before edge (visibility + ordering).
+- **`volatile`** — a field modifier giving visibility + ordering (a memory barrier) and atomic single read/write, but **not** atomicity of compound actions. For flags, not counters.
+- **CAS (compare-and-swap)** — a single atomic CPU instruction: "set this location to *new* only if it currently equals *expected*." The basis of lock-free algorithms; retries on conflict instead of blocking.
+- **`AtomicLong` / `AtomicInteger`** — a single `volatile` value updated via a CAS loop (`addAndGet`, `incrementAndGet`). Lock-free, ideal at low/medium contention.
+- **`LongAdder`** — a contention-friendly counter that stripes its value across multiple `Cell`s (threads usually hit different cells), summed on read via `sum()`. Beats `AtomicLong` under heavy write contention.
+- **virtual thread** — a lightweight JVM-scheduled thread (stable Java 21) that runs many-to-few on platform carrier threads; cheap to create by the million.
+- **carrier thread** — a platform (OS) thread that actually runs virtual threads; a virtual thread **mounts** a carrier to run and **unmounts** it when it blocks.
+- **mount / unmount** — a virtual thread mounts onto a carrier while running and unmounts (freeing the carrier) when it blocks, which is why blocking is cheap.
+- **`ExecutorService`** — a task-submission abstraction over a thread pool; `AutoCloseable` since Java 19 (its `close()` performs an orderly shutdown that *waits* for submitted tasks).
+- **`CompletableFuture`** — composable asynchronous results (`thenCombine`, `thenCompose`, `allOf`) without manual thread juggling.
+- **`Semaphore`** — a counting permit holder; `Semaphore(n)` lets at most `n` threads into a section at once — a clean way to bound concurrency.
+- **`CyclicBarrier`** — a sync point where N threads `await()` until all arrive, then all proceed; used here to *force* a deterministic lost-update interleaving.
+- **deadlock** — two+ threads each holding a lock the other needs, so none can proceed. Fixed by a global lock ordering or `tryLock` with timeout.
+- **double-checked locking** — the lazy-singleton trick that is broken unless the field is `volatile` (reordering can publish a half-constructed object).
+- **false sharing** — two unrelated fields on the same 64-byte cache line, causing cores to fight over the line; mitigated by `LongAdder` / `@Contended`.
+- **TOCTOU (time-of-check-to-time-of-use)** — a race where state changes between checking it and acting on it (e.g. check balance, then debit); a security bug, not just a correctness one. Fix by making check-and-act atomic.

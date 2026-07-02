@@ -13,14 +13,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | the 8 fallacies · CAP & PACELC · consistency models · consensus/quorums · clocks · delivery |
-| **C** | [🛠️ Build](#build) | a `distributed-lab` module in **11 sub-steps**: clocks · quorums · delivery semantics · a CAP/PACELC register · smoke harness |
-| **D** | [🔬 Prove](#prove) | the Verification Log — 13 deterministic tests, the §12.3 mutation, smoke.sh, clean-room |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep (CAP is *the* systems interview) · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~Time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~30 min |
+| **B** | [🧠 Understand](#understand) | the 8 fallacies · CAP & PACELC · consistency models · consensus/quorums · clocks · delivery | ~2 h |
+| **C** | [🛠️ Build](#build) | a `distributed-lab` module in **11 sub-steps**: clocks · quorums · delivery semantics · a CAP/PACELC register · smoke harness | ~5 h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — 13 deterministic tests, the §12.3 mutation, smoke.sh, clean-room | ~45 min |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep (CAP is *the* systems interview) · your-turn challenges | ~1.25 h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~30 min |
 
 ---
 
@@ -109,6 +109,21 @@ git describe --tags          # → step-18-end (or a descendant of it)
 ./mvnw -version              # → Maven 3.9.x, Java 25
 ```
 
+## 🗓️ Session Plan
+
+≈ 10 hours won't fit one sitting — and it doesn't need to. Four sittings of ~2–3 h, each ending at a real ✋ save point:
+
+| Sitting | Covers | ~Time | Ends at (save point) |
+|---|---|---|---|
+| **1 · Theory** | A · Orient + B · Understand (fallacies → CAP/PACELC → consistency models → quorums → clocks → delivery) + the B→C bridge | ~2.5 h | the B→C bridge — you can whiteboard all five ideas |
+| **2 · Module & clocks** | C · sub-steps 1–4 (scaffold the module → `LamportClock` → `VectorClock` → `LogicalClockTest`) | ~2 h | sub-step 4's ✋ — `LogicalClockTest` green (Lab 1, 3 of 13 tests) |
+| **3 · Quorums & delivery** | C · sub-steps 5–8 (`QuorumSystem` → `QuorumTest` → `DeliverySim` → `DeliverySemanticsTest`) | ~2 h | sub-step 8's ✋ — Labs 2+3 green (10 of 13 tests) |
+| **4 · CAP, harness & prove** | C · sub-steps 9–11 (`ReplicatedRegister` → `CapPacelcTest` + §12.3 mutation → smoke.sh/`make play-19`) + 🎮 Play With It + D · Prove + E/F | ~3 h | sub-step 11's ✋ — 13/13 green, smoke PASSED, committed & tagged `step-19-end` |
+
+**Optional routes:** the ⏭️ skip-test skim route above ≈ 2 h total · the five 🚀 Go Deeper asides +~25 min · the 🏋️ Your Turn quick challenges +~15 min each, G-Counter stretch +~45 min.
+
+> 🪫 **Stopping here?** You have a green `step-18-end` build, pre-flight verified. Next: B · Understand (fallacies → CAP/PACELC → consistency → quorums → clocks → delivery); first action: pure reading — the next command arrives in C · sub-step 1.
+
 ---
 
 <a id="understand"></a>
@@ -167,6 +182,8 @@ Linearizable → Sequential → Causal → Read-your-writes → Eventual
 
 To agree on a value despite failures, replicas run **consensus** (Paxos, Raft) — which needs a **majority quorum** (`> N/2`) to make progress, so it tolerates `⌊(N-1)/2⌋` failures (5 nodes tolerate 2). The read/write version: with `N` replicas, a **write quorum** `W` and **read quorum** `R`, if **`W + R > N`** then every read set must intersect every write set (pigeonhole) → a read always sees the latest committed write (**strong consistency**); also requiring **`W > N/2`** prevents two conflicting writes from both succeeding. Slacken to `W+R ≤ N` and you get cheaper, faster, **eventually-consistent** reads that can be stale. **This single inequality is the consistency/latency dial** — and Lab 2 checks it by brute force over every quorum combination.
 
+❓ **Quick check:** with `N=5` replicas, `W=2, R=2` is fast — can a read miss the latest write? <details><summary>Answer</summary>Yes — `W+R = 4 ≤ 5`, so a write set and a read set can be disjoint (no overlap): the read may return stale data. You've dialed toward eventual consistency; only `W+R>N` guarantees the intersection that makes reads strong.</details>
+
 ## 🌱 Under the Hood: time & causality
 
 There is no global "now." **Logical clocks** order events by causality instead of wall time:
@@ -216,6 +233,8 @@ playground/distributed-lab/
 steps/step-19/{lesson.md, smoke.sh}      (new) this lesson + its proof
 ```
 
+> 🪫 **Stopping here?** You have the theory (and zero code changes — the repo is still at `step-18-end`). Next: Sub-step 1 of 11 (register & scaffold the module); first action: open the root `pom.xml` and find `<modules>`.
+
 <a id="build"></a>
 
 # C · 🛠️ Let's Build It — Step by Step
@@ -237,7 +256,7 @@ steps/step-19/{lesson.md, smoke.sh}      (new) this lesson + its proof
 
 ---
 
-### Sub-step 1 of 11 — Register & scaffold the module 🧭 *(you are here: **module** → clocks → clock test → quorum → quorum test → delivery → delivery test → CAP → CAP test → harness)*
+### Sub-step 1 of 11 — Register & scaffold the module · ⏱️ ~30 min 🧭 *(you are here: **module** → clocks → clock test → quorum → quorum test → delivery → delivery test → CAP → CAP test → harness)*
 
 🎯 **Goal:** a new pure-JUnit Maven module, wired into the reactor, that `./mvnw verify` builds alongside the bank — the empty shell the four labs will live in.
 
@@ -346,7 +365,7 @@ git commit -m "build(distributed-lab): scaffold the Step 19 distributed-systems 
 
 ---
 
-### Sub-step 2 of 11 — `LamportClock`: causal order with one counter 🧭 *(module ✅ → **Lamport** → vector → clock test → …)*
+### Sub-step 2 of 11 — `LamportClock`: causal order with one counter · ⏱️ ~20 min 🧭 *(module ✅ → **Lamport** → vector → clock test → …)*
 
 🎯 **Goal:** the simplest logical clock — one counter per process — that orders events by **causality** instead of wall time. This is Lamport's 1978 idea that underpins event ordering everywhere from Kafka offsets to Raft terms.
 
@@ -465,9 +484,11 @@ git commit -m "feat(distributed-lab): Lamport logical clock (tick + max-receive 
 
 ⚠️ **Pitfall:** writing `time++` (post-increment) instead of `++time` in `tick()` returns the *old* value — your first event gets stamp `0` and "before the beginning" exists. And forgetting the `+ 1` in `onReceive` lets a receive **tie** with its send — the clock condition demands *strictly* greater.
 
+> 🪫 **Stopping here?** You have the module in the reactor and `LamportClock` committed. Next: Sub-step 3 of 11 (`VectorClock` — concurrency detection); first action: create `playground/distributed-lab/src/main/java/com/buildabank/distributed/clocks/VectorClock.java`.
+
 ---
 
-### Sub-step 3 of 11 — `VectorClock`: detect concurrency, not just order 🧭 *(module ✅ → Lamport ✅ → **vector** → clock test → …)*
+### Sub-step 3 of 11 — `VectorClock`: detect concurrency, not just order · ⏱️ ~35 min 🧭 *(module ✅ → Lamport ✅ → **vector** → clock test → …)*
 
 🎯 **Goal:** the upgrade Lamport can't make — one counter **per process**, carried as a vector, so we can distinguish "*a caused b*" from "*a and b are concurrent*". This is the machinery behind causal consistency and Dynamo-style conflict detection.
 
@@ -635,7 +656,7 @@ git commit -m "feat(distributed-lab): vector clock with happens-before + concurr
 
 ---
 
-### Sub-step 4 of 11 — `LogicalClockTest`: prove the clock condition — and Lamport's blind spot 🧭 *(clocks ✅ → **clock test** → quorum → …)*
+### Sub-step 4 of 11 — `LogicalClockTest`: prove the clock condition — and Lamport's blind spot · ⏱️ ~20 min 🧭 *(clocks ✅ → **clock test** → quorum → …)*
 
 🎯 **Goal:** three deterministic tests: (1) Lamport respects causality, (2) Lamport **cannot** see concurrency — numbers lie, (3) the vector clock detects both order *and* concurrency.
 
@@ -757,9 +778,13 @@ git commit -m "test(distributed-lab): clock condition + Lamport blind spot + vec
 
 ⚠️ **Pitfall:** in test 3, reusing `alice` after `tick()` (e.g. `alice.happensBefore(b2)`) compares the **empty original** — remember the clocks are immutable snapshots; always compare the *returned* values (`a1`, `b1`, `b2`).
 
+❓ **Quick check:** Lamport gives `L(a) < L(b)`. Does that prove `a → b`? <details><summary>Answer</summary>No — the guarantee only runs one way (`a → b ⇒ L(a) < L(b)`). `L(a) < L(b)` merely rules out `b → a`; the events may be concurrent. That blind spot is exactly what test 2 demonstrates — and why vector clocks exist.</details>
+
+> 🪫 **Stopping here?** You have Lab 1 proven — causality ordering *and* concurrency detection (3 of 13 tests green). Next: Sub-step 5 of 11 (quorums); first action: create `quorum/QuorumSystem.java`.
+
 ---
 
-### Sub-step 5 of 11 — `QuorumSystem`: the `W+R>N` machine 🧭 *(clocks ✅ → **quorum** → quorum test → delivery → …)*
+### Sub-step 5 of 11 — `QuorumSystem`: the `W+R>N` machine · ⏱️ ~35 min 🧭 *(clocks ✅ → **quorum** → quorum test → delivery → …)*
 
 🎯 **Goal:** a tiny quorum-replicated register over `N` replicas — plus a brute-force checker that *enumerates every possible quorum pair* to verify the intersection guarantee empirically, not just by trusting the formula.
 
@@ -916,7 +941,7 @@ git commit -m "feat(distributed-lab): quorum register + exhaustive W+R>N interse
 
 ---
 
-### Sub-step 6 of 11 — `QuorumTest`: the theorem, brute-forced 🧭 *(quorum ✅ → **quorum test** → delivery → …)*
+### Sub-step 6 of 11 — `QuorumTest`: the theorem, brute-forced · ⏱️ ~20 min 🧭 *(quorum ✅ → **quorum test** → delivery → …)*
 
 🎯 **Goal:** three tests: the `W+R>N` rule verified over **all 25 (w, r) pairs** for `N=5`; a strict quorum that *always* reads fresh; a sloppy quorum caught reading stale.
 
@@ -1026,9 +1051,11 @@ git commit -m "test(distributed-lab): W+R>N proven over all combinations + stric
 
 ⚠️ **Pitfall:** `Set.of(...)` is **immutable** and rejects duplicates — `Set.of(1, 1)` throws `IllegalArgumentException` at *creation*, not a friendly test failure. Quorum members are distinct replicas by definition.
 
+> 🪫 **Stopping here?** You have `W+R>N` proven by exhaustion (6 of 13 tests green). Next: Sub-step 7 of 11 (delivery semantics); first action: create `delivery/DeliverySim.java`.
+
 ---
 
-### Sub-step 7 of 11 — `DeliverySim`: the delivery-semantics simulator 🧭 *(quorums ✅ → **delivery** → delivery test → CAP → …)*
+### Sub-step 7 of 11 — `DeliverySim`: the delivery-semantics simulator · ⏱️ ~25 min 🧭 *(quorums ✅ → **delivery** → delivery test → CAP → …)*
 
 🎯 **Goal:** model what a network can actually promise — **at-most-once** (may lose) or **at-least-once** (may duplicate) — and the consumer-side idempotency that turns duplicates into **exactly-once effect**. This is Step 14's `Idempotency-Key`, distilled to its essence.
 
@@ -1162,7 +1189,7 @@ git commit -m "feat(distributed-lab): delivery-semantics sim — unreliable chan
 
 ---
 
-### Sub-step 8 of 11 — `DeliverySemanticsTest`: duplicates, loss, and the fix 🧭 *(delivery ✅ → **delivery test** → CAP → CAP test → harness)*
+### Sub-step 8 of 11 — `DeliverySemanticsTest`: duplicates, loss, and the fix · ⏱️ ~20 min 🧭 *(delivery ✅ → **delivery test** → CAP → CAP test → harness)*
 
 🎯 **Goal:** four tests that pin every delivery regime to a number: naive ×3 → 300 (the bug), idempotent ×3 → 100 (exactly-once effect), ×0 → 0 (at-most-once loss), and interleaved duplicates of *two* messages → still exact.
 
@@ -1281,9 +1308,11 @@ git commit -m "test(distributed-lab): delivery semantics — overcount, exactly-
 
 ⚠️ **Pitfall:** sharing one `BalanceProjection` between tests would leak dedupe state across them. Each test builds its own — the same per-test isolation discipline JUnit's fresh-instance-per-test model encourages.
 
+> 🪫 **Stopping here?** You have quorums *and* delivery semantics proven (10 of 13 tests green). Next: Sub-step 9 of 11 (CAP & PACELC — the centerpiece); first action: create `cap/ReplicatedRegister.java`.
+
 ---
 
-### Sub-step 9 of 11 — `ReplicatedRegister`: CAP & PACELC as an executable object 🧭 *(delivery ✅ → **CAP register** → CAP test → harness)*
+### Sub-step 9 of 11 — `ReplicatedRegister`: CAP & PACELC as an executable object · ⏱️ ~40 min 🧭 *(delivery ✅ → **CAP register** → CAP test → harness)*
 
 🎯 **Goal:** the step's centerpiece — a replicated register with a `mode` switch (CP/AP), a `partition()` you can inflict, and a `sync()/heal()` lifecycle, so the CAP choice and PACELC's else-branch stop being slideware and become method calls.
 
@@ -1477,7 +1506,7 @@ git commit -m "feat(distributed-lab): CP/AP replicated register with partition, 
 
 ---
 
-### Sub-step 10 of 11 — `CapPacelcTest`: the trade-offs, asserted 🧭 *(register ✅ → **CAP test** → harness)*
+### Sub-step 10 of 11 — `CapPacelcTest`: the trade-offs, asserted · ⏱️ ~30 min 🧭 *(register ✅ → **CAP test** → harness)*
 
 🎯 **Goal:** three tests — CP sacrifices availability (and provably stays consistent), AP sacrifices consistency (and provably converges on heal), and PACELC's else-branch (async replication = fast acks, stale peer, until `sync()`).
 
@@ -1605,9 +1634,13 @@ git commit -m "test(distributed-lab): CP refusal, AP divergence+LWW convergence,
 
 ⚠️ **Pitfall:** writing test 2's divergence assertions *after* `heal()` — order matters; the whole point is to catch the system **in** its inconsistent window, then watch it exit.
 
+❓ **Quick check:** during the partition the AP register serves *divergent* reads. What restores agreement, and who wins? <details><summary>Answer</summary>`heal()` reconciles via last-write-wins — the highest caller-supplied timestamp wins, with a deterministic tie-break on writer id. Availability was kept during the partition; consistency is *eventual* — and the losing write (`ts=5`) is silently discarded.</details>
+
+> 🪫 **Stopping here?** You have all 13 lab tests green and you've watched the §12.3 mutation fail + revert. Next: Sub-step 11 of 11 (the harness); first action: create `steps/step-19/smoke.sh`.
+
 ---
 
-### Sub-step 11 of 11 — The harness: `smoke.sh`, `make play-19`, and the full run 🧭 *(all four labs ✅ → **wire the proof**)*
+### Sub-step 11 of 11 — The harness: `smoke.sh`, `make play-19`, and the full run · ⏱️ ~30 min 🧭 *(all four labs ✅ → **wire the proof**)*
 
 🎯 **Goal:** one-command proof for learners (`smoke.sh`), a Makefile shortcut (`play-19`), and the full 13-test run that closes the build.
 
@@ -1723,6 +1756,8 @@ git commit -m "feat(distributed-lab): Step 19 distributed-systems theory labs �
 
 ⚠️ **Pitfall:** on Windows, run smoke.sh from **Git Bash** (it ships with Git for Windows) — PowerShell won't execute bash scripts. The Maven command inside works identically from PowerShell as `.\mvnw.cmd -pl playground/distributed-lab test`.
 
+> 🪫 **Stopping here?** You have the finished build — 13/13 green, smoke PASSED, `make play-19` wired. Next: the flow recap + 🎮 Play With It, then D · Prove (compare your outputs to the Verification Log); first action: `bash steps/step-19/smoke.sh`.
+
 ---
 
 ### 🔁 The flow you just built
@@ -1803,6 +1838,8 @@ QuorumSystem.everyWriteAndReadQuorumIntersect(3,1,1)   // ⇒ false (2 ≤ 3)
 
 `step-19-end`: the bank builds green (now **10 modules**) with a `distributed-lab` proving the Phase-D theory. **✅ Learner Definition of Done:** you can explain CAP/PACELC + quorums + clocks + delivery, `./mvnw verify` is green, `bash steps/step-19/smoke.sh` passes, and you've committed/tagged `step-19-end`.
 
+> 🪫 **Stopping here?** You have the Definition of Done met — the build is complete. Next: D · Prove (read the Verification Log and match it against your own runs); first action: `./mvnw -pl playground/distributed-lab test` and compare the `Tests run: 13` line.
+
 ---
 
 <a id="prove"></a>
@@ -1863,7 +1900,9 @@ The per-class runs and every jshell session shown in the 🛠️ Build and 🎮 
 
 # E · 🎓 Apply
 
-## 🚀 Go Deeper (Optional)
+> 🪫 **Stopping here?** You have a fully verified step — everything from here to F is depth, not build. Next: 🚀 Go Deeper + 💼 Interview Prep + 🏋️ Your Turn; first action: reading only — or warm up with `jshell --class-path playground/distributed-lab/target/classes`.
+
+## 🚀 Go Deeper (Optional · +~25 min)
 
 <details><summary>Why "CA" isn't a thing</summary>You can't choose to not have partitions — cables fail, GC pauses look like partitions, switches reboot. So "partition tolerance" isn't optional; the real choice is what you do *when* a partition happens: CP or AP. A single-node database is "CA" only in the trivial sense that it isn't distributed.</details>
 
@@ -1889,9 +1928,11 @@ The per-class runs and every jshell session shown in the 🛠️ Build and 🎮 
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-- **Quick:** add `sequential`-vs-`causal` reasoning by extending `VectorClock` with a `merge`-only (no tick) op; assert two replicas converge. <details><summary>Hint</summary>Convergence = equal vectors after exchanging each other's clocks both ways.</details>
-- **Quick:** make `QuorumSystem.read` return *all* values seen (siblings) when versions tie — the Dynamo conflict case.
-- 🎯 **Stretch:** replace the CAP register's last-write-wins with a **G-Counter CRDT** (a per-node counter map; merge = componentwise max; value = sum) and show AP replicas converge with **no lost updates** after a partition heal — strictly better than LWW. This previews the conflict-resolution choices you'll make for real in Phase D. <details><summary>Design hints</summary>Shape: `Map<String,Long> increments` per replica, `increment(replica)` bumps own entry, `merge(other)` takes componentwise max (idempotent + commutative + associative — re-merging duplicates is harmless, which also reconnects to Lab 3), `value()` sums the map. Test: partition, increment both sides, heal-by-merge both ways, assert both replicas read the <em>sum</em> of all increments — nothing lost, unlike LWW.</details>
+- **Quick (+~15 min):** add `sequential`-vs-`causal` reasoning by extending `VectorClock` with a `merge`-only (no tick) op; assert two replicas converge. <details><summary>Hint</summary>Convergence = equal vectors after exchanging each other's clocks both ways.</details>
+- **Quick (+~15 min):** make `QuorumSystem.read` return *all* values seen (siblings) when versions tie — the Dynamo conflict case.
+- 🎯 **Stretch (+~45 min):** replace the CAP register's last-write-wins with a **G-Counter CRDT** (a per-node counter map; merge = componentwise max; value = sum) and show AP replicas converge with **no lost updates** after a partition heal — strictly better than LWW. This previews the conflict-resolution choices you'll make for real in Phase D. <details><summary>Design hints</summary>Shape: `Map<String,Long> increments` per replica, `increment(replica)` bumps own entry, `merge(other)` takes componentwise max (idempotent + commutative + associative — re-merging duplicates is harmless, which also reconnects to Lab 3), `value()` sums the map. Test: partition, increment both sides, heal-by-merge both ways, assert both replicas read the <em>sum</em> of all increments — nothing lost, unlike LWW.</details>
+
+> 🪫 **Stopping here?** You have the step done plus whatever depth you chose. Next: F · Review (troubleshooting, recap, flashcards, what's next); first action: skim 🩺 so you know where the fixes live, then the (c) 🧠 Test Yourself questions.
 
 ---
 

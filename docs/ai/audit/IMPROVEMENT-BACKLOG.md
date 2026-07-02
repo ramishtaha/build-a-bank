@@ -1,5 +1,14 @@
 # Improvement Backlog — Verified Re-enrichment Work Orders (Steps 1–30)
 
+> [!IMPORTANT]
+> **STATUS: CLOSED — 2026-07-02.** Every step 1–30 has now received a verified enrichment pass:
+> - **Steps 9, 12–27** — the overnight enrichment loop (commits `6cf0f86…44fc4e0` + local `51a4697/8043915/849c81d`): full micro-anatomy rebuilds, code transcribed verbatim from tags, live re-runs where drift-free (see `docs/ENRICHMENT.md` per-step notes).
+> - **Steps 1, 2, 10, 28, 29, 30** — the loop's continuation on `origin/main` (commits `0fde4b1…c3bd231`), merged 2026-07-02.
+> - **Steps 3–8, 11** — the aids pass (2026-07-02): worktree runs at each tag, all suites green (20/20 · 22/22 · 6/6 · 10/10 · 16/16 · 6/6 w/ Testcontainers · 8/8), dated evidence appended.
+> - The audit's **ADHD/session layer** was re-applied on top of all enriched bodies the same day.
+>
+> **Honest residuals (optional, not blocking):** a few work orders asked for intermediate-state replays from `step-NN-start` and induced common-wrong-output captures — the loops transcribed from `step-NN-end` and re-ran drift-free suites instead. Those niceties remain listed below; treat this file as the historical work-order record.
+
 > **What this file is.** A ready-made instruction set for future **verified re-enrichment** sessions. It contains every audit finding that **cannot be fixed by pure editing**: all `needsRun:true` findings, plus a full re-enrichment order for every `thinBuild:true` lesson (the repo NEVER invents command output — thin builds must be re-filled with code transcribed from the step's tag and output captured from real runs).
 >
 > **How to use it.** Each session: pick **one step** (top-down — the list is ordered by severity × learner impact, thin builds on money/security/concurrency steps first). Then:

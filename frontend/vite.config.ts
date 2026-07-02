@@ -19,5 +19,7 @@ export default defineConfig({
     },
     setupFiles: './src/test/setup.ts',
     css: false,
+    // Step 31 · Playwright owns e2e/ — Vitest must not try to load those specs (different runner, different APIs).
+    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
   },
 });

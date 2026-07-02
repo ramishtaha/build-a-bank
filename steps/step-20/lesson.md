@@ -13,14 +13,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | sync vs async · Spring events & `@TransactionalEventListener` · the dual-write problem · Outbox · Kafka · SSE |
-| **C** | [🛠️ Build](#build) | domain event → Outbox (atomic, in-tx) → relay → Kafka → idempotent consumer → SSE push — **15 hand-held sub-steps** |
-| **D** | [🔬 Prove](#prove) | the Verification Log — real Redpanda/Postgres tests, the §12.3 mutation, smoke.sh |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting (the Boot-4 Kafka starter gotcha) · resources · recap, flashcards & the **Cumulative Review (steps 1–20)** |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1h |
+| **B** | [🧠 Understand](#understand) | sync vs async · Spring events & `@TransactionalEventListener` · the dual-write problem · Outbox · Kafka · SSE | ~2h |
+| **C** | [🛠️ Build](#build) | domain event → Outbox (atomic, in-tx) → relay → Kafka → idempotent consumer → SSE push — **15 hand-held sub-steps** | ~12h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — real Redpanda/Postgres tests, the §12.3 mutation, smoke.sh | ~2h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~2h |
+| **F** | [🏆 Review](#review) | troubleshooting (the Boot-4 Kafka starter gotcha) · resources · recap, flashcards & the **Cumulative Review (steps 1–20)** | ~1h |
 
 ---
 
@@ -103,6 +103,26 @@ Synchronous REST couples services: if notification is down, should a transfer fa
 - **Connects to what you know:** the **transfer** (Step 12) is the event source; **idempotency** (Step 14, Step 19) is how the consumer gets exactly-once effect; **delivery semantics** (Step 19) is the theory we now run on a real broker; the **signed webhook** (Step 14) was the *partner-facing* async channel — Kafka is the *internal* one.
 - **Depends on:** Steps **19, 12, 14, 13**. **+ Docker.**
 
+## 🗓️ Session Plan
+
+≈ 20 hours won't fit in one sitting — and it doesn't need to. Each sitting below ends at a real save point (a ✋ checkpoint or section boundary), so you can stop, close the laptop, and re-enter cleanly:
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| **S1** | A · Orient + B · Understand (Big Idea → Then vs. Now) + the B→C bridge | ~3h | the B→C bridge (diagram + file tree) |
+| **S2** | Sub-steps 1–3 — the Kafka starter + producer config, `TransferCompletedEvent`, the AFTER_COMMIT listener | ~2h | Sub-step 3 ✋ checkpoint |
+| **S3** | Sub-steps 4–6 — `V3__outbox.sql` + `OutboxEvent`, repository + `OutboxWriter`, the `TransferService.post()` edit | ~2h | Sub-step 6 ✋ checkpoint |
+| **S4** | Sub-steps 7–8 — the `OutboxRelay` + the scheduler & test override | ~2h | Sub-step 8 ✋ checkpoint |
+| **S5** | Sub-steps 9–10 — the atomicity proof (`OutboxWriteTest`) + the real-broker relay proof (`RedpandaContainers`, `OutboxRelayKafkaTest`) | ~2h | Sub-step 10 ✋ checkpoint (producer half proven) |
+| **S6** | Sub-steps 11–13 — the notification scaffold, `Notification` + `SseHub`, the idempotent `TransferEventConsumer` | ~2h | Sub-step 13 ✋ checkpoint |
+| **S7** | Sub-steps 14–15 + 🎮 Play With It — `NotificationController` + the Kafka capstone, the harness (Makefile/smoke.sh/ADR), then see it live | ~2h | 🏁 The Finished Result (Definition of Done) |
+| **S8** | D · Prove — read the Verification Log, re-run what you like | ~2h | end of the Verification Log |
+| **S9** | E · Apply + F · Review — challenges, interview prep, flashcards, the Cumulative Review (steps 1–20), tag | ~3h | `step-20-end` tagged |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can send you straight to Step 21; the five 🚀 Go Deeper asides are +~5 min each; the 🏋️ Your Turn quick challenges are +~10–20 min each and the 🎯 Stretch adds +~60–90 min to S9.
+
+✋ Stopping after Orient? You have the map and prereqs checked. Next: B · Understand; first action: reread the headline diagram in the 📇 Cheat Card, then start at "The Big Idea."
+
 ---
 
 <a id="understand"></a>
@@ -162,6 +182,12 @@ systems; there's no shared transaction. Whichever you do first, a crash in betwe
 change. Write an `outbox_event` row alongside the ledger update — both commit or neither does (atomic). Then
 a separate **relay** reads unpublished rows and publishes them to Kafka, marking each sent only **after** a
 successful send. A crash just means the relay retries → **at-least-once**, never lost.
+
+❓ **Knowledge-check:** in write-then-publish (no Outbox), the app saves the transfer and crashes before
+publishing — is the resulting event *phantom* or *lost*, and which single change makes the write and the
+publish-intent atomic? <details><summary>Answer</summary>**Lost** (the DB change committed but no event ever
+reaches the broker). The fix: write the event as an `outbox_event` row **in the same DB transaction** as the
+ledger change — both commit or neither does; a relay then publishes it at-least-once.</details>
 
 **Alternatives/trade-offs:** publishing from an `AFTER_COMMIT` listener is simpler but reintroduces the lost-
 event gap (commit succeeds, crash before publish). Change-Data-Capture (Debezium tailing the DB log, Step 54)
@@ -284,6 +310,8 @@ adr/0011-events-outbox-kafka.md (new)
 steps/step-20/{lesson.md, requests.http, smoke.sh}
 ```
 
+✋ Stopping here? You have the theory (dual-write → Outbox → idempotent consumer) and the build map. Next: C · Build, Sub-step 1 of 15 (the Kafka starter); first action: open `services/demand-account/pom.xml` and add `spring-boot-starter-kafka`.
+
 <a id="build"></a>
 
 # C · 🛠️ Let's Build It — Step by Step
@@ -339,7 +367,7 @@ sub-step 9). If not → 🩺.
 
 ---
 
-### Sub-step 1 of 15 — Producer-side wiring: the Kafka starter + config 🧭 *(you are here: **deps/config** → event → listener → outbox → relay → tests → consumer service)*
+### Sub-step 1 of 15 — Producer-side wiring: the Kafka starter + config 🧭 *(you are here: **deps/config** → event → listener → outbox → relay → tests → consumer service)* · ≈45 min
 
 🎯 **Goal:** give demand-account the ability to *talk to Kafka at all* — the right Boot-4 dependency (this is
 the step's #1 gotcha) and the producer configuration. Nothing publishes yet; we're laying rails.
@@ -471,7 +499,7 @@ later, at context startup, as *"Parameter 1 of constructor in …OutboxRelay req
 
 ---
 
-### Sub-step 2 of 15 — The domain event: `TransferCompletedEvent` 🧭 *(deps ✅ → **event** → listener → outbox → …)*
+### Sub-step 2 of 15 — The domain event: `TransferCompletedEvent` 🧭 *(deps ✅ → **event** → listener → outbox → …)* · ≈30 min
 
 🎯 **Goal:** define *the fact* that flows through the whole pipeline — an immutable record saying "a transfer
 completed," carrying a unique `eventId` that will be the dedupe key from the Outbox row all the way to the
@@ -570,7 +598,7 @@ process boundaries — they must stay plain data. If you feel the urge to put `A
 
 ---
 
-### Sub-step 3 of 15 — React after commit: `TransferEventListener` 🧭 *(deps ✅ → event ✅ → **listener** → outbox → …)*
+### Sub-step 3 of 15 — React after commit: `TransferEventListener` 🧭 *(deps ✅ → event ✅ → **listener** → outbox → …)* · ≈45 min
 
 🎯 **Goal:** see `@TransactionalEventListener(AFTER_COMMIT)` work — a listener that reacts **only when the
 transfer actually committed** — and understand why this is *not* where Kafka publishing belongs.
@@ -684,9 +712,11 @@ plain `@EventListener` here would *look* identical in the happy path and only be
 difference between the two annotations is invisible until something fails — which is why sub-step 9 tests the
 rollback path explicitly.
 
+✋ Stopping here? You have the in-process half — Kafka wiring, the event record, and an AFTER_COMMIT listener — but nothing durable yet. Next: Sub-step 4 (the outbox table); first action: create `services/demand-account/src/main/resources/db/migration/V3__outbox.sql`.
+
 ---
 
-### Sub-step 4 of 15 — The outbox table: `V3__outbox.sql` + the `OutboxEvent` entity 🧭 *(deps ✅ → event ✅ → listener ✅ → **outbox row** → writer → …)*
+### Sub-step 4 of 15 — The outbox table: `V3__outbox.sql` + the `OutboxEvent` entity 🧭 *(deps ✅ → event ✅ → listener ✅ → **outbox row** → writer → …)* · ≈45 min
 
 🎯 **Goal:** create the durable home for "events we intend to publish" — a Flyway-managed table and its JPA
 entity. This row is what makes the publish-intent survive a crash.
@@ -895,7 +925,7 @@ checksums every applied migration and will fail with a *validate* error on misma
 
 ---
 
-### Sub-step 5 of 15 — `OutboxEventRepository` + `OutboxWriter` 🧭 *(… outbox row ✅ → **repo & writer** → wire into the transfer → relay → …)*
+### Sub-step 5 of 15 — `OutboxEventRepository` + `OutboxWriter` 🧭 *(… outbox row ✅ → **repo & writer** → wire into the transfer → relay → …)* · ≈40 min
 
 🎯 **Goal:** the data access for outbox rows (with the relay's oldest-first query) and the component that
 turns a `TransferCompletedEvent` into a persisted JSON row — the half of the Outbox that runs *inside* the
@@ -1063,7 +1093,7 @@ ecosystems. Module's classpath decides the mapper; here we construct Jackson 2 e
 
 ---
 
-### Sub-step 6 of 15 — Wire it into the money path: `TransferService.post()` 🧭 *(… repo & writer ✅ → **the transfer publishes** → relay → …)*
+### Sub-step 6 of 15 — Wire it into the money path: `TransferService.post()` 🧭 *(… repo & writer ✅ → **the transfer publishes** → relay → …)* · ≈35 min
 
 🎯 **Goal:** make every successful transfer emit the event **two ways, both inside the transaction**: the
 in-process Spring event (for AFTER_COMMIT listeners) and the durable Outbox row (for Kafka). This is the only
@@ -1149,6 +1179,12 @@ edit to existing code in the whole step.
 synchronization fires `TransferEventListener.onTransferCommitted`. On any failure before commit, **all five
 statements** vanish together — including the publish-intent.
 
+❓ **Knowledge-check:** which crash windows can still *lose* the event now? <details><summary>Answer</summary>
+**None inside demand-account.** Either the transaction commits (ledger + outbox row together — the relay will
+retry publishing until Kafka acks) or it rolls back (no ledger change, no row, no phantom event). The remaining
+risk is **duplication** (a relay retry re-publishing), never loss — sub-step 13's idempotent consumer absorbs
+that.</details>
+
 🔮 **Predict:** `transferUnsafe(...)` (the Step-12 demonstration path) doesn't call `post(...)`. Does an
 unsafe transfer emit an event? <details><summary>Answer</summary>No — it writes its ledger entries inline and
 never mints an event. Fine for a deliberately-broken teaching path; a production refactor would route every
@@ -1187,9 +1223,11 @@ git commit -m "feat(demand-account): transfers publish TransferCompletedEvent + 
 returns. That's *after the commit* → you've rebuilt the dual-write (commit OK, crash before write = lost
 event). The entire pattern lives or dies on "same transaction."
 
+✋ Stopping here? You have an outbox row written atomically with every safe transfer — nothing reads it yet. Next: Sub-step 7 (the relay → Kafka); first action: create `services/demand-account/src/main/java/com/buildabank/account/outbox/OutboxRelay.java`.
+
 ---
 
-### Sub-step 7 of 15 — The relay: `OutboxRelay` 🧭 *(… transfer publishes ✅ → **relay → Kafka** → scheduler → tests → …)*
+### Sub-step 7 of 15 — The relay: `OutboxRelay` 🧭 *(… transfer publishes ✅ → **relay → Kafka** → scheduler → tests → …)* · ≈1 h
 
 🎯 **Goal:** the "message relay" half of the pattern — drain unpublished rows oldest-first, publish each to
 Kafka keyed by event id, and mark a row published **only after** the broker confirmed the send.
@@ -1331,7 +1369,7 @@ the Outbox was theater. If you remember one line of this class, remember the `.g
 
 ---
 
-### Sub-step 8 of 15 — The scheduler + the test override 🧭 *(… relay ✅ → **scheduler & config** → producer-side tests → …)*
+### Sub-step 8 of 15 — The scheduler + the test override 🧭 *(… relay ✅ → **scheduler & config** → producer-side tests → …)* · ≈1 h
 
 🎯 **Goal:** drive the relay automatically every 2 s in production, and — just as important — make it
 **switch-offable** so tests can call `publishPending()` deterministically instead of racing a poller.
@@ -1475,9 +1513,11 @@ works — but then the scheduling infrastructure is *always* on and you can't sw
 worse, every future `@Scheduled` anywhere in the module silently activates. Scope capabilities to the feature
 that needs them.
 
+✋ Stopping here? You have the full producer side coded (event → outbox → relay → scheduler) but unproven. Next: Sub-step 9 (the atomicity proof); first action: create `services/demand-account/src/test/java/com/buildabank/account/outbox/OutboxWriteTest.java` — with Docker running.
+
 ---
 
-### Sub-step 9 of 15 — Prove atomicity: `OutboxWriteTest` 🧭 *(… scheduler ✅ → **the atomicity proof** → the broker proof → the consumer service → …)*
+### Sub-step 9 of 15 — Prove atomicity: `OutboxWriteTest` 🧭 *(… scheduler ✅ → **the atomicity proof** → the broker proof → the consumer service → …)* · ≈1 h
 
 🎯 **Goal:** the first of the step's three proof-tests: a committed transfer writes **exactly one** outbox row
 in the same transaction (and fires AFTER_COMMIT once); a rolled-back transfer writes **none** (and the
@@ -1658,7 +1698,7 @@ weakening the listener assertions. Commit-semantics tests must commit.
 
 ---
 
-### Sub-step 10 of 15 — Prove the relay on a real broker: `RedpandaContainers` + `OutboxRelayKafkaTest` 🧭 *(… atomicity ✅ → **relay → real Kafka** → the consumer service → …)*
+### Sub-step 10 of 15 — Prove the relay on a real broker: `RedpandaContainers` + `OutboxRelayKafkaTest` 🧭 *(… atomicity ✅ → **relay → real Kafka** → the consumer service → …)* · ≈1 h
 
 🎯 **Goal:** the producer-side capstone — against a **real** Kafka-compatible broker: the relay publishes the
 pending row, a raw Kafka consumer reads the record back off the topic (hard-to-fake), the row is marked
@@ -1888,9 +1928,11 @@ git commit -m "test(demand-account): outbox relay publishes to real Redpanda, ma
 on the missing DataSource. The error names a JPA bean, not "you forgot Postgres," so read context-startup
 failures bottom-up.
 
+✋ Stopping here? You have the producer half proven on real Postgres + Redpanda; nobody consumes the topic yet. Next: Sub-step 11 (the notification scaffold — a brand-new service); first action: register `services/notification` in the repo-root `pom.xml`.
+
 ---
 
-### Sub-step 11 of 15 — A brand-new service: the `notification` scaffold 🧭 *(producer side ✅✅ → **new consumer service** → SSE hub → consumer → API → capstone)*
+### Sub-step 11 of 15 — A brand-new service: the `notification` scaffold 🧭 *(producer side ✅✅ → **new consumer service** → SSE hub → consumer → API → capstone)* · ≈45 min
 
 🎯 **Goal:** scaffold `services/notification` — the bank's 5th service and 11th module. Deliberately **no
 database**: its state is the live event stream. Port 8084, Kafka consumer config, registered with the parent
@@ -2125,7 +2167,7 @@ git commit -m "feat(notification): scaffold event-driven notification service (K
 
 ---
 
-### Sub-step 12 of 15 — The `Notification` record + the `SseHub` 🧭 *(… scaffold ✅ → **SSE fan-out** → idempotent consumer → API → capstone)*
+### Sub-step 12 of 15 — The `Notification` record + the `SseHub` 🧭 *(… scaffold ✅ → **SSE fan-out** → idempotent consumer → API → capstone)* · ≈40 min
 
 🎯 **Goal:** the push machinery: a small value type for "what the user sees," and a hub that holds every open
 SSE connection, broadcasts each notification to all of them, and keeps a recent buffer for late joiners.
@@ -2304,7 +2346,7 @@ one (Step 11's whole message).
 
 ---
 
-### Sub-step 13 of 15 — The idempotent consumer: `TransferEventConsumer` 🧭 *(… SSE hub ✅ → **the idempotent @KafkaListener** → API → capstone)*
+### Sub-step 13 of 15 — The idempotent consumer: `TransferEventConsumer` 🧭 *(… SSE hub ✅ → **the idempotent @KafkaListener** → API → capstone)* · ≈35 min
 
 🎯 **Goal:** the heart of the consumer side — a `@KafkaListener` that parses each event, **dedupes by
 `eventId`**, and pushes fresh ones to the hub. At-least-once delivery in; exactly-once *effect* out. This is
@@ -2480,9 +2522,11 @@ compile** in this module (`package com.fasterxml.jackson.databind does not exist
 the classpath at all. Boot 4's web default is Jackson 3 (`tools.jackson`); this exact compile error is in 🩺
 because we hit it for real while building the step.
 
+✋ Stopping here? You have the consumer side coded — SSE hub + idempotent listener — with its proofs still to come. Next: Sub-step 14 (the API + the Kafka capstone); first action: create `services/notification/src/main/java/com/buildabank/notification/NotificationController.java`.
+
 ---
 
-### Sub-step 14 of 15 — The API + the proofs: `NotificationController`, slice test, and the Kafka capstone 🧭 *(… consumer ✅ → **API & tests** → harness)*
+### Sub-step 14 of 15 — The API + the proofs: `NotificationController`, slice test, and the Kafka capstone 🧭 *(… consumer ✅ → **API & tests** → harness)* · ≈1 h
 
 🎯 **Goal:** expose the stream (`GET /api/notifications/stream`, SSE) and the recent buffer
 (`GET /api/notifications`), then prove the whole consumer side twice: a fast web-slice test and the real-broker
@@ -2763,7 +2807,7 @@ delivery, the **exact** value for effect: that asymmetry *is* the at-least-once/
 
 ---
 
-### Sub-step 15 of 15 — The harness: Makefile, smoke.sh, ADR — and the full picture 🧭 *(everything ✅ → **package it up**)*
+### Sub-step 15 of 15 — The harness: Makefile, smoke.sh, ADR — and the full picture 🧭 *(everything ✅ → **package it up**)* · ≈30 min
 
 🎯 **Goal:** one-command helpers (`make play-20`, `make run-notification`), the step's `smoke.sh`, the
 architecture decision record, and the sequence diagram of what you built.
@@ -2966,6 +3010,8 @@ SSE push. demand-account: 37 tests; notification: 3.
 - [ ] you can explain the dual-write problem and your fix in two sentences,
 - [ ] you've committed and tagged `step-20-end`.
 
+✋ Stopping here? You have the pipeline built and seen live. Next: D · Prove (~2h — read the evidence, re-run what you like); first action: `./mvnw -pl services/demand-account,services/notification test`.
+
 ---
 
 <a id="prove"></a>
@@ -3044,15 +3090,15 @@ remain this step's truth; the §12.3 mutation was not re-run (code frozen).)*
 
 ## 🚀 Go Deeper (Optional)
 
-<details><summary>Outbox relay: polling vs CDC</summary>Polling (ours) is simple and DB-agnostic but adds latency (≤ poll interval) and load. Change-Data-Capture (Debezium reading Postgres' WAL, Step 54) turns committed outbox rows into Kafka records with no polling and lower latency — the production-grade upgrade. Debezium even ships an "outbox event router" that expects almost exactly our table shape (id, aggregate_type, type, payload).</details>
+<details><summary>Outbox relay: polling vs CDC (+~5 min)</summary>Polling (ours) is simple and DB-agnostic but adds latency (≤ poll interval) and load. Change-Data-Capture (Debezium reading Postgres' WAL, Step 54) turns committed outbox rows into Kafka records with no polling and lower latency — the production-grade upgrade. Debezium even ships an "outbox event router" that expects almost exactly our table shape (id, aggregate_type, type, payload).</details>
 
-<details><summary>Why block on the send in the relay?</summary>If we marked rows published before the broker confirmed, a broker failure would lose the event (we'd think it was sent). Blocking on <code>send().get()</code> makes "published" mean "Kafka durably accepted it." The cost is holding the DB transaction during the send — acceptable here; production relays often publish outside the tx and reconcile, or use CDC.</details>
+<details><summary>Why block on the send in the relay? (+~5 min)</summary>If we marked rows published before the broker confirmed, a broker failure would lose the event (we'd think it was sent). Blocking on <code>send().get()</code> makes "published" mean "Kafka durably accepted it." The cost is holding the DB transaction during the send — acceptable here; production relays often publish outside the tx and reconcile, or use CDC.</details>
 
-<details><summary>Keying by event id vs aggregate id</summary>We key records by <code>eventId</code> — good for dedupe, but each event lands on an arbitrary partition, so two events about the <em>same account</em> may be consumed out of order. Keying by account number would order all of one account's events on one partition (what most banks do), at the cost of needing the dedupe id elsewhere (the payload — where ours already is). With one partition in the dev topic the difference is invisible; with 12 partitions it's a design decision.</details>
+<details><summary>Keying by event id vs aggregate id (+~5 min)</summary>We key records by <code>eventId</code> — good for dedupe, but each event lands on an arbitrary partition, so two events about the <em>same account</em> may be consumed out of order. Keying by account number would order all of one account's events on one partition (what most banks do), at the cost of needing the dedupe id elsewhere (the payload — where ours already is). With one partition in the dev topic the difference is invisible; with 12 partitions it's a design decision.</details>
 
-<details><summary>Avoiding the merge round-trip for assigned-id entities</summary><code>OutboxEvent</code> assigns its own id, so <code>save()</code> can't tell new-from-detached and issues a pre-SELECT (merge semantics). Implementing <code>Persistable&lt;UUID&gt;</code> with <code>isNew() == true</code> for fresh instances (e.g. a transient <code>@Transient boolean isNew = true</code> flipped by <code>@PostPersist/@PostLoad</code>) restores plain INSERTs. Worth it at production outbox volumes.</details>
+<details><summary>Avoiding the merge round-trip for assigned-id entities (+~5 min)</summary><code>OutboxEvent</code> assigns its own id, so <code>save()</code> can't tell new-from-detached and issues a pre-SELECT (merge semantics). Implementing <code>Persistable&lt;UUID&gt;</code> with <code>isNew() == true</code> for fresh instances (e.g. a transient <code>@Transient boolean isNew = true</code> flipped by <code>@PostPersist/@PostLoad</code>) restores plain INSERTs. Worth it at production outbox volumes.</details>
 
-<details><summary>SSE vs WebSocket vs polling — when each wins</summary>Polling: simplest, fine for minute-level freshness. SSE: one-way push over plain HTTP — works through proxies, auto-reconnects (<code>Last-Event-ID</code> can even resume), one socket per client. WebSocket: full duplex — needed when the <em>client</em> streams too (chat, collaborative editing, trading order entry). Notifications are the canonical SSE case; Step 29's React app will consume this exact stream.</details>
+<details><summary>SSE vs WebSocket vs polling — when each wins (+~5 min)</summary>Polling: simplest, fine for minute-level freshness. SSE: one-way push over plain HTTP — works through proxies, auto-reconnects (<code>Last-Event-ID</code> can even resume), one socket per client. WebSocket: full duplex — needed when the <em>client</em> streams too (chat, collaborative editing, trading order entry). Notifications are the canonical SSE case; Step 29's React app will consume this exact stream.</details>
 
 ## 💼 Interview Prep: Questions You'll Be Asked
 
@@ -3068,12 +3114,14 @@ remain this step's truth; the §12.3 mutation was not re-run (code frozen).)*
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-- **Quick:** add a second SSE client and prove fan-out — two `curl -N` terminals, one transfer, two prints.
+- **Quick (+~10 min):** add a second SSE client and prove fan-out — two `curl -N` terminals, one transfer, two prints.
   <details><summary>What you're verifying</summary>The hub's broadcast loop sends to every registered emitter; <code>subscriberCount()</code> (exposed for exactly this) should read 2.</details>
-- **Quick:** publish a second event type (`account.opened`) through the same Outbox and consume it.
+- **Quick (+~20 min):** publish a second event type (`account.opened`) through the same Outbox and consume it.
   <details><summary>Hint</summary>Mint an event in <code>openAccount(...)</code>, give <code>OutboxWriter</code> a generic <code>write(type, payload)</code> overload (the table already has the <code>type</code> column), and either filter by type in the existing listener or add a second <code>@KafkaListener</code> method. Watch the consumer's <code>buildMessage</code> — it assumes transfer fields.</details>
-- **Quick:** add a `GET /actuator/health` check that the consumer is connected. <details><summary>Hint</summary>Kafka listener health is part of the actuator's `kafka`/listener indicators when the starter is present.</details>
-- 🎯 **Stretch:** make the consumer dedupe **durable** — persist processed `eventId`s so a consumer restart doesn't reprocess. Prove it: process an event, "restart" the dedupe store from the persisted ids, redeliver the same event → still applied once. <details><summary>Design hints (no <code>solutions/step-20</code> directory exists — Step 21 builds the real version with Redis)</summary>Extract a <code>ProcessedEventStore</code> interface (<code>boolean markProcessed(String id)</code>); keep the in-memory set as one implementation; add a file-backed one (append ids to a file, reload into the set at startup) for the exercise. The test then constructs a fresh store from the same file and asserts <code>markProcessed(knownId) == false</code>. In Step 21 the store becomes Redis <code>SETNX</code>-style with a TTL ≥ the producer's max retry window — and that interface is exactly the seam the hexagonal refactor later formalizes as a port.</details>
+- **Quick (+~15 min):** add a `GET /actuator/health` check that the consumer is connected. <details><summary>Hint</summary>Kafka listener health is part of the actuator's `kafka`/listener indicators when the starter is present.</details>
+- 🎯 **Stretch (+~60–90 min):** make the consumer dedupe **durable** — persist processed `eventId`s so a consumer restart doesn't reprocess. Prove it: process an event, "restart" the dedupe store from the persisted ids, redeliver the same event → still applied once. <details><summary>Design hints (no <code>solutions/step-20</code> directory exists — Step 21 builds the real version with Redis)</summary>Extract a <code>ProcessedEventStore</code> interface (<code>boolean markProcessed(String id)</code>); keep the in-memory set as one implementation; add a file-backed one (append ids to a file, reload into the set at startup) for the exercise. The test then constructs a fresh store from the same file and asserts <code>markProcessed(knownId) == false</code>. In Step 21 the store becomes Redis <code>SETNX</code>-style with a TTL ≥ the producer's max retry window — and that interface is exactly the seam the hexagonal refactor later formalizes as a port.</details>
+
+✋ Stopping here? You have everything built, proven, and (optionally) stretched. Left: F · Review (~1h); first action: skim the 🩺 troubleshooting table, then the recap and the Cumulative Review.
 
 ---
 

@@ -22,14 +22,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | batch vs online · chunk-oriented steps · the JobRepository · skip vs filter vs retry · restartability · the capstone |
-| **C** | [🛠️ Build](#build) | the dependency → taming the autoconfig → the Flyway V4 JobRepository schema → the domain types → processor → writer → the Job/Step wiring → the job test (live) → the 🎓 capstone test (live) → the harness |
-| **D** | [🔬 Prove](#prove) | the Verification Log — the job's counts + effects, the capstone, §12.3 mutation, today's re-run |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & **Phase-D wrap** |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~0.5 h |
+| **B** | [🧠 Understand](#understand) | batch vs online · chunk-oriented steps · the JobRepository · skip vs filter vs retry · restartability · the capstone | ~2.5 h |
+| **C** | [🛠️ Build](#build) | the dependency → taming the autoconfig → the Flyway V4 JobRepository schema → the domain types → processor → writer → the Job/Step wiring → the job test (live) → the 🎓 capstone test (live) → the harness | ~11.5 h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — the job's counts + effects, the capstone, §12.3 mutation, today's re-run | ~1.5 h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~1.5 h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & **Phase-D wrap** | ~0.5 h |
 
 ---
 
@@ -132,6 +132,25 @@ distributed-systems interview for the rest of your career: *exactly-once deliver
 - **Step 22** — `@Scheduled` + ShedLock. The EOD *trigger* for tonight's job is exactly that machinery (described, and a Your-Turn exercise).
 
 > **Depends on:** Steps **12, 8, 20, 21, 19** (+ 22 for the trigger). **+ Docker.**
+
+## 🗓️ Session Plan
+
+≈18 hours is **not** one heroic evening — it's eight sittings, each ending at a real save point (the ✋ checkpoints mark them in the text):
+
+| # | Sitting | Covers | ~time | Ends at |
+|---|---|---|---|---|
+| S1 | Read the map | Movements **A + B** (skip-test, Big Idea, Pattern Spotlight, Under the Hood, Then-vs-Now, capstone theory) + the B→C bridge | ~3 h | end-of-B ✋ (nothing to commit) |
+| S2 | Engine + schema | 📦 Starting Point + **Sub-steps 0–2** — `spring-boot-starter-batch`, taming the autoconfig in `application.yml`, Flyway `V4__batch_schema.sql` | ~2.5 h | Sub-step 2 ✋ + commit |
+| S3 | The brain | **Sub-steps 3–5** — `InterestPosting` + `InterestSkipException`, `InterestProcessor` (compute/filter/skip), `InterestWriter` (credit under the lock) | ~2.5 h | Sub-step 5 ✋ + commit |
+| S4 | The wiring | **Sub-steps 6–7** — the `RepositoryItemReader`, then the fault-tolerant step + job (`InterestAccrualJobConfig`, whole-file confirm) | ~2 h | Sub-step 7 ✋ + commit |
+| S5 | First launch | **Sub-step 8** — `InterestAccrualJobTest` green on real Postgres (counts + effects) + the 🔬 break-it mutation | ~2 h | Sub-step 8 ✋ + commit |
+| S6 | The capstone | **Sub-step 9** — `PaymentExactlyOnceCapstoneTest` green on real Postgres + Redpanda | ~2 h | Sub-step 9 ✋ + commit |
+| S7 | Prove it | **Sub-step 10** (Makefile `play-24`, `smoke.sh`, ADR-0015) + 🎮 Play With It + **Movement D** (the Verification Log) | ~2 h | Sub-step 10 ✋ · tag `step-24-end` |
+| S8 | Cement it | Movements **E + F** — go-deeper, interview prep, your-turn challenges, recap + Phase-D wrap | ~2 h | Phase D done 🎖️ |
+
+**Optional routes:** the ⏭️ skip-test above costs 5 min and may save you the step; the three 🚀 Go-Deeper asides in Movement E are +~10 min each; the 🧪 Play-With-It experiments are +~5 min apiece; the 🏋️ Your-Turn quicks are +~20–30 min each and the 🎯 stretch (idempotent-on-restart accrual) +~1–2 h.
+
+> ✋ **Stopping here?** You have the map — the 30-second overview, the skip-test verdict, and the session plan. Next: B · 🧠 Understand (The Big Idea); first action: reopen this lesson at [#understand](#understand).
 
 ---
 
@@ -259,6 +278,12 @@ the restart bookmark trustworthy.
 sort is **deterministic** (`id ASC`), "resume from item 8,010" means the same item tomorrow as today. An unsorted
 read order would make restart semantics meaningless — same rows, different order, double-processing.
 
+❓ **Knowledge-check:** an EOD job fails halfway and you re-launch it with the **same identifying
+JobParameters** — do you get a new JobInstance, a new JobExecution, or both?
+<details><summary>Answer</summary>A **new JobExecution** of the **same JobInstance** — the JobRepository knows
+the instance failed, so the new execution rehydrates the ExecutionContext bookmark and resumes from the last
+committed chunk. (A *completed* instance won't re-run at all — `JobInstanceAlreadyCompleteException`.)</details>
+
 ## 🛡️ Security Lens & 🧵 Thread-safety note
 
 An EOD job runs **concurrently with live traffic** — the bank doesn't stop taking transfers at 2am. Two shared-
@@ -272,6 +297,9 @@ state hazards, two mitigations you already own:
   the *credit* is what must never lose an update.)
 - **Transient conflicts are the retry case.** A live transaction holding the row, an optimistic-lock version bump —
   these deserve a `retry(OptimisticLockingFailureException.class)`, not a skip and *definitely* not a failed night.
+  Be precise about what that retry covers, though: a pessimistic lock **timeout** raises
+  `PessimisticLockingFailureException` — a *sibling* type this retry does **not** match; widening the retry to
+  their common parent `ConcurrencyFailureException` would catch both (if you change it, re-run the tests).
 
 Security-wise: a batch job is a **privileged writer** (it touches every account with no user in the loop). It runs
 with the service's own identity, not a relayed user token (Step 23's distinction); its effects are fully
@@ -330,6 +358,10 @@ debit, credit, ledger, and the outbox row in one transaction. The client retries
 same transactionId without a second movement. The OutboxRelay reads the unpublished row and publishes the event
 to Kafka keyed by eventId. Kafka delivers the event twice (a duplicate); the idempotent consumer checks the
 eventId and applies it only once.*
+
+> ✋ **Stopping here?** You have the concepts — chunks, the JobRepository, filter vs skip vs retry,
+> restartability, and the capstone theory; nothing to commit yet (end of S1). Next: the B→C bridge, then
+> Sub-step 0 (the dependency); first action: open `services/demand-account/pom.xml`.
 
 ---
 
@@ -638,7 +670,7 @@ bank.outbox.relay.scheduled=false
 That's the Phase-D recap-by-reading. Now we build the batch layer on top.
 
 ---
-## Sub-step 0 of 10 — The dependency: `spring-boot-starter-batch` 🧭 *(you are here: **pom** → config → schema → types → processor → writer → job → tests → harness)*
+## Sub-step 0 of 10 — The dependency: `spring-boot-starter-batch` 🧭 *(you are here: **pom** → config → schema → types → processor → writer → job → tests → harness)* · ≈30 min
 
 🎯 **Goal:** put Spring Batch on demand-account's classpath. One starter brings the whole chunk-processing engine
 *and* triggers Boot's Batch auto-configuration (JobRepository, JobLauncher) — which is exactly why the next
@@ -724,7 +756,7 @@ git commit -m "feat(demand-account): add spring-boot-starter-batch for EOD jobs 
 
 ---
 
-## Sub-step 1 of 10 — Tame the autoconfig: `application.yml` 🧭 *(pom ✅ → **config** → schema → types → processor → writer → job → tests → harness)*
+## Sub-step 1 of 10 — Tame the autoconfig: `application.yml` 🧭 *(pom ✅ → **config** → schema → types → processor → writer → job → tests → harness)* · ≈45 min
 
 🎯 **Goal:** two `spring.batch` settings that make Batch behave inside a *service*: don't run jobs at startup, and
 don't touch my schema — Flyway owns it.
@@ -890,7 +922,7 @@ startup anyway). When a yml setting "doesn't work," check its depth first.
 
 ---
 
-## Sub-step 2 of 10 — Flyway V4: the JobRepository schema 🧭 *(pom ✅ → config ✅ → **schema** → types → processor → writer → job → tests → harness)*
+## Sub-step 2 of 10 — Flyway V4: the JobRepository schema 🧭 *(pom ✅ → config ✅ → **schema** → types → processor → writer → job → tests → harness)* · ≈1 h
 
 🎯 **Goal:** create the six `BATCH_*` metadata tables and three sequences the JobRepository needs — as a versioned
 Flyway migration, copied **verbatim** from Spring Batch's own canonical `schema-postgresql.sql`.
@@ -1028,6 +1060,10 @@ o.f.core.internal.command.DbMigrate      : Successfully applied 4 migrations to 
 `ls services/demand-account/src/main/resources/db/migration/` shows `V1…V2…V3…V4…` — the service's whole schema
 history in one directory listing.
 
+> ✋ **Stopping here?** You have the engine, the tamed autoconfig, and the V4 schema committed (end of S2).
+> Next: Sub-step 3 (the batch domain types); first action: create
+> `services/demand-account/src/main/java/com/buildabank/account/batch/InterestPosting.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -1041,7 +1077,7 @@ major versions (e.g. params storage). Copy it from **your resolved version's** j
 
 ---
 
-## Sub-step 3 of 10 — The batch domain types: `InterestPosting` + `InterestSkipException` 🧭 *(… schema ✅ → **types** → processor → writer → job → tests → harness)*
+## Sub-step 3 of 10 — The batch domain types: `InterestPosting` + `InterestSkipException` 🧭 *(… schema ✅ → **types** → processor → writer → job → tests → harness)* · ≈45 min
 
 🎯 **Goal:** the two tiny types the pipeline speaks: the processor's *output* (what interest to post, to which
 account, under which transaction id) and the *signal* for "skip this record."
@@ -1130,7 +1166,7 @@ checked ones in `RuntimeException` at the throw site loses the type that `skip(.
 
 ---
 
-## Sub-step 4 of 10 — `InterestProcessor`: compute, filter, or skip 🧭 *(… types ✅ → **processor** → writer → job → tests → harness)*
+## Sub-step 4 of 10 — `InterestProcessor`: compute, filter, or skip 🧭 *(… types ✅ → **processor** → writer → job → tests → harness)* · ≈1 h
 
 🎯 **Goal:** the chunk's brain — given one `Account`, decide: compute interest (return a posting), *filter* (return
 `null` — no work needed), or *skip* (throw — bad record, tolerate and move on).
@@ -1247,7 +1283,7 @@ explicit (Step 2's drum, beaten forever).
 
 ---
 
-## Sub-step 5 of 10 — `InterestWriter`: credit + ledger, under the Step-12 lock 🧭 *(… processor ✅ → **writer** → job → tests → harness)*
+## Sub-step 5 of 10 — `InterestWriter`: credit + ledger, under the Step-12 lock 🧭 *(… processor ✅ → **writer** → job → tests → harness)* · ≈1 h
 
 🎯 **Goal:** the chunk's hands — for each posting, re-read the account **with the pessimistic lock**, credit it,
 and append a ledger entry. All inside the chunk transaction Batch manages.
@@ -1356,6 +1392,10 @@ would be silently overwritten. Step 12's capstone proved this exact race fails; 
 ✋ **Checkpoint:** you can say *who opens the transaction the writer runs in* (Batch — per chunk), and *why the
 re-read uses `ForUpdate`* (live traffic races the EOD run).
 
+> ✋ **Stopping here?** You have the whole item pipeline — types, processor, writer — compiling and committed
+> (end of S3). Next: Sub-step 6 (the reader); first action: create
+> `services/demand-account/src/main/java/com/buildabank/account/batch/InterestAccrualJobConfig.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -1369,7 +1409,7 @@ re-read-under-lock **is** the correctness, not overhead.
 
 ---
 
-## Sub-step 6 of 10 — `InterestAccrualJobConfig`, part 1: the reader 🧭 *(… writer ✅ → **job wiring** → tests → harness)*
+## Sub-step 6 of 10 — `InterestAccrualJobConfig`, part 1: the reader 🧭 *(… writer ✅ → **job wiring** → tests → harness)* · ≈45 min
 
 🎯 **Goal:** start the wiring class: a `RepositoryItemReader` that pages over **all** accounts in deterministic
 order, reusing the existing Spring Data repository — no SQL, no new query.
@@ -1437,7 +1477,7 @@ stateful reader is teaching you the same lesson as this lesson.
 
 ---
 
-## Sub-step 7 of 10 — `InterestAccrualJobConfig`, part 2: the fault-tolerant step + the job 🧭 *(… reader ✅ → **step & job** → tests → harness)*
+## Sub-step 7 of 10 — `InterestAccrualJobConfig`, part 2: the fault-tolerant step + the job 🧭 *(… reader ✅ → **step & job** → tests → harness)* · ≈1 h
 
 🎯 **Goal:** assemble the machine: a chunk-oriented `Step` with skip + retry, wrapped in a `Job` — then confirm
 the whole file.
@@ -1602,6 +1642,10 @@ restart granularity ≈ the whole run — chunking earns its keep at realistic v
 ✋ **Checkpoint:** your file matches the whole-file block above **exactly** (the import block is where drift
 hides). Three beans: reader, step, job. `faultTolerant()` comes *after* writer, *before* skip/retry.
 
+> ✋ **Stopping here?** You have the job fully wired — reader, fault-tolerant step, job — compiling and committed
+> (end of S4). Next: Sub-step 8 (the job test — the first live run); first action: create
+> `services/demand-account/src/test/java/com/buildabank/account/batch/InterestAccrualJobTest.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -1615,7 +1659,7 @@ the skip lines to "fix" the compile error: everything builds, and the first bad 
 night. If the compiler complains about `skip`, the answer is *add* `faultTolerant()`, never *remove* `skip`.
 
 ---
-## Sub-step 8 of 10 — `InterestAccrualJobTest`: launch the job, assert counts *and* effects 🧭 *(… job wiring ✅ → **job test** → capstone → harness)*
+## Sub-step 8 of 10 — `InterestAccrualJobTest`: launch the job, assert counts *and* effects 🧭 *(… job wiring ✅ → **job test** → capstone → harness)* · ≈2 h
 
 🎯 **Goal:** prove the whole machine on a **real Postgres**: seed four accounts that exercise every path (credit ×2,
 filter, skip), launch the job through the real `JobLauncher`, and assert both the **StepExecution counters** and
@@ -1804,6 +1848,10 @@ rerun, green. *(Output above is the recorded mutation run from this step's Verif
 ✋ **Checkpoint:** test green on a random-port Postgres; you can point at the log line proving V4 ran and the line
 proving the job COMPLETED.
 
+> ✋ **Stopping here?** You have the batch deliverable green — counts and balances proven on real Postgres, the
+> mutation tried and reverted (end of S5). Next: Sub-step 9 (the 🎓 capstone); first action: create
+> `services/demand-account/src/test/java/com/buildabank/account/PaymentExactlyOnceCapstoneTest.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -1817,7 +1865,7 @@ balances — the counters (`write 2`, `skip 1`) close those holes. Belt *and* su
 
 ---
 
-## Sub-step 9 of 10 — 🎓 The Phase-D capstone: `PaymentExactlyOnceCapstoneTest` 🧭 *(… job test ✅ → **capstone** → harness)*
+## Sub-step 9 of 10 — 🎓 The Phase-D capstone: `PaymentExactlyOnceCapstoneTest` 🧭 *(… job test ✅ → **capstone** → harness)* · ≈2 h
 
 🎯 **Goal:** one test, the whole phase: an idempotent payment (Step 21) → the transactional Outbox (Step 20) → Kafka
 (Redpanda, Step 20) → a **forced duplicate** redelivery (Step 19's at-least-once reality) → deduped by eventId →
@@ -1825,6 +1873,12 @@ applied **exactly once**.
 
 📁 **Location:** new file → `services/demand-account/src/test/java/com/buildabank/account/PaymentExactlyOnceCapstoneTest.java`
 (top-level test package — it spans the service, not just the batch corner)
+
+❓ **Knowledge-check (before you write it):** the relay *publishes* the event, **then** marks the outbox row
+published (Step 20 — see the Starting Point's `OutboxRelay`). Which duplicate does that gap allow?
+<details><summary>Answer</summary>A crash *between* the broker's ack and the mark-published commit leaves the row
+"unpublished" — the next relay pass publishes it **again**: an at-least-once duplicate. That is exactly the
+redelivery this capstone forces by hand, and exactly what the consumer's dedupe-by-eventId must absorb.</details>
 
 ⌨️ **Code:**
 
@@ -2061,6 +2115,10 @@ the event — usually Docker resources (Redpanda needs a moment) or a `TOPIC` ty
 ✋ **Checkpoint:** capstone green; you can narrate the three acts from memory, each with its step number:
 idempotent replay (21) → outbox publish (20) → duplicate deduped (19/20). That narration *is* your Phase-D oral exam.
 
+> ✋ **Stopping here?** You have both proofs green — the job's counts/effects and the capstone's
+> delivered-≥2×-applied-once (end of S6). Next: Sub-step 10 (the harness); first action: edit the root
+> `Makefile` (add the `play-24` target).
+
 💾 **Commit:**
 
 ```bash
@@ -2075,7 +2133,7 @@ drum, final beat.
 
 ---
 
-## Sub-step 10 of 10 — The harness: `make play-24`, `smoke.sh`, ADR-0015 🧭 *(… capstone ✅ → **harness** → done 🏁)*
+## Sub-step 10 of 10 — The harness: `make play-24`, `smoke.sh`, ADR-0015 🧭 *(… capstone ✅ → **harness** → done 🏁)* · ≈45 min
 
 🎯 **Goal:** one-command ways to re-prove the step forever, plus the decision record. (No `requests.http` this
 step — deliberately: the job has **no HTTP surface** (a `JobLauncher` launches it; the EOD trigger is a Your-Turn),
@@ -2226,6 +2284,10 @@ bash steps/step-24/smoke.sh        # or: make play-24
 
 ✋ **Checkpoint:** `make help` lists `play-24`; the smoke passes from a clean shell.
 
+> ✋ **Stopping here?** You have the harness committed and the smoke green. Next: 🎮 Play With It, then
+> Movement D (the Verification Log — read it against your own runs, then tag `step-24-end`); first action: run
+> `make play-24`.
+
 💾 **Commit (and the step's single squashed message if you commit per-step):**
 
 ```bash
@@ -2283,7 +2345,7 @@ make play-24                 # both proofs, one command (Docker: Postgres + Redp
 ./mvnw -pl services/demand-account test -Dtest=InterestAccrualJobTest    # just the batch job — watch Flyway V4 + the COMPLETED line
 ```
 
-🧪 **Little experiments** (change X → see Y; revert after each):
+🧪 **Little experiments** (change X → see Y; revert after each; +~5 min apiece):
 
 1. **Rate knob:** add `bank.interest.daily-rate: 0.001` to the *test* `application.properties` → rerun → the test
    **fails** with `expected: 1000.10 but was: 1001.00` — config drives money, and the test pins the config.
@@ -2377,7 +2439,7 @@ dependencies — which don't touch this step's code). So both tests were re-run 
 
 ## 🚀 Go Deeper (Optional)
 
-<details><summary><strong>Restartability & idempotent jobs — the full story</strong></summary>
+<details><summary><strong>Restartability & idempotent jobs — the full story</strong> · +~10 min</summary>
 
 A job identified by its **identifying JobParameters** is one `JobInstance`; each launch attempt is a
 `JobExecution`. A **FAILED** execution can be re-launched with the *same* parameters: Batch finds the instance,
@@ -2392,7 +2454,7 @@ by run date (`runDate` as the identifying parameter + an `(account, runDate)` un
 or a processed-marker per account. That's the batch analogue of the Idempotency-Key — and the 🏋️ stretch goal.
 </details>
 
-<details><summary><strong>Partitioning for scale</strong></summary>
+<details><summary><strong>Partitioning for scale</strong> · +~10 min</summary>
 
 For millions of rows, a single thread reading pages won't finish the night. Spring Batch's **partitioned step**
 splits the keyspace (account-id ranges) across worker StepExecutions — each runs the same
@@ -2403,7 +2465,7 @@ resource becomes the *database* — which is why real EOD architectures pair par
 or move the read side to a warehouse.
 </details>
 
-<details><summary><strong>Operating a JobRepository in production</strong></summary>
+<details><summary><strong>Operating a JobRepository in production</strong> · +~10 min</summary>
 
 The `BATCH_*` tables are an operational goldmine: `SELECT STATUS, COUNT(*) FROM batch_job_execution GROUP BY
 STATUS` is your nightly dashboard; `EXIT_MESSAGE` carries the stack trace of a failed step; `READ_COUNT` deltas
@@ -2473,19 +2535,19 @@ instance — that's a night that never recovered.
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-- **Quick:** unit-test the processor — no Spring, no Docker: `new InterestProcessor(new BigDecimal("0.0001"))`,
+- **Quick (+~20 min):** unit-test the processor — no Spring, no Docker: `new InterestProcessor(new BigDecimal("0.0001"))`,
   assert the three behaviors (posting / null / throw). <details><summary>Hint</summary>Construct `Account`s via
   `TransferService`-free means (the entity's constructor), then: `process(acc1000).interest()` is
   `0.10` by `isEqualByComparingTo`; `process(accZero)` is `null`; `assertThatThrownBy(() ->
   process(accSkip)).isInstanceOf(InterestSkipException.class)`.</details>
-- **Quick:** add an EOD trigger — a `@Scheduled(cron = "0 0 2 * * *")` + `@SchedulerLock` (Step 22) method that
+- **Quick (+~30 min):** add an EOD trigger — a `@Scheduled(cron = "0 0 2 * * *")` + `@SchedulerLock` (Step 22) method that
   launches `interestAccrualJob` with the **run date** as the identifying JobParameter. <details><summary>Hint</summary>
   Inject `JobLauncher` + the `Job`; `new JobParametersBuilder().addString("runDate", LocalDate.now().toString())`.
   ShedLock stops three pods racing the *launch*; the JobInstance uniqueness is the second net — same date, same
   instance, `JobInstanceAlreadyCompleteException` for the losers. Two independent guards, by design.</details>
-- **Quick:** add a second step to the job — a per-account statement-summary writer — chained with
+- **Quick (+~30 min):** add a second step to the job — a per-account statement-summary writer — chained with
   `.start(interestAccrualStep).next(statementStep)`. Watch `BATCH_STEP_EXECUTION` grow a second row per execution.
-- 🎯 **Stretch: make the accrual idempotent on restart** — key it by run date so re-running the same EOD date
+- 🎯 **Stretch (+~1–2 h): make the accrual idempotent on restart** — key it by run date so re-running the same EOD date
   can't double-credit; prove it by launching twice for the same date and asserting interest applied once.
   <details><summary>Design hints (no reference repo for this one — your build)</summary>
   ① Schema: V5 migration — `interest_posting(account_id, run_date, amount, …)` with a **unique
@@ -2496,6 +2558,10 @@ instance — that's a night that never recovered.
   it). ④ The proof test: two launches, **different** `runId` but same `runDate`, then assert balance credited
   once and one posting row. ⑤ Note what you just rebuilt: the Outbox-pattern shape — effect + dedupe record in
   one transaction.</details>
+
+> ✋ **Stopping here?** You have the step applied — go-deeper read, interview answers rehearsed, challenges
+> picked. Next: F · 🏆 Review (troubleshooting, recap, flashcards, the Phase-D wrap); first action: reopen this
+> lesson at [#review](#review).
 
 ---
 

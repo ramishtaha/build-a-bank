@@ -1112,6 +1112,36 @@ bash steps/step-03/smoke.sh
 
 runs `./mvnw -B -q -pl playground/java-basics -am verify` and asserts the two demo `.class` files exist, ending with `✅ Step 3 smoke test PASSED (networking lab green)`.
 
+### Re-run 1 — re-verified 2026-07-02 (aids pass)
+
+> Re-run in an isolated worktree checked out at the **`step-03-end`** tag (pure JVM, no Docker). **Drift-check:** `git diff step-03-end..HEAD -- playground/java-basics steps/step-03` shows the module has since gained the Step-4 `jvm` package (`AllocationDemo`, `BytecodeSample`, `JvmLabTest` — 3 files, +105 lines); nothing in the `net` package changed, but the tag checkout is still the honest baseline for re-running *this* step.
+
+**Module tests (`./mvnw -B -pl playground/java-basics -am test`) — real tail from this machine:**
+
+```
+[INFO] Running com.buildabank.basics.net.LoopbackHttpTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.364 s -- in com.buildabank.basics.net.LoopbackHttpTest
+[INFO] Running com.buildabank.basics.net.UrlAnatomyTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.006 s -- in com.buildabank.basics.net.UrlAnatomyTest
+[INFO] Tests run: 20, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Build-a-Bank :: Playground :: Java Basics .......... SUCCESS [  4.188 s]
+[INFO] BUILD SUCCESS
+[INFO] Total time:  4.645 s
+[INFO] Finished at: 2026-07-02T11:05:00+05:30
+```
+
+Both `net` test classes are green — the loopback round trip (a real JDK `HttpServer` on an ephemeral port, exercised by the `java.net.http` client **and** the raw socket) took 0.364 s.
+
+**`bash steps/step-03/smoke.sh` (from the worktree root — runs `verify` and asserts the demo `.class` files exist):**
+
+```
+==> Build + test the networking lab (loopback HTTP round-trip + URL anatomy)
+==> Compile-check the demos are runnable (class present)
+✅ Step 3 smoke test PASSED (networking lab green)
+```
+
+**Not re-run:** the live-service demo runs (`HttpClientDemo`/`RawHttpDemo` against `make run-hello`) and the `curl`/`nslookup`/TLS captures — those are exploration artifacts whose recorded outputs in §2–§6 above remain the reference; and no mutation/clean-room checks, per this step's 🟠 Standard tier and the frozen-code rule of the documentation pass. The gate that matters — the self-contained loopback HTTP round trip — ran live today and is green.
+
 ---
 
 <a id="apply"></a>

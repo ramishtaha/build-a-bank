@@ -1253,6 +1253,62 @@ Boot evaluated hundreds of candidates and **applied 141** based on classpath + c
 
 The smoke script builds + tests the module, runs the jar, and `grep`s the output for both `greeting (auto-config) : Welcome to Build-a-Bank, intern!` and `annual rate (props)    : 3.25%` — so a learner following along gets exactly the shown result.
 
+### Re-run 1 — re-verified 2026-07-02 (aids pass)
+
+To confirm this step's code and tests still behave exactly as documented, they were re-run in a clean, isolated `git worktree` checked out at the **`step-06-end`** tag (repo untouched, worktree removed afterwards). Environment: **Java 25.0.3 · Maven 3.9.12 · Spring Boot 4.0.6 · Windows 11**.
+
+**Drift-check** (`git diff step-06-end..HEAD -- playground/spring-lab steps/step-06`): the module **has drifted at HEAD** — later steps added the Step-7/8 material (`pom.xml` +21 lines, `ProxyInspectorRunner`, the `account/*` package, the `aop/*` aspect + `AccountControllerTest`/`AuditAspectSelfInvocationTest`). But **every Step-6 artifact is byte-identical to the tag**: `config/` (BankProperties, LabConfig), `autoconfig/` (GreetingService, GreetingAutoConfiguration), `LabRunner.java`, the `.imports` file, and both Step-6 test classes show an empty diff. The worktree at the tag is therefore the truth for the run below (HEAD's module now carries extra later-step tests on top of these 10).
+
+**1) `./mvnw -pl playground/spring-lab -am test` — all 10 tests, fresh:**
+
+```
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.587 s -- in com.buildabank.springlab.autoconfig.GreetingAutoConfigurationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.661 s -- in com.buildabank.springlab.config.BankPropertiesTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.180 s -- in com.buildabank.springlab.MarketRateContextTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.015 s -- in com.buildabank.springlab.rates.ConditionalBeansTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.162 s -- in com.buildabank.springlab.SpringLabApplicationTests
+[INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+[INFO] Total time:  4.851 s
+```
+
+**2) `java -jar playground/spring-lab/target/spring-lab-0.1.0-SNAPSHOT.jar` — fresh app run (timestamp is today's):**
+
+```
+com.buildabank.springlab.LabRunner       : ================ Spring Lab :: Build-a-Bank ================
+com.buildabank.springlab.LabRunner       : greeting (auto-config) : Welcome to Build-a-Bank, intern!
+com.buildabank.springlab.LabRunner       : wired RateProvider     : fixed
+com.buildabank.springlab.LabRunner       : annual rate (props)    : 3.25%
+com.buildabank.springlab.LabRunner       : interest on 10000.00   : 325.00
+com.buildabank.springlab.LabRunner       : clock.instant() (UTC)  : 2026-07-02T05:36:25.156825900Z
+com.buildabank.springlab.LabRunner       : singleton same instance? true
+com.buildabank.springlab.LabRunner       : prototype instances     : #1 vs #2  (same? false)
+com.buildabank.springlab.LabRunner       : ==================================================
+```
+
+**3) Break-it #1 re-run for real — `--bank.greeting.enabled=false` (the documented fail-fast, verbatim):**
+
+```
+... UnsatisfiedDependencyException: Error creating bean with name 'labRunner' ... Unsatisfied dependency expressed
+through constructor parameter 4: No qualifying bean of type 'com.buildabank.springlab.autoconfig.GreetingService'
+available: expected at least 1 bean which qualifies as autowire candidate.
+APPLICATION FAILED TO START
+Parameter 4 of constructor in com.buildabank.springlab.LabRunner required a bean of type
+'com.buildabank.springlab.autoconfig.GreetingService' that could not be found.
+Action:
+Consider defining a bean of type 'com.buildabank.springlab.autoconfig.GreetingService' in your configuration.
+```
+
+**4) `bash steps/step-06/smoke.sh` (from the worktree root):**
+
+```
+==> 1/2 Build + test spring-lab (incl. BankPropertiesTest + GreetingAutoConfigurationTest)
+==> 2/2 Run the app; assert typed @ConfigurationProperties + the auto-configured GreetingService
+✅ Step 6 smoke test PASSED
+```
+
+**Not re-run:** the live `hello-service` Actuator capture in §3 (requires starting the `:8080` web server; the recorded **141 positive / 82 negative** matches remain the tag-time truth — exact counts drift with Boot patch versions, as §3's note says), and no mutation/clean-room pass (🟠 Standard tier, and code is frozen for this documentation-only pass per §12.8). Everything re-run matches the log above exactly.
+
 ---
 
 <a id="apply"></a>

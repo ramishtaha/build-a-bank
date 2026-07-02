@@ -1483,6 +1483,52 @@ It asserts the three load-bearing facts — `fixed` wired, singleton identity `t
 > [!NOTE]
 > **Windows note.** `smoke.sh` is a bash script — run it from **Git Bash/WSL** (`bash steps/step-05/smoke.sh`). On a plain PowerShell prompt, run the two underlying commands directly: `.\mvnw.cmd -pl playground/spring-lab -am verify` then `java -jar playground/spring-lab/target/spring-lab-0.1.0-SNAPSHOT.jar`.
 
+### Re-run 5 — re-verified 2026-07-02 (aids pass)
+
+Re-verified on a clean `git worktree` at the **`step-05-end`** tag (Java 25.0.3, Windows 11, Maven wrapper). **Drift check:** `git diff step-05-end..HEAD -- playground/spring-lab steps/step-05` shows the module **has drifted** since the tag — later steps grew `spring-lab` (AOP aspect + counter, Greeting auto-configuration, `account/*` controller stack, `BankProperties`, `ProxyInspectorRunner`, and 4 new test classes; 21 files, +668/−63). All runs below were therefore executed **in the tag worktree** — the exact code this lesson builds.
+
+**1) Full build + all tests — `./mvnw -pl playground/spring-lab -am test`** (real captured output):
+
+```
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.783 s -- in com.buildabank.springlab.MarketRateContextTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.049 s -- in com.buildabank.springlab.rates.ConditionalBeansTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.207 s -- in com.buildabank.springlab.SpringLabApplicationTests
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Build-a-Bank :: Playground :: Spring Lab ........... SUCCESS [  5.466 s]
+[INFO] BUILD SUCCESS
+[INFO] Total time:  5.994 s
+```
+
+✅ Still **6 tests, 0 failures — BUILD SUCCESS in ~6 s**, matching section 1 above (which omitted per-class timings).
+
+**2) Lifecycle + conditional wiring, live from the test boots** (real log lines, trimmed of timestamps):
+
+```
+INFO c.b.springlab.lifecycle.LifecycleBean    : 1) constructor
+INFO c.b.s.lifecycle.TimingBeanPostProcessor  : 2) BPP before-init for bean 'lifecycleBean'
+INFO c.b.springlab.lifecycle.LifecycleBean    : 3) @PostConstruct
+INFO c.b.s.lifecycle.TimingBeanPostProcessor  : 4) BPP after-init for bean 'lifecycleBean'
+INFO com.buildabank.springlab.LabRunner       : wired RateProvider     : market
+INFO com.buildabank.springlab.LabRunner       : interest on 10000.00   : 475.00
+...
+INFO com.buildabank.springlab.LabRunner       : wired RateProvider     : fixed
+INFO com.buildabank.springlab.LabRunner       : interest on 10000.00   : 325.00
+INFO com.buildabank.springlab.LabRunner       : singleton same instance? true
+INFO com.buildabank.springlab.LabRunner       : prototype instances     : #3 vs #4  (same? false)
+```
+
+The 1→2→3→4 lifecycle ordering, both conditional wirings (`market` → **475.00**, `fixed` → **325.00**), singleton identity `true`, and distinct prototype instances all reproduce exactly as documented in sections 2–3.
+
+**3) Smoke — `bash steps/step-05/smoke.sh`** (run from the worktree root):
+
+```
+==> 1/2 Build + test spring-lab
+==> 2/2 Run the app and assert the IoC demo output
+✅ Step 5 smoke test PASSED
+```
+
+**Not re-run:** nothing beyond the standing 🟠 Standard-tier policy — no mutation/clean-room pass (code is frozen for this documentation pass), and the interactive `spring-boot:run` experiments were not re-driven by hand (the jar run inside `smoke.sh` asserts the same three load-bearing facts).
+
 ---
 
 <a id="apply"></a>

@@ -11,14 +11,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | asymmetric signing & JWKS · resource servers · method security · MFA/step-up |
-| **C** | [🛠️ Build](#build) | auth → RS256 + JWKS + method security · demand-account → resource server + @PreAuthorize |
-| **D** | [🔬 Prove](#prove) | the Verification Log — cross-service JWKS validation live, 401/403/201, §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1h |
+| **B** | [🧠 Understand](#understand) | asymmetric signing & JWKS · resource servers · method security · MFA/step-up | ~3h |
+| **C** | [🛠️ Build](#build) | auth → RS256 + JWKS + method security · demand-account → resource server + @PreAuthorize | ~12h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — cross-service JWKS validation live, 401/403/201, §12.3 mutation | ~3h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~2h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~1h |
 
 ---
 
@@ -113,6 +113,24 @@ The moment you have more than one service, "who can validate a token?" becomes t
 
 > **Depends on: Steps 16, 12, 15.** Second of the two security deep-dives.
 
+## 🗓️ Session Plan
+
+≈22 hours is not one sitting. Nine sittings of ~2–3h, each ending at a commit or a natural boundary — stop at the end of any row and you lose nothing:
+
+| # | Sitting | Covers | ~time | Ends at |
+|---|---|---|---|---|
+| S1 | Read the map | A · Orient + B · Understand (Big Idea → Pattern Spotlight) | ~2.5h | Pattern-Spotlight ❓ quick check answered |
+| S2 | Finish the theory | B · Understand (Under the Hood → Thread-safety note) + 📦 Your Starting Point | ~1.5h | `./mvnw -q verify` green at `step-17-start` |
+| S3 | Issuer goes asymmetric | Sub-steps 1–3 (RS256 header → RSA keys & beans → JWKS endpoint) | ~2.75h | sub-step 3 ✋ — `GET /oauth2/jwks` returns 200, committed |
+| S4 | auth method security + proof | Sub-steps 4–5 (`@PreAuthorize` `/admin-method` → auth tests) | ~2.25h | sub-step 5 ✋ — auth **11** tests green, committed |
+| S5 | Resource-server wiring | Sub-steps 6–8 (deps → `jwk-set-uri` → demand-account `SecurityConfig`) | ~2h | sub-step 8 ✋ — money endpoints gated, committed |
+| S6 | Method security + slice tests | Sub-steps 9–10 (`/api/v1/admin/ping` → `jwt()` slice tests) | ~2.25h | sub-step 10 ✋ — slice security tests green, committed |
+| S7 | Integration + harness | Sub-steps 11–12 (minted RS256 tokens → requests.http / smoke.sh / ADR-0009) | ~2.75h | sub-step 12 ✋ — `smoke.sh` PASSED, `step-17-end` tagged |
+| S8 | Prove it live | 🎮 Play With It + live cross-service run + D · 🔬 Verification Log | ~3h | ✅ Definition of Done all checked |
+| S9 | Lock it in | E · Apply (go deeper · interview prep · your turn) + F · Review (flashcards) | ~3h | 🃏 flashcards + one-line reflection done |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can shrink this to a ~5h skim for experienced learners; the four 🚀 Go Deeper asides are +~10 min each; 🏋️ Your Turn stretch challenges 4–5 are +1–2h each.
+
 ---
 
 <a id="understand"></a>
@@ -163,6 +181,8 @@ sequenceDiagram
 
 > **Implementation (here).** auth publishes `/oauth2/jwks` (RS256 public key); demand-account sets `jwk-set-uri` to it and `oauth2ResourceServer(jwt(...))`. Proven live: demand-account accepted an auth-minted token (201) and rejected an unauthenticated one (401).
 
+❓ **Quick check:** an attacker fully compromises demand-account and dumps everything it holds. Can they now forge admin tokens the rest of the fleet would accept — and why (not)? <details><summary>answer</summary>No — demand-account only ever holds auth's <em>public</em> key (fetched from the JWKS), which can verify signatures but not create them. Only auth's private key can mint tokens. With a shared HMAC secret the answer would be yes — that's exactly the forgery risk RS256 + JWKS removes.</details>
+
 ## 🌱 Under the Hood: How It Really Works
 
 **Generating & using the RSA key (auth).** A `RSAKey` (Nimbus) is generated at startup; `NimbusJwtEncoder` signs over an `ImmutableJWKSet` of it, and the `JwsHeader` declares `RS256`. The `/oauth2/jwks` controller returns `new JWKSet(rsaKey.toPublicJWK()).toJSONObject()` — **public** material only (`kty`, `kid`, `n`, `e`; never the private exponent `d`). *Production note:* generating at startup is ephemeral (a restart rotates the key, invalidating live tokens); real systems load a persisted key from a keystore/Vault (Phase H) and rotate deliberately — JWKS' multi-key support makes rollover seamless.
@@ -170,6 +190,8 @@ sequenceDiagram
 **Validating (demand-account, the resource server).** With `spring.security.oauth2.resourceserver.jwt.jwk-set-uri` set, Boot auto-configures a `JwtDecoder` that **lazily** fetches the JWKS on first use (so the service boots even if auth is down) and **caches** it. Per request, the `BearerTokenAuthenticationFilter` extracts the token, the decoder validates signature + `exp`, and our `JwtAuthenticationConverter` maps the `roles` claim to authorities. No session, no callback to auth per request.
 
 **URL rules vs `@PreAuthorize` (and a blast-radius lesson).** We secure the HTTP edge with `authorizeHttpRequests` (`/api/**` → authenticated; health + docs → permitAll) and demonstrate **method security** (`@EnableMethodSecurity` + `@PreAuthorize("hasRole('ADMIN')")`) on a narrow admin endpoint. We deliberately **did not** put `@PreAuthorize` on the core transfer *service* methods: method security wraps the bean with an AOP proxy and applies to **direct** calls too — which would force a security context into the dozens of service-level unit tests that call `transfer(...)` directly. Keeping authorization at the edge (URL rules) + a narrow method-security demo means only the **HTTP-layer tests** needed tokens, not the service tests. (A real system *would* use method security on services — and accept setting up the security context in those tests.)
+
+❓ **Quick check:** you add `@PreAuthorize("hasRole('ADMIN')")` to `TransferService.transfer(...)`. Which tests break, and why? <details><summary>answer</summary>Every service-level unit test that calls <code>transfer(...)</code> directly — method security wraps the bean in an AOP proxy that checks the SecurityContext on <em>any</em> invocation, not just HTTP ones. With no <code>Authentication</code> on the test thread, it throws <code>AccessDeniedException</code>.</details>
 
 **Testing security without committing keys.** Controller slice (`@WebMvcTest`): `spring-security-test`'s `jwt()` request post-processor injects the `Authentication` directly (no real decoding) — but the slice needs `@EnableWebSecurity` on the config to get an `HttpSecurity` bean, and a mock `JwtDecoder`. Integration test (`@SpringBootTest`, real HTTP): a `@TestConfiguration` supplies a `JwtDecoder` from a **test** RSA public key (overriding the production `jwk-set-uri`), and the test **mints** RS256 tokens with the matching private key. No private key is committed; the real auth↔demand-account JWKS interop is proven by a **live** run instead (🔬).
 
@@ -185,6 +207,8 @@ sequenceDiagram
 - **Leaking private key / no rotation.** The signing private key is the crown jewel — keystore/Vault, never in git, rotate it (Phase H). JWKS makes rotation safe (publish new + old, retire old after expiry).
 - **Over-broad tokens & no revocation.** Long-lived, widely-scoped tokens are dangerous if stolen. Short lifetimes, least-privilege scopes/roles, refresh tokens, and step-up for sensitive actions limit blast radius.
 
+❓ **Quick check:** a token arrives at demand-account with header `alg: HS256`, HMAC-signed using auth's *public* key as the secret. Does it validate? <details><summary>answer</summary>No — Spring's <code>NimbusJwtDecoder</code> derives the acceptable algorithm from the JWKS key type (RSA), so an HS256 token simply doesn't match and the request gets 401. Trusting the token's own <code>alg</code> header is the classic <em>algorithm-confusion</em> vulnerability.</details>
+
 ## 🕰️ Then vs. Now (How This Changed Across Versions)
 
 | Topic | Then | Now | Why it changed |
@@ -192,7 +216,7 @@ sequenceDiagram
 | **Cross-service token validation** | Shared secret, or call the auth server per request (introspection). | **JWKS** — fetch the issuer's public keys, validate locally. | Decentralized, fast, no shared secret; the OAuth2/OIDC standard. |
 | **Signing** | HMAC (HS256) symmetric. | **RS256/ES256** asymmetric for multi-validator setups. | Validators can verify but not forge (least privilege). |
 | **Method security** | `@Secured` / `@EnableGlobalMethodSecurity`. | **`@EnableMethodSecurity`** + `@PreAuthorize` (SpEL). | Cleaner, SpEL-powered, on by default for `@PreAuthorize`. |
-| **Auth factors / passwordless** | Password + maybe SMS OTP. | **Passkeys/WebAuthn** (phishing-resistant, public-key); SS7 models **factors** for step-up. | Passwords are the weak link; passkeys + step-up are the modern direction. |
+| **Auth factors / passwordless** | Password + maybe SMS OTP. | **Passkeys/WebAuthn** (phishing-resistant, public-key); Spring Security 7 models **factors** for step-up. | Passwords are the weak link; passkeys + step-up are the modern direction. |
 
 > [!NOTE]
 > *Verify, don't guess.* We're on **Spring Security 7 / Boot 4** — verified RS256 signing, the `/oauth2/jwks` endpoint, the resource-server `jwk-set-uri` validation, and `@EnableMethodSecurity`/`@PreAuthorize` all **work**, including a **live cross-service** validation (auth's token accepted by demand-account, 🔬). WebAuthn has a Spring Security DSL (`webAuthn()`), but the full passkey ceremony needs the **frontend** (Phase F) — taught here as a concept, not faked.
@@ -200,6 +224,8 @@ sequenceDiagram
 ## 🧵 Thread-safety note
 
 The security components are **stateless singletons** safe across request threads: the `JwtDecoder` (its JWKS cache is internally synchronized), the RSA key, and the filter chain hold no per-request mutable state. Per-request identity lives in the `SecurityContextHolder` (a `ThreadLocal`, cleared after each request), so concurrent requests never see each other's `Authentication`. `@PreAuthorize` is evaluated per invocation against that thread's context. Same Step-11 rule: stateless singletons + confine per-request state.
+
+↩️ **Stopping here?** You have the theory — RS256/JWKS, resource servers, URL vs method security, MFA/passkeys/step-up. Next: C · 🛠️ Build (📦 Your Starting Point); first action: `./mvnw -q verify` at `step-17-start`.
 
 ---
 
@@ -277,7 +303,7 @@ steps/step-17/{requests.http, smoke.sh} · adr/0009-asymmetric-jwt-resource-serv
 
 ---
 
-### Sub-step 1 of 12 — auth: switch the signing algorithm HS256 → RS256 🧭 *(you are here: **RS256 header** → keys → JWKS → method-sec → tests → resource server …)*
+### Sub-step 1 of 12 — auth: switch the signing algorithm HS256 → RS256 (~30 min) 🧭 *(you are here: **RS256 header** → keys → JWKS → method-sec → tests → resource server …)*
 
 🎯 **Goal:** the auth service's token-minting code should declare **RS256** (asymmetric) in the JWT header instead of HS256 (symmetric). This is a one-line change in `JwtService`, but it's the conceptual pivot of the whole step: we're moving from "one shared secret" to "private signs / public verifies." Everything else this step exists to support it.
 
@@ -377,7 +403,7 @@ public class JwtService {
 
 ---
 
-### Sub-step 2 of 12 — auth: generate an RSA key + the JWK source / encoder / decoder beans + turn on method security 🧭 *(RS256 header ✅ → **keys & beans** → JWKS → …)*
+### Sub-step 2 of 12 — auth: generate an RSA key + the JWK source / encoder / decoder beans + turn on method security (~1.5h) 🧭 *(RS256 header ✅ → **keys & beans** → JWKS → …)*
 
 🎯 **Goal:** replace the HMAC secret machinery with an **RSA key pair**: a `JWKSource` (private key, used only to sign), a `JwtEncoder` that signs with it, a `JwtDecoder` that validates with the public half, and a separate `publicJwkSet` bean exposing **only** the public key (for the JWKS endpoint in sub-step 3). We also add `@EnableMethodSecurity` so `@PreAuthorize` works (sub-step 4).
 
@@ -570,7 +596,7 @@ git commit -m "feat(auth): asymmetric RS256 signing — RSA key + JWK source/enc
 
 ---
 
-### Sub-step 3 of 12 — auth: publish the JWKS endpoint 🧭 *(keys & beans ✅ → **JWKS endpoint** → method-sec → tests …)*
+### Sub-step 3 of 12 — auth: publish the JWKS endpoint (~45 min) 🧭 *(keys & beans ✅ → **JWKS endpoint** → method-sec → tests …)*
 
 🎯 **Goal:** expose the public key at the well-known path `GET /oauth2/jwks` so resource servers can fetch it. This is the endpoint demand-account will point its `jwk-set-uri` at.
 
@@ -638,11 +664,13 @@ git add services/auth/src/main/java/com/buildabank/auth/web/JwksController.java
 git commit -m "feat(auth): publish public JWKS at /oauth2/jwks"
 ```
 
+↩️ **Stopping here?** You have auth signing RS256 and serving a public JWKS, committed. Next: sub-step 4 (a `@PreAuthorize` method-security endpoint); first action: open `services/auth/src/main/java/com/buildabank/auth/web/AuthController.java`.
+
 ⚠️ **Pitfall:** returning the wrong bean — e.g. autowiring `JWKSource` and calling something that serializes the private key — leaks the signing key. Inject the dedicated **`JWKSet publicJwkSet`** bean only.
 
 ---
 
-### Sub-step 4 of 12 — auth: a `@PreAuthorize` endpoint (method security) 🧭 *(JWKS ✅ → **method security** → auth tests …)*
+### Sub-step 4 of 12 — auth: a `@PreAuthorize` endpoint (method security) (~45 min) 🧭 *(JWKS ✅ → **method security** → auth tests …)*
 
 🎯 **Goal:** demonstrate **method security** — authorization expressed on the *method* (`@PreAuthorize`) rather than on the URL. We add `/admin-method`, which has **no** URL rule beyond "authenticated," so the `@PreAuthorize("hasRole('ADMIN')")` is the *only* thing enforcing ADMIN. Contrast it with the existing `/admin`, which is gated by a URL rule.
 
@@ -780,7 +808,7 @@ git commit -m "feat(auth): @PreAuthorize admin endpoint demonstrating method sec
 
 ---
 
-### Sub-step 5 of 12 — auth: extend the security tests (JWKS + method security) 🧭 *(method security ✅ → **auth tests** → resource server …)*
+### Sub-step 5 of 12 — auth: extend the security tests (JWKS + method security) (~1.5h) 🧭 *(method security ✅ → **auth tests** → resource server …)*
 
 🎯 **Goal:** add two tests to the real-HTTP `AuthSecurityTest` — one asserting the JWKS publishes **public-only** key material, one asserting `@PreAuthorize` enforces ADMIN — taking auth from 9 (Step-16: 7 in this class) to **11** total (9 here + 2 in `PasswordEncodingTest`).
 
@@ -964,11 +992,13 @@ git add services/auth/src/test/java/com/buildabank/auth/AuthSecurityTest.java
 git commit -m "test(auth): assert JWKS publishes public-only key + method-security enforces ADMIN (11 tests)"
 ```
 
+↩️ **Stopping here?** You have the auth side fully done (RS256 + JWKS + method security, 11 tests green, committed). Next: sub-step 6 (demand-account becomes a resource server); first action: open `services/demand-account/pom.xml`.
+
 ⚠️ **Pitfall:** asserting only the *allow* path (`admin → 200`) hides a broken rule. A `@PreAuthorize` that's silently inert (missing `@EnableMethodSecurity`) still returns 200 for admin — only the **403 deny** case catches it. Always test deny.
 
 ---
 
-### Sub-step 6 of 12 — demand-account: add resource-server dependencies 🧭 *(auth done ✅ → **resource-server deps** → config → SecurityConfig …)*
+### Sub-step 6 of 12 — demand-account: add resource-server dependencies (~30 min) 🧭 *(auth done ✅ → **resource-server deps** → config → SecurityConfig …)*
 
 🎯 **Goal:** give demand-account the libraries to validate Bearer JWTs: Spring Security + the OAuth2 **resource-server** starter, plus `spring-security-test` for the test helpers.
 
@@ -1032,7 +1062,7 @@ git commit -m "build(demand-account): add security + oauth2-resource-server + sp
 
 ---
 
-### Sub-step 7 of 12 — demand-account: point `jwk-set-uri` at auth's JWKS 🧭 *(deps ✅ → **jwk-set-uri** → SecurityConfig …)*
+### Sub-step 7 of 12 — demand-account: point `jwk-set-uri` at auth's JWKS (~30 min) 🧭 *(deps ✅ → **jwk-set-uri** → SecurityConfig …)*
 
 🎯 **Goal:** tell demand-account where to fetch the public key — auth's JWKS endpoint — via one config key. Boot reads it and auto-builds a `JwtDecoder`.
 
@@ -1118,7 +1148,7 @@ git commit -m "config(demand-account): set jwk-set-uri to auth's JWKS for token 
 
 ---
 
-### Sub-step 8 of 12 — demand-account: the resource-server `SecurityConfig` 🧭 *(jwk-set-uri ✅ → **SecurityConfig** → admin endpoint …)*
+### Sub-step 8 of 12 — demand-account: the resource-server `SecurityConfig` (~1h) 🧭 *(jwk-set-uri ✅ → **SecurityConfig** → admin endpoint …)*
 
 🎯 **Goal:** declare the security filter chain: money endpoints (`/api/**`) require a valid token; health + API docs stay public; the Bearer token is validated and its `roles` claim mapped to authorities; `@EnableMethodSecurity` turns on `@PreAuthorize`.
 
@@ -1204,11 +1234,13 @@ git add services/demand-account/src/main/java/com/buildabank/account/web/Securit
 git commit -m "feat(demand-account): OAuth2 resource-server security filter chain + roles converter"
 ```
 
+↩️ **Stopping here?** You have the money endpoints requiring a token, committed — but demand-account's HTTP-layer tests are now red until sub-steps 10–11 give them tokens. Next: sub-step 9 (`@PreAuthorize` admin ping); first action: open `services/demand-account/src/main/java/com/buildabank/account/web/TransferController.java`.
+
 ⚠️ **Pitfall:** omitting `@EnableWebSecurity` works in the full app but breaks the `@WebMvcTest` slice (`No qualifying bean of type HttpSecurity`). Include it. Also: list `permitAll()` rules **before** `anyRequest().authenticated()` — rules match top-down, and an authenticated-everything rule placed first would lock out health/docs.
 
 ---
 
-### Sub-step 9 of 12 — demand-account: a `@PreAuthorize` admin endpoint 🧭 *(SecurityConfig ✅ → **admin endpoint** → tests …)*
+### Sub-step 9 of 12 — demand-account: a `@PreAuthorize` admin endpoint (~45 min) 🧭 *(SecurityConfig ✅ → **admin endpoint** → tests …)*
 
 🎯 **Goal:** add a narrow admin-only operational endpoint guarded by **method security** — the demand-account counterpart to auth's `/admin-method` — so we can prove `@PreAuthorize` works here too (USER → 403, ADMIN → 200).
 
@@ -1271,7 +1303,7 @@ git commit -m "feat(demand-account): @PreAuthorize admin/ping endpoint (method s
 
 ---
 
-### Sub-step 10 of 12 — demand-account: authenticate the controller-slice tests 🧭 *(admin endpoint ✅ → **slice tests** → integration tests …)*
+### Sub-step 10 of 12 — demand-account: authenticate the controller-slice tests (~1.5h) 🧭 *(admin endpoint ✅ → **slice tests** → integration tests …)*
 
 🎯 **Goal:** the Step-13/14 `@WebMvcTest` slice now hits a secured controller, so every request needs an `Authentication`. We use `spring-security-test`'s `jwt()` post-processor (injects the auth directly — no real decoding), add a `@MockitoBean JwtDecoder` so the resource-server config can start in the slice, and add two new tests (`unauthenticatedRequestIs401`, `adminPing_methodSecurity_enforcesRole`).
 
@@ -1557,11 +1589,13 @@ git add services/demand-account/src/test/java/com/buildabank/account/web/Transfe
 git commit -m "test(demand-account): authenticate slice via jwt() post-processor + mock JwtDecoder; 401 + method-security tests"
 ```
 
+↩️ **Stopping here?** You have the slice green (401 deny, 403 method-security deny, 200 allow), committed. Next: sub-step 11 (mint real RS256 tokens in the integration test); first action: open `services/demand-account/src/test/java/com/buildabank/account/DemandAccountIntegrationTest.java`.
+
 ⚠️ **Pitfall:** forgetting `@MockitoBean JwtDecoder` → the slice context fails to start (`oauth2ResourceServer` needs a decoder bean). And forgetting `.with(user())` on an existing test → it suddenly returns 401 and the assertion fails — a sign you missed one.
 
 ---
 
-### Sub-step 11 of 12 — demand-account: mint real RS256 tokens in the integration test 🧭 *(slice tests ✅ → **integration tests** → harness)*
+### Sub-step 11 of 12 — demand-account: mint real RS256 tokens in the integration test (~2h) 🧭 *(slice tests ✅ → **integration tests** → harness)*
 
 🎯 **Goal:** the real-HTTP `@SpringBootTest` integration test must send *real* Bearer tokens. We add a `@TestConfiguration` that overrides the production `jwk-set-uri` decoder with one built from a **test** RSA key, mint RS256 tokens with that key's private half, attach them to every request, and add two new tests (`unauthenticatedMoneyRequestIs401`, `adminPing_methodSecurity_overHttp`). No private keys are committed.
 
@@ -1923,7 +1957,7 @@ git commit -m "test(demand-account): mint RS256 tokens with a test key; 401 + me
 
 ---
 
-### Sub-step 12 of 12 — wire the play/verify harness + ADR 🧭 *(integration tests ✅ → **harness & ADR**)*
+### Sub-step 12 of 12 — wire the play/verify harness + ADR (~45 min) 🧭 *(integration tests ✅ → **harness & ADR**)*
 
 🎯 **Goal:** ship the learner-facing tools — a `requests.http` for the cross-service flow, a `smoke.sh` that proves the step, and ADR-0009 recording the decision. (These already exist at `step-17-end`; here's what they contain and why.)
 
@@ -2021,6 +2055,8 @@ git add steps/step-17/requests.http steps/step-17/smoke.sh adr/0009-asymmetric-j
 git commit -m "docs(step-17): cross-service requests.http, smoke.sh, ADR-0009 (asymmetric JWT + resource servers)"
 git tag step-17-end
 ```
+
+↩️ **Stopping here?** You have both services green (auth 11 + demand-account 31), the harness wired, and `step-17-end` tagged. Next: 🎮 Play With It (the live cross-service run) → D · 🔬 Prove; first action: `./mvnw -pl services/auth spring-boot:run` (the Cheat Card has the full sequence).
 
 ⚠️ **Pitfall:** the `requests.http` token is **pasted manually** (`@token = PASTE_JWT_HERE`) — tokens expire (30 min) and a restart of auth rotates the key, so an old token gives 401. Re-login to get a fresh one. (The Cheat Card's `curl | sed` one-liner automates extracting it.)
 
@@ -2140,25 +2176,25 @@ Tomcat bound a random high port (`Tomcat started on port 64077`). A fresh live J
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① Key rotation with JWKS</summary>
+<summary>① Key rotation with JWKS (optional, +~10 min)</summary>
 
 JWKS lists *multiple* keys, and tokens carry a `kid`. To rotate: generate a new key, add it to the JWKS, start signing new tokens with it (old tokens still validate against the old key still in the set), then remove the old key after the longest token lifetime passes. Resource servers refresh the JWKS (Spring refreshes on an unknown `kid`), so rotation is seamless and zero-downtime. Our ephemeral-at-startup key is a stand-in; production persists keys (keystore/Vault, Phase H) and rotates on a schedule.
 </details>
 
 <details>
-<summary>② Passkeys / WebAuthn — the real flow</summary>
+<summary>② Passkeys / WebAuthn — the real flow (optional, +~10 min)</summary>
 
 WebAuthn registration: the server sends a challenge; the authenticator (Face ID/fingerprint/security key) generates a key pair, signs the challenge, and returns the *public* key + an attestation. Login: the server sends a challenge; the authenticator signs it with the *private* key (never leaves the device); the server verifies with the stored public key. No shared secret, nothing phishable. Spring Security has a `webAuthn()` DSL, but the ceremony is browser-driven — we wire it in **Phase F** (the frontend). Passkeys are the endgame for MFA.
 </details>
 
 <details>
-<summary>③ Step-up authentication with factors</summary>
+<summary>③ Step-up authentication with factors (optional, +~10 min)</summary>
 
 Spring Security 7 tracks *how* you authenticated as `FACTOR_*` authorities (e.g. `FACTOR_PASSWORD`, `FACTOR_OTP`, `FACTOR_WEBAUTHN`). A sensitive operation can require a stronger/fresh factor: `@PreAuthorize("hasAuthority('FACTOR_OTP')")` or a custom check on token age — if absent, the app triggers a re-auth (step-up) for *that* action, then proceeds. This is how a bank asks you to re-confirm before a large transfer even though you're logged in.
 </details>
 
 <details>
-<summary>④ Why a mock JwtDecoder in the slice but a real one in the integration test?</summary>
+<summary>④ Why a mock JwtDecoder in the slice but a real one in the integration test? (optional, +~10 min)</summary>
 
 In the `@WebMvcTest` slice we only care about *authorization* behavior (who gets 401/403/200), not signature crypto — so `jwt()` injects a ready-made authentication and a mock `JwtDecoder` just satisfies bean wiring. In the `@SpringBootTest` integration test we want to exercise the *real* signature-validation path end-to-end over HTTP, so we mint genuinely-signed RS256 tokens and validate them with a real `NimbusJwtDecoder` (from a test key). Two layers of the pyramid, two appropriate fidelities — fast slice, faithful integration.
 </details>
@@ -2175,7 +2211,7 @@ In the `@WebMvcTest` slice we only care about *authorization* behavior (who gets
 
 5. **"How do you revoke a JWT?"** *(gotcha)* → You mostly can't before `exp` (self-contained). Mitigate with short-lived access tokens + revocable refresh tokens, a `jti` denylist, and key rotation (JWKS). Or use opaque tokens + introspection if instant revocation is required.
 
-6. **"What are passkeys and step-up auth?"** *(modern)* → Passkeys/WebAuthn: phishing-resistant, device-bound public-key credentials (no password to steal). Step-up: requiring a stronger/fresh factor for sensitive actions even when logged in (modeled by SS7 `FACTOR_*` authorities).
+6. **"What are passkeys and step-up auth?"** *(modern)* → Passkeys/WebAuthn: phishing-resistant, device-bound public-key credentials (no password to steal). Step-up: requiring a stronger/fresh factor for sensitive actions even when logged in (modeled by Spring Security 7's `FACTOR_*` authorities).
 
 7. **"What's the algorithm-confusion attack, and how does Spring defend?"** *(security gotcha)* → An attacker takes an RS256 deployment and submits an **HS256** token signed with the *public* key (which is, well, public) as the HMAC secret — if the verifier naively trusts the token's `alg`, it validates. Defense: pin/derive the expected algorithm from the *key*, never from the token. Spring's `NimbusJwtDecoder` from a JWKS validates against the RSA key type, so an HS256 token simply doesn't match.
 
@@ -2188,6 +2224,8 @@ In the `@WebMvcTest` slice we only care about *authorization* behavior (who gets
 3. **Secure cif too.** Make the cif service a resource server validating auth's tokens. *(Reference: `solutions/step-17/`.)*
 4. **Stretch — key rotation.** Persist the RSA key (file/keystore), expose two keys in JWKS, sign with the new `kid`, and prove old tokens still validate.
 5. **Stretch — refresh tokens.** Add `/api/auth/refresh` (a longer-lived token mints new short access tokens) and show revocation by not honoring a revoked refresh token.
+
+↩️ **Stopping here?** You have the step proven and applied (interview answers rehearsed, challenges attempted). Next: F · 🏆 Review (recap + flashcards); first action: skim the 🩺 troubleshooting table.
 
 ---
 
@@ -2226,7 +2264,7 @@ In the `@WebMvcTest` slice we only care about *authorization* behavior (who gets
 - A **resource server** validates Bearer JWTs per request (`jwk-set-uri`), statelessly.
 - **URL rules** gate the edge; **`@PreAuthorize`** method security expresses fine-grained domain rules — but applies to direct calls too (blast-radius).
 - **Revocation** is the JWT weak spot → short-lived access + refresh tokens + key rotation.
-- **Modern auth**: MFA, **passkeys/WebAuthn** (phishing-resistant), **step-up** (SS7 `FACTOR_*`).
+- **Modern auth**: MFA, **passkeys/WebAuthn** (phishing-resistant), **step-up** (Spring Security 7 `FACTOR_*`).
 
 **(b) Key terms:** RS256 vs HS256, JWKS/kid/rotation, resource server/jwk-set-uri, JwtDecoder, URL authz vs @PreAuthorize/@EnableMethodSecurity, jwt() post-processor, identity propagation, revocation/refresh, MFA/passkey/WebAuthn/step-up, algorithm confusion.
 
@@ -2237,6 +2275,7 @@ In the `@WebMvcTest` slice we only care about *authorization* behavior (who gets
 4. Why is a JWT hard to revoke? <details><summary>answer</summary>It's self-contained/valid until exp — no per-request lookup; mitigate with short lifetimes + refresh + key rotation.</details>
 5. What's an algorithm-confusion attack? <details><summary>answer</summary>Submitting an HS256 token using the RS256 public key as the HMAC secret; defend by pinning the expected algorithm to the key, not the token.</details>
 6. Why does the integration test mint its own RS256 token instead of calling auth? <details><summary>answer</summary>To keep the suite single-service (no auth orchestration): a `@TestConfiguration` overrides the decoder with a test key, and the test signs tokens with that key's private half. The real cross-service interop is proven by a live run (🔬 §2).</details>
+7. Why are passkeys phishing-resistant where passwords and SMS OTP are not — and what is step-up auth? <details><summary>answer</summary>A passkey signs a server challenge with a device-bound private key that never leaves the device — there's no secret to type into a fake site (and SMS OTPs can be phished or intercepted). Step-up = requiring a stronger or fresh factor for a sensitive action even when already logged in (Spring Security 7 models this with <code>FACTOR_*</code> authorities).</details>
 
 **(d) 🔗 How this connects**
 - **Back to Step 16** (auth + filter chain + JWT), **Step 12/14** (the money endpoints), **Step 15** (gateway/identity propagation).

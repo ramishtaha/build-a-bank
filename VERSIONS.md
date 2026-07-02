@@ -79,6 +79,10 @@ The SPA is a separate Node/npm project (not a Maven module). `package.json` carr
 | @tanstack/react-query | 5.101.0 | server state — cache, loading/error, invalidation (Step 30) |
 | react-hook-form | 7.78.0 | form state + submission (Step 30) |
 | zod / @hookform/resolvers | 3.25.76 / 3.10.0 | schema validation + the RHF resolver (Step 30; zod 3 line) |
+| msw | 2.14.6 | network-level API mocking for the Vitest suite (Step 31) |
+| i18next / react-i18next | 24.2.3 / 15.7.4 | i18n with synchronous bundled resources (Step 31) |
+| @playwright/test | 1.60.0 | E2E in real Chromium; browsers verified installed here (Step 31) |
+| axe-core | 4.12.0 | accessibility assertions (Step 31) |
 
 ## Reproducibility
 `./mvnw verify` twice yields the same result; `npm ci` in `frontend/` reproduces the locked SPA tree.

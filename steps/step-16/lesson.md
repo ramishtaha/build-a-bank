@@ -11,14 +11,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | the security filter chain · authn vs authz · JWTs · BCrypt · CSRF/CORS/headers |
-| **C** | [🛠️ Build](#build) | the `auth` service: filter chain, JWT encode/decode, BCrypt user store, login + protected endpoints |
-| **D** | [🔬 Prove](#prove) | the Verification Log — login→token→401/403/200 over real HTTP, §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1h |
+| **B** | [🧠 Understand](#understand) | the security filter chain · authn vs authz · JWTs · BCrypt · CSRF/CORS/headers | ~4h |
+| **C** | [🛠️ Build](#build) | the `auth` service: filter chain, JWT encode/decode, BCrypt user store, login + protected endpoints | ~9h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — login→token→401/403/200 over real HTTP, §12.3 mutation | ~2h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~2.5h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~1.5h |
 
 ---
 
@@ -113,6 +113,25 @@ An unauthenticated banking API is a non-starter — and security is the area whe
 
 > **Depends on: Steps 15, 13.** This is the first of two security deep-dives (Step 17 adds OAuth2/OIDC + MFA).
 
+## 🗓️ Session Plan
+
+≈ 20 hours ≠ one sitting. Here's the step cut into **8 sittings of ~1.5–3h**, each ending at a real ✋ checkpoint (a commit or a section boundary). One sitting per day makes this step a good week — that's fine; the plan is the pace.
+
+| Sitting | Covers | ~time | Ends at (✋ save point) |
+|---|---|---|---|
+| **S1** | A Orient (30-seconds → Session Plan) + B: 🧠 The Big Idea + 🧩 Pattern Spotlight | ~2.5h | end of 🧩 Pattern Spotlight |
+| **S2** | B: 🌱 Under the Hood → 🛡️ Security Lens → 🕰️ Then vs. Now → 🧵 Thread-safety | ~2.5h | end of movement B |
+| **S3** | C: Sub-steps 0–2 (module → `application.yml`/bootstrap → `SecurityConfig`, the heart) | ~3h | sub-step 2 ✋ + commit |
+| **S4** | C: Sub-steps 3–5 (`JwtService` → `UserService` → `AuthDtos`) | ~2.5h | sub-step 5 ✋ + commit |
+| **S5** | C: Sub-steps 6–7 (`AuthController` — first live login→token→`/me` run — then `AuthSecurityTest`) | ~2.5h | sub-step 7 ✋ + commit |
+| **S6** | C: Sub-steps 8–9 (`PasswordEncodingTest`, run all 9, harness + §12.3 mutation) + 🎮 Play With It + 🏁 DoD | ~2.5h | `step-16-end` tagged, DoD checked |
+| **S7** | D: 🔬 the Verification Log — re-run §1, §2 and §5 against your own build | ~1.5h | end of movement D |
+| **S8** | E Apply (interview prep + one Your-Turn challenge) + F Review (recap, flashcards) | ~3h | sign-off 🚀 |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can shrink this to a ~4h skim for Spring Security veterans; the 🚀 Go Deeper asides in E add ~25 min total; Your-Turn challenges 1–5 are open-ended extras (1–4h each) beyond the 20h.
+
+✋ **Stopping here?** You have the map — the effort budget, the `services/auth` artifact, and prerequisites checked (`./mvnw -q verify` green). Next: B · 🧠 Understand; first action: read `## 🧠 The Big Idea` and the bank-security-desk analogy.
+
 ---
 
 <a id="understand"></a>
@@ -153,6 +172,8 @@ sequenceDiagram
 ```
 
 *Alt-text: the user logs in (a public endpoint); the controller verifies the password with BCrypt and issues a signed JWT with subject, roles, and expiry. On a later request with the Bearer token, the filter chain validates the signature and expiry, builds the Authentication with roles, and either forwards to the controller (200) or returns 401 (missing/invalid token) or 403 (wrong role).*
+
+❓ **Knowledge-check:** a request arrives with a *valid* JWT, but the token's roles don't include the one the path requires — which status code, and is that an authentication or an authorization failure? <details><summary>answer</summary>**403 Forbidden** — an **authorization** failure. Identity was established (authentication succeeded), but the access rule denied it. No/invalid token would be 401 (authentication).</details>
 
 ## 🧩 Pattern Spotlight — Stateless JWT Authentication (Resource Server)
 
@@ -207,6 +228,8 @@ sequenceDiagram
 ## 🧵 Thread-safety note
 
 Spring Security's components are **stateless singletons** safe to share across request threads: the filter chain, `JwtDecoder`/`JwtEncoder`, and `BCryptPasswordEncoder` hold no per-request mutable state. The **per-request** identity lives in the `SecurityContextHolder`, which is backed by a **`ThreadLocal`** (and cleared at the end of each request) — so each request thread sees only its own `Authentication`, never another's. Our in-memory user store uses a `ConcurrentHashMap`. This is Step 11's "stateless singletons + confine per-request state" rule, applied to security.
+
+✋ **Stopping here?** You have the mental model — filter chain, 401 vs 403, JWT anatomy, BCrypt, the CSRF rationale. Next: C · 🛠️ Build, Sub-step 0 (the auth module); first action: create `services/auth/pom.xml`.
 
 ---
 
@@ -279,7 +302,7 @@ steps/step-16/{requests.http, smoke.sh} · adr/0008-auth-service-and-jwt-securit
 
 ---
 
-### Sub-step 0 of 9 — The auth module 🧭 *(you are here: **module** → config → SecurityConfig → JwtService → UserService → DTOs → controller → security test → password test → harness)*
+### Sub-step 0 of 9 — The auth module · ≈45 min 🧭 *(you are here: **module** → config → SecurityConfig → JwtService → UserService → DTOs → controller → security test → password test → harness)*
 
 🎯 **Goal:** stand up a new Maven module with the right dependencies — Spring Security (the filter chain + BCrypt) and OAuth2 Resource Server (Bearer-JWT validation **and**, via Nimbus, the library we use to *issue* tokens) — and register it in the parent build.
 
@@ -386,7 +409,7 @@ steps/step-16/{requests.http, smoke.sh} · adr/0008-auth-service-and-jwt-securit
 - **`spring-boot-starter-oauth2-resource-server`** — adds the Bearer-token filter (`BearerTokenAuthenticationFilter`) for validating incoming JWTs, **and** transitively brings `spring-security-oauth2-jose`, which wraps the **Nimbus** JOSE library — the same library we use to *issue* (`NimbusJwtEncoder`) and *decode* (`NimbusJwtDecoder`) tokens.
 - `spring-boot-starter-validation` — Jakarta Bean Validation, so `@Valid @RequestBody LoginRequest` rejects blank credentials (sub-step 5–6).
 - `spring-boot-starter-actuator` — gives us `/actuator/health` (we mark it public in the chain) and the operational endpoints.
-- **Test deps:** `spring-boot-starter-test` (JUnit 5 + AssertJ + JsonPath), `spring-boot-webmvc-test` (Boot 4's MVC test slice support), and **`spring-security-test`** — applies the *real* filter chain in tests, so an unauthenticated request genuinely returns 401 (not a bypassed mock).
+- **Test deps:** `spring-boot-starter-test` (JUnit 5 + AssertJ + JsonPath), `spring-boot-webmvc-test` (Boot 4's MVC test slice support), and **`spring-security-test`** — Spring Security's MockMvc-style test helpers (`@WithMockUser`, security request post-processors). Note: it is *not* what makes the real chain run in our integration test — a `RANDOM_PORT` test boots a real server, so the real filter chain always applies (sub-step 7).
 - `spring-boot-maven-plugin` — repackages the runnable fat-jar and powers `spring-boot:run`.
 - The **root-pom diff** adds `services/auth` to the reactor so `./mvnw verify` builds it with everything else, in dependency order.
 
@@ -419,7 +442,7 @@ git commit -m "build(auth): add Spring Security + OAuth2 resource server module"
 
 ---
 
-### Sub-step 1 of 9 — `application.yml` + `AuthApplication` 🧭 *(module ✅ → **config** → SecurityConfig → JwtService → …)*
+### Sub-step 1 of 9 — `application.yml` + `AuthApplication` · ≈30 min 🧭 *(module ✅ → **config** → SecurityConfig → JwtService → …)*
 
 🎯 **Goal:** configure the service (port, JWT secret/TTL/issuer, graceful shutdown) and add the Spring Boot bootstrap class.
 
@@ -513,9 +536,11 @@ git commit -m "feat(auth): app config (port 8083, JWT secret/TTL/issuer) + boots
 
 ⚠️ **Pitfall:** committing a **real** secret here. The default is fake and clearly labelled; in production the value comes from `BANK_JWT_SECRET` (env/Vault), never the YAML. A secret shorter than 32 bytes will fail HS256 at runtime — keep the demo string long.
 
+✋ **Stopping here?** You have the auth module skeleton (module POM registered, `application.yml`, `AuthApplication`) compiling, committed. Next: Sub-step 2 (`SecurityConfig` — the heart of the step); first action: create `services/auth/src/main/java/com/buildabank/auth/security/SecurityConfig.java`.
+
 ---
 
-### Sub-step 2 of 9 — `SecurityConfig`: the filter chain + JWT + BCrypt 🧭 *(module ✅ → config ✅ → **SecurityConfig** → JwtService → …)*
+### Sub-step 2 of 9 — `SecurityConfig`: the filter chain + JWT + BCrypt · ≈1.5h 🧭 *(module ✅ → config ✅ → **SecurityConfig** → JwtService → …)*
 
 🎯 **Goal:** the **heart of the step** — declare *who can hit what* (the access rules), make the API **stateless** (no session, CSRF off), wire JWT **validation** (resource server) + the password and token-signing beans. This one file is what every "how does Spring Security work?" interview answer is really about.
 
@@ -669,7 +694,7 @@ git commit -m "feat(auth): stateless JWT SecurityFilterChain + BCrypt + HS256 en
 
 ---
 
-### Sub-step 3 of 9 — `JwtService`: mint signed tokens 🧭 *(… SecurityConfig ✅ → **JwtService** → UserService → …)*
+### Sub-step 3 of 9 — `JwtService`: mint signed tokens · ≈1h 🧭 *(… SecurityConfig ✅ → **JwtService** → UserService → …)*
 
 🎯 **Goal:** a service that builds a JWT's claims (`sub`, `roles`, `iss`, `iat`, `exp`) and **signs** it with the `JwtEncoder` from sub-step 2 — returning the compact `header.claims.signature` string.
 
@@ -772,9 +797,11 @@ git commit -m "feat(auth): JWT issuer (HS256, sub/roles/exp claims, configurable
 
 ⚠️ **Pitfall:** putting secrets or PII in claims because "it's encoded." Base64 is **not** encryption — anyone can read the payload. The signature only proves *integrity/authenticity*, not *confidentiality*. Keep claims to identity + roles + timing.
 
+✋ **Stopping here?** You have the filter chain + BCrypt/JWT beans and the token issuer compiling, committed. Next: Sub-step 4 (`UserService` — the BCrypt store); first action: create `services/auth/src/main/java/com/buildabank/auth/user/UserService.java`.
+
 ---
 
-### Sub-step 4 of 9 — `UserService`: in-memory BCrypt store 🧭 *(… JwtService ✅ → **UserService** → DTOs → …)*
+### Sub-step 4 of 9 — `UserService`: in-memory BCrypt store · ≈45 min 🧭 *(… JwtService ✅ → **UserService** → DTOs → …)*
 
 🎯 **Goal:** a tiny user store that holds **only BCrypt hashes** (never plaintext) and verifies credentials with a constant-time `matches`. Seeded with two fake demo users.
 
@@ -869,7 +896,7 @@ git commit -m "feat(auth): in-memory BCrypt user store (alice/admin demo users)"
 
 ---
 
-### Sub-step 5 of 9 — `AuthDtos`: request/response records 🧭 *(… UserService ✅ → **DTOs** → controller → …)*
+### Sub-step 5 of 9 — `AuthDtos`: request/response records · ≈30 min 🧭 *(… UserService ✅ → **DTOs** → controller → …)*
 
 🎯 **Goal:** the small immutable records that shape the API — the login request (validated) and the two responses (token, identity). DTOs keep the wire contract separate from internals.
 
@@ -942,7 +969,7 @@ git commit -m "feat(auth): request/response DTO records (LoginRequest, TokenResp
 
 ---
 
-### Sub-step 6 of 9 — `AuthController`: login + protected endpoints 🧭 *(… DTOs ✅ → **controller** → security test → …)*
+### Sub-step 6 of 9 — `AuthController`: login + protected endpoints · ≈1.5h 🧭 *(… DTOs ✅ → **controller** → security test → …)*
 
 🎯 **Goal:** the API surface — `POST /api/auth/login` (public; BCrypt-check → issue token or 401), `GET /api/auth/me` (any valid token), `GET /api/auth/admin` (ADMIN role). Crucially, the controller has **no authorization code** — the filter chain enforced it before we run.
 
@@ -1032,6 +1059,8 @@ public class AuthController {
 
 💭 **Under the hood:** for `/me` and `/admin`, by the time your method runs, the `BearerTokenAuthenticationFilter` has already decoded+validated the JWT and the `AuthorizationFilter` has already applied the rule. So the controller is blissfully simple — it *reads* identity, it doesn't *establish* it. The `Authentication` comes from the `SecurityContextHolder` (a `ThreadLocal`), which is why method-arg injection works and is request-confined.
 
+❓ **Knowledge-check:** the `/admin` handler contains zero security code — what stops a `ROLE_USER` token from reaching it? <details><summary>answer</summary>The **security filter chain**: sub-step 2's `requestMatchers("/api/auth/admin").hasRole("ADMIN")` rule is enforced by the `AuthorizationFilter` *before* the controller is invoked, returning 403. Authorization lives in one place (the chain), not in controller bodies.</details>
+
 🔮 **Predict:** before you run it — `GET /api/auth/admin` with **alice's** token (ROLE_USER) returns what? With **admin's** token? <details><summary>answer</summary>alice → **403** (valid token, wrong role); admin → **200** `{"message":"admin access granted"}`. The Verification Log §2 shows both.</details>
 
 ▶️ **Run & See** — start the service and drive the live flow:
@@ -1070,9 +1099,11 @@ git commit -m "feat(auth): login + /me + /admin endpoints"
 
 ⚠️ **Pitfall:** duplicating authorization in the controller body (e.g. an `if (!isAdmin) throw ...`) when the chain already enforces `hasRole("ADMIN")`. Keep authorization in **one** place (the chain, or method security — Step 17) so the two can't drift out of sync.
 
+✋ **Stopping here?** You have a live login→token→`/me` flow working over real HTTP, committed. Next: Sub-step 7 (`AuthSecurityTest`); first action: create `services/auth/src/test/java/com/buildabank/auth/AuthSecurityTest.java`.
+
 ---
 
-### Sub-step 7 of 9 — `AuthSecurityTest`: authn/authz over real HTTP 🧭 *(… controller ✅ → **security test** → password test → …)*
+### Sub-step 7 of 9 — `AuthSecurityTest`: authn/authz over real HTTP · ≈1h 🧭 *(… controller ✅ → **security test** → password test → …)*
 
 🎯 **Goal:** prove the whole thing end-to-end over **real HTTP** (random port, real filter chain): valid login → token; wrong password → 401; no token → 401 (authN); wrong role → 403 (authZ); right role → 200; and the `nosniff` security header is set.
 
@@ -1192,7 +1223,7 @@ class AuthSecurityTest {
 
 🔍 **Line-by-line:**
 
-- `@SpringBootTest(webEnvironment = RANDOM_PORT)` — boots the **full** application context on a **random** free port (so parallel test runs don't clash) with a **real embedded Tomcat**. Because `spring-security-test` is on the classpath, the **real filter chain** runs — unauthenticated requests genuinely get 401. `@LocalServerPort int port` is injected with the chosen port.
+- `@SpringBootTest(webEnvironment = RANDOM_PORT)` — boots the **full** application context on a **random** free port (so parallel test runs don't clash) with a **real embedded Tomcat**. Because a real server handles the requests, the **real filter chain** runs — unauthenticated requests genuinely get 401. (`spring-security-test` isn't what does this — it's only needed for MockMvc-style tests, `@WithMockUser` and friends, not this class.) `@LocalServerPort int port` is injected with the chosen port.
 - **`HttpClient http = HttpClient.newHttpClient()`** — the JDK's HTTP client (Java 11+). We hit the running server over real TCP — this is an integration test, not a mock.
 - `@BeforeEach setup()` — build the base URL from the random port.
 - `login_withValidCredentials_returnsAToken` — POST valid creds → **200**; `JsonPath.read(body, "$.token")` extracts the token; assert it's non-blank and dot-separated (a JWT shape).
@@ -1229,11 +1260,11 @@ git add services/auth/src/test/java/com/buildabank/auth/AuthSecurityTest.java
 git commit -m "test(auth): real-HTTP authn/authz (401/403/200), JWT flow, security header"
 ```
 
-⚠️ **Pitfall:** mocking the filter chain (or `@WithMockUser` for an integration test) hides the very thing you want to prove. `@SpringBootTest(RANDOM_PORT)` + a real HTTP client + `spring-security-test` runs the *actual* chain — so a 401 is a *real* 401.
+⚠️ **Pitfall:** mocking the filter chain (or `@WithMockUser` for an integration test) hides the very thing you want to prove. `@SpringBootTest(RANDOM_PORT)` + a real HTTP client runs the *actual* chain — so a 401 is a *real* 401.
 
 ---
 
-### Sub-step 8 of 9 — `PasswordEncodingTest` (BCrypt) + run all 9 🧭 *(… security test ✅ → **password test** → harness)*
+### Sub-step 8 of 9 — `PasswordEncodingTest` (BCrypt) + run all 9 · ≈45 min 🧭 *(… security test ✅ → **password test** → harness)*
 
 🎯 **Goal:** a fast pure-unit test pinning BCrypt's three properties (one-way, salted, verify-by-`matches`), then run the **whole suite** — 9 tests green.
 
@@ -1318,9 +1349,11 @@ git commit -m "test(auth): BCrypt fundamentals (one-way, salted, verify-by-match
 
 ⚠️ **Pitfall:** asserting an exact hash string (it changes every run because of the salt). Assert *properties* — prefix `$2`, `matches` true/false, `a != b` — never the literal hash.
 
+✋ **Stopping here?** You have 9 green tests, committed. Next: Sub-step 9 (`requests.http` + `smoke.sh` + the §12.3 mutation); first action: create `steps/step-16/requests.http`.
+
 ---
 
-### Sub-step 9 of 9 — Play & verify harness: `requests.http`, `smoke.sh`, the §12.3 mutation 🧭 *(… password test ✅ → **harness**)*
+### Sub-step 9 of 9 — Play & verify harness: `requests.http`, `smoke.sh`, the §12.3 mutation · ≈45 min 🧭 *(… password test ✅ → **harness**)*
 
 🎯 **Goal:** ship the learner aids — a ready-to-run `requests.http`, a one-shot `smoke.sh`, and the **§12.3 mutation** that proves the authorization rule is load-bearing.
 
@@ -1467,6 +1500,8 @@ You're at **`step-16-end`** (== `step-17-start`). The bank has an Identity & Aut
 - [ ] `bash steps/step-16/smoke.sh` prints `✅ Step 16 smoke test PASSED`.
 - [ ] You've committed and tagged `step-16-end`.
 
+✋ **Stopping here?** You have all Step-16 artifacts committed and `step-16-end` tagged. Next: D · 🔬 the Verification Log; first action: `./mvnw -pl services/auth test` and compare your output against §1.
+
 ---
 
 <a id="prove"></a>
@@ -1531,28 +1566,30 @@ A fresh `./mvnw -pl services/auth test` against the current tree compiles and ru
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① Why a dedicated auth service (and not securing demand-account in place)? — ADR-0008</summary>
+<summary>① Why a dedicated auth service (and not securing demand-account in place)? — ADR-0008 · +~5 min</summary>
 
 We stood up a **new `services/auth` module** instead of bolting security onto an existing service. The reason (ADR-0008): securing demand-account in place would force authentication into **all of its existing tests at once** — a huge, noisy change that buries the security concepts. A focused auth service teaches the filter chain, JWT, BCrypt, and authn/authz cleanly. **Step 17** then makes demand-account/cif/the gateway *resource servers* that validate this service's tokens — the natural next move, with the concepts already learned in isolation.
 </details>
 
 <details>
-<summary>② Why asymmetric signing (and a JWKS endpoint) is next</summary>
+<summary>② Why asymmetric signing (and a JWKS endpoint) is next · +~10 min</summary>
 
 With HMAC, every service that *validates* a token also holds the secret — so any of them could *forge* tokens. When multiple independent services validate (Step 17+), switch to **asymmetric** signing: the auth service signs with a **private** key; each service validates with the **public** key, fetched from a `/.well-known/jwks.json` (**JWKS**) endpoint. Validators can verify but not mint — least privilege. Spring's resource server supports `jwkSetUri` out of the box. (Full **Authorization Server** in Step 41.)
 </details>
 
 <details>
-<summary>③ Method security (@PreAuthorize) vs URL rules</summary>
+<summary>③ Method security (@PreAuthorize) vs URL rules · +~5 min</summary>
 
 We authorized by URL (`authorizeHttpRequests`). Spring also offers **method security** (`@EnableMethodSecurity` + `@PreAuthorize("hasRole('ADMIN')")` / `@PostAuthorize` / `@PreFilter`) — authorization expressed on the service/method, closer to the domain and reusable across entry points. Use URL rules for coarse edges and method security for fine-grained domain rules. Step 17 goes deeper.
 </details>
 
 <details>
-<summary>④ Token revocation & refresh</summary>
+<summary>④ Token revocation & refresh · +~5 min</summary>
 
 A JWT is valid until it expires — you can't easily revoke it mid-life (no server lookup). Mitigations: **short** access-token lifetimes (minutes) + a **refresh token** (longer-lived, revocable, used to mint new access tokens), or a denylist of revoked token ids (reintroduces some state). The access/refresh split is standard OAuth2 (Step 17/32 for the frontend flow).
 </details>
+
+❓ **Knowledge-check:** with our HS256 setup, every service that can *validate* a token could also *forge* one — why, and what's the fix when many services validate? <details><summary>answer</summary>HMAC is **symmetric**: the same shared secret both signs and verifies, so any holder can mint valid tokens. The fix is **asymmetric** signing — the auth service signs with a private key; validators fetch the public key (JWKS) and can verify but not forge (Step 17/41).</details>
 
 ## 💼 Interview Prep: Questions You'll Be Asked
 
@@ -1577,6 +1614,8 @@ A JWT is valid until it expires — you can't easily revoke it mid-life (no serv
 3. **Switch to asymmetric signing.** Generate an RSA key pair, sign with the private key, validate with the public key, and expose a JWKS endpoint. *(Reference: `solutions/step-16/`.)*
 4. **Stretch — DB-backed users.** Replace the in-memory store with a JPA `users` table (BCrypt hashes), Flyway migration, Testcontainers — wiring Step 8's stack into auth.
 5. **Stretch — tamper test.** Write a test that flips a byte of a valid token and asserts the call 401s (signature verification).
+
+✋ **Stopping here?** You have the interview answers rehearsed and (at least) one Your-Turn challenge attempted. Next: F · 🏆 Review; first action: skim the 🩺 troubleshooting table, then run through the 🃏 flashcards.
 
 ---
 

@@ -12,14 +12,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | local tx vs Saga · orchestration vs choreography · compensation · idempotency in Redis · DLQ |
-| **C** | [🛠️ Build](#build) | a payment Saga (steps + compensation) · Redis Idempotency-Key · retries + Dead-Letter Topic |
-| **D** | [🔬 Prove](#prove) | the Verification Log — Saga compensation, Redis idempotency, DLQ on real infra; §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep (Saga is a system-design staple) · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting (shared-context test state) · resources · recap, flashcards & next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~0.5h |
+| **B** | [🧠 Understand](#understand) | local tx vs Saga · orchestration vs choreography · compensation · idempotency in Redis · DLQ | ~1.5h |
+| **C** | [🛠️ Build](#build) | a payment Saga (steps + compensation) · Redis Idempotency-Key · retries + Dead-Letter Topic | ~13h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — Saga compensation, Redis idempotency, DLQ on real infra; §12.3 mutation | ~1.5h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep (Saga is a system-design staple) · your-turn challenges | ~1h |
+| **F** | [🏆 Review](#review) | troubleshooting (shared-context test state) · resources · recap, flashcards & next | ~0.5h |
 
 ---
 
@@ -95,6 +95,22 @@ Money that moves across services, queues, or shards can't ride one database tran
 - **Prereqs:** bank builds green (`git describe` → `step-20-end`); Docker running (Postgres + Redis + Redpanda).
 - **Connects to what you know:** the **transfer** (Step 12) is the atomic baseline we now contrast with a Saga; **idempotency** (Step 14 DB, Step 20 in-memory) becomes **durable in Redis**; the **Kafka consumer** (Step 20) gets a **DLQ**; **delivery semantics** (Step 19) explains why retries + idempotency = exactly-once effect.
 - **Depends on:** Steps **20, 12, 14, 19**. **+ Docker.**
+
+## 🗓️ Session Plan (≈18h → 7 sittings)
+
+Don't attempt this in one sitting. Each sitting below ends at a ✋ re-entry ritual or a 💾 commit, so you can stop clean and resume cold.
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| **S1** | A Orient + B Understand (Saga, orchestration vs choreography, `REQUIRES_NEW`, Redis idempotency, DLQ) + the B→C bridge | 2h | ✋ after the files-we'll-touch tree |
+| **S2** | Sub-steps 0–2 of 13 — Redis wiring · `PaymentFailedException` · `PaymentStepService` (the Saga legs, each `REQUIRES_NEW`) | 2.5h | ✋ after Sub-step 2 |
+| **S3** | Sub-steps 3–4 of 13 — `RedisIdempotencyStore` (`SET NX EX`) · `PaymentService` (the orchestrator + compensation) | 2.5h | ✋ after Sub-step 4 |
+| **S4** | Sub-steps 5–7 of 13 — the payments endpoint · `PaymentFailedException` → 422 · `RedisContainers` test infra | 2h | ✋ after Sub-step 7 |
+| **S5** | Sub-steps 8–9 of 13 — `PaymentSagaTest` (real Postgres + Redis) · `PaymentControllerTest` (the web slice) | 2h | ✋ after Sub-step 9 — demand-account half done |
+| **S6** | Sub-steps 10–12 of 13 — DLT error handler · stop swallowing in the consumer · `DeadLetterTest` + cached-context fix | 3h | ✋ after Sub-step 12 |
+| **S7** | Sub-step 13 (harness) → 🎮 Play With It → D Prove (Verification Log + `smoke.sh`) → E Apply → F Review | 3.5h | `step-21-end` tag |
+
+**Optional routes:** pass the ⏭️ 5-minute skip-test above to jump straight to Step 22 · the four 🚀 Go Deeper asides in E add ~5 min each · the 🏋️ Quick exercises are ~20-30 min each; the 🎯 Stretch (choreographed Saga) is a separate ~3-4h project.
 
 ---
 
@@ -221,6 +237,8 @@ SET idem:payment:PAY-001 7131b6d9-… NX EX 86400
 - Redis executes commands on a **single thread**, so two concurrent `SET … NX` for the same key can't both
   succeed — one wins, the other sees "already exists." (That's the 🧵 thread-safety story below.)
 
+❓ **Knowledge-check:** Step 14 already stored idempotency keys in the DB. Why Redis here? <details><summary>Answer</summary>Fast, shared across instances, and entries **auto-expire** via TTL — an idempotency key only matters for a retry window, so Redis deletes it itself (no cleanup job, unlike the Step-14 table). The 🧵 note below spells out what this simple check-then-record flow still does <em>not</em> cover.</details>
+
 ## 🌱 Under the Hood: retries & the Dead-Letter Topic
 
 A consumer will eventually meet a message it can't process (malformed, or a bug). If it just rethrows forever,
@@ -250,6 +268,8 @@ flowchart LR
 
 *Alt-text: records flow from the topic into the listener; a throw routes to the error handler, which retries
 twice and then hands the record to the recoverer, which publishes it to the .DLT topic and lets the offset commit.*
+
+❓ **Knowledge-check:** why can't the consumer just keep rethrowing on a poison message and rely on Kafka to skip it? <details><summary>Answer</summary>Kafka won't advance past a failing offset — the consumer **blocks the partition** and no later messages get processed. That's why after a few retries the <code>DeadLetterPublishingRecoverer</code> quarantines the record on <code>&lt;topic&gt;.DLT</code> and moves on.</details>
 
 ## 🛡️ Security Lens & 🧵 Thread-safety note
 
@@ -326,6 +346,8 @@ adr/0012-payment-saga-redis-idempotency-dlq.md            (new)
 steps/step-21/{lesson.md, requests.http, smoke.sh}        + Makefile play-21 · VERSIONS.md rows
 ```
 
+✋ **Stopping here (end of Sitting 1)?** You have the concepts — Saga vs local tx, compensation, `REQUIRES_NEW`, `SET NX EX`, DLT — and nothing built yet. Next: Sub-step 0 of 13 (wire Redis in); first action: edit `services/demand-account/pom.xml`.
+
 <a id="build"></a>
 
 # C · 🛠️ Let's Build It — Step by Step
@@ -352,7 +374,7 @@ any **durable** idempotency (Step 20's dedupe set dies with the JVM), and any an
 
 ---
 
-## Sub-step 0 of 13 — wire Redis into demand-account 🧭 *(you are here: **wiring** → exception → steps → Redis store → orchestrator → web → 422 → test infra → Saga test → slice test → DLT → consumer → DLT test → harness)*
+## Sub-step 0 of 13 — wire Redis into demand-account · ≈30 min 🧭 *(you are here: **wiring** → exception → steps → Redis store → orchestrator → web → 422 → test infra → Saga test → slice test → DLT → consumer → DLT test → harness)*
 
 🎯 **Goal:** add the Redis client (the `data-redis` starter) and tell the app where Redis lives, so
 `StringRedisTemplate` exists as a bean in sub-step 3. Pure plumbing — no behavior yet.
@@ -459,7 +481,7 @@ default localhost while your Redis runs elsewhere. The full path is `spring.data
 
 ---
 
-## Sub-step 1 of 13 — `PaymentFailedException`: name the failure 🧭 *(wiring ✅ → **exception** → steps → Redis store → orchestrator → web → 422 → test infra → tests → DLT → harness)*
+## Sub-step 1 of 13 — `PaymentFailedException`: name the failure · ≈30 min 🧭 *(wiring ✅ → **exception** → steps → Redis store → orchestrator → web → 422 → test infra → tests → DLT → harness)*
 
 🎯 **Goal:** a dedicated exception meaning "*a Saga step failed after an earlier step had committed; the
 committed work was compensated; the payment did not happen*." The web layer maps it to a clean `422` in
@@ -534,7 +556,7 @@ and Problem type. Name your domain failures.
 
 ---
 
-## Sub-step 2 of 13 — `PaymentStepService`: the Saga legs, each its own transaction 🧭 *(wiring ✅ → exception ✅ → **steps** → Redis store → orchestrator → web → 422 → test infra → tests → DLT → harness)*
+## Sub-step 2 of 13 — `PaymentStepService`: the Saga legs, each its own transaction · ≈1.5h 🧭 *(wiring ✅ → exception ✅ → **steps** → Redis store → orchestrator → web → 422 → test infra → tests → DLT → harness)*
 
 🎯 **Goal:** the three Saga steps — `debit`, `credit`, and the compensation `refund` — each in its **own
 committed transaction** (`REQUIRES_NEW`), reusing Step 12's pessimistic row lock and writing a ledger row per
@@ -685,9 +707,11 @@ class "to keep it simple," `pay()` calling `this.debit()` would *not* pass throu
 (probably none → each repository call auto-commits in its own micro-transaction — subtly different and
 wrong). Separate bean, always, for propagation changes. (Step 7 taught it; Step 12's `AuditService` proved it.)
 
+✋ **Stopping here?** You have the Redis wiring, a named failure, and `PaymentStepService` — debit/credit/refund, each committing in its own transaction. Next: Sub-step 3 of 13 (the Redis Idempotency-Key store); first action: create `services/demand-account/src/main/java/com/buildabank/account/payment/RedisIdempotencyStore.java`.
+
 ---
 
-## Sub-step 3 of 13 — `RedisIdempotencyStore`: SET NX EX 🧭 *(wiring ✅ → exception ✅ → steps ✅ → **Redis store** → orchestrator → web → 422 → test infra → tests → DLT → harness)*
+## Sub-step 3 of 13 — `RedisIdempotencyStore`: SET NX EX · ≈1h 🧭 *(wiring ✅ → exception ✅ → steps ✅ → **Redis store** → orchestrator → web → 422 → test infra → tests → DLT → harness)*
 
 🎯 **Goal:** a tiny, durable map of `Idempotency-Key → paymentId` in Redis, so a retried payment can return
 its original result instead of charging twice. Two methods: look up, record.
@@ -804,7 +828,7 @@ where the key exists with no TTL; the three-arg form is one atomic command.
 
 ---
 
-## Sub-step 4 of 13 — `PaymentService`: the orchestrator that compensates 🧭 *(wiring ✅ → exception ✅ → steps ✅ → Redis store ✅ → **orchestrator** → web → 422 → test infra → tests → DLT → harness)*
+## Sub-step 4 of 13 — `PaymentService`: the orchestrator that compensates · ≈1.5h 🧭 *(wiring ✅ → exception ✅ → steps ✅ → Redis store ✅ → **orchestrator** → web → 422 → test infra → tests → DLT → harness)*
 
 🎯 **Goal:** the Saga **orchestrator**: check the idempotency key, run debit → credit, and on a credit failure
 run the compensating refund and throw `PaymentFailedException`. Deliberately **not** `@Transactional`.
@@ -940,6 +964,8 @@ Saga's non-isolation, visible for real. A reader in that window sees money "in f
 fix with locks (the whole point is we <em>can't</em> hold one lock across steps) — it's a property to design
 for: pending states in the UI, and never summing "available balance" from mid-Saga reads.</details>
 
+❓ **Knowledge-check:** this is an *orchestrated* Saga. Sketch the same flow choreographed — and name one thing you'd lose. <details><summary>Answer</summary><code>debit</code> emits <code>debited</code> → a credit consumer emits <code>credited</code> or <code>credit-failed</code> → a refund consumer compensates on <code>credit-failed</code>. You lose the single place that knows the whole flow — tracing and debugging get harder (that's the 🎯 Stretch in E · Apply).</details>
+
 ▶️ **Run & See:**
 
 ```bash
@@ -976,9 +1002,11 @@ in-memory orchestration is the honest teaching version; the gap is recorded in A
 Phase-D capstone (Step 24) and event sourcing (Step 52). Interviewers love "what if the refund fails?" — now
 you have the answer.
 
+✋ **Stopping here?** You have a full, idempotent Saga — debit → credit with a refund compensation, retries short-circuited by Redis — but no HTTP way in yet. Next: Sub-step 5 of 13 (the payments endpoint); first action: create `services/demand-account/src/main/java/com/buildabank/account/web/PaymentRequest.java`.
+
 ---
 
-## Sub-step 5 of 13 — the payments endpoint: request, response, controller 🧭 *(wiring ✅ → … → orchestrator ✅ → **web** → 422 → test infra → tests → DLT → harness)*
+## Sub-step 5 of 13 — the payments endpoint: request, response, controller · ≈1h 🧭 *(wiring ✅ → … → orchestrator ✅ → **web** → 422 → test infra → tests → DLT → harness)*
 
 🎯 **Goal:** expose the Saga as `POST /api/v1/payments` — a validated JSON body, an **optional**
 `Idempotency-Key` header, a `{"paymentId": …}` response. Secured by the existing resource-server chain (Step 17).
@@ -1132,7 +1160,7 @@ useless (the retry that needs it won't carry it; only the client knows two reque
 
 ---
 
-## Sub-step 6 of 13 — map `PaymentFailedException` → 422 Problem Detail 🧭 *(wiring ✅ → … → web ✅ → **422** → test infra → tests → DLT → harness)*
+## Sub-step 6 of 13 — map `PaymentFailedException` → 422 Problem Detail · ≈30 min 🧭 *(wiring ✅ → … → web ✅ → **422** → test infra → tests → DLT → harness)*
 
 🎯 **Goal:** a compensated-but-failed payment should answer with a clean, machine-readable
 `422 Unprocessable Entity` Problem Detail — not a 500 stack trace. One handler method in the existing advice.
@@ -1311,7 +1339,7 @@ identical, *valid* payment request is exactly right after a transient failure (w
 
 ---
 
-## Sub-step 7 of 13 — `RedisContainers`: a real Redis for tests 🧭 *(wiring ✅ → … → 422 ✅ → **test infra** → Saga test → slice test → DLT → harness)*
+## Sub-step 7 of 13 — `RedisContainers`: a real Redis for tests · ≈30 min 🧭 *(wiring ✅ → … → 422 ✅ → **test infra** → Saga test → slice test → DLT → harness)*
 
 🎯 **Goal:** tests must prove idempotency against a **real** Redis, not a mock (Part VI). One
 `@TestConfiguration` that starts a throwaway Redis container and auto-wires `spring.data.redis.*` at it.
@@ -1403,9 +1431,11 @@ fails with `RedisConnectionFailureException: Unable to connect to localhost/<unr
 silently *succeeds* against some stale local Redis with old keys in it. If you see port `6379` in a test
 failure, the container wiring is broken (real mapped ports are random high ones).
 
+✋ **Stopping here?** You have all the production code (Saga + Redis + secured endpoint + 422 mapping) and the Redis test container — nothing behavior-proven yet. Next: Sub-step 8 of 13 (`PaymentSagaTest`, the step's centerpiece proof); first action: create `services/demand-account/src/test/java/com/buildabank/account/payment/PaymentSagaTest.java`.
+
 ---
 
-## Sub-step 8 of 13 — `PaymentSagaTest`: prove the Saga on real Postgres + Redis 🧭 *(wiring ✅ → … → test infra ✅ → **Saga test** → slice test → DLT → harness)*
+## Sub-step 8 of 13 — `PaymentSagaTest`: prove the Saga on real Postgres + Redis · ≈1.5h 🧭 *(wiring ✅ → … → test infra ✅ → **Saga test** → slice test → DLT → harness)*
 
 🎯 **Goal:** the step's centerpiece proof — three facts, each on real infrastructure: ① the happy path moves
 money and writes both ledger legs; ② a failed credit **compensates** (balance restored, ledger nets to zero);
@@ -1602,7 +1632,7 @@ erases it.)
 
 ---
 
-## Sub-step 9 of 13 — `PaymentControllerTest`: the web slice 🧭 *(wiring ✅ → … → Saga test ✅ → **slice test** → DLT config → consumer → DLT test → harness)*
+## Sub-step 9 of 13 — `PaymentControllerTest`: the web slice · ≈30 min 🧭 *(wiring ✅ → … → Saga test ✅ → **slice test** → DLT config → consumer → DLT test → harness)*
 
 🎯 **Goal:** prove the HTTP boundary without booting Postgres/Redis: the endpoint returns the payment id,
 **forwards the `Idempotency-Key` header** to the service, and rejects anonymous callers with 401.
@@ -1753,9 +1783,11 @@ git commit -m "test(demand-account): payments slice — id returned, Idempotency
 the controller forwards `null`. Idempotency dies silently at the boundary, and you discover it in production
 when a retry double-charges. Match exactly the values whose forwarding *is the feature*.
 
+✋ **Stopping here?** You have demand-account's half done and committed — 42 tests green, Saga + Redis idempotency proven on real containers. Next: Sub-step 10 of 13 switches to the **notification** service (retries + DLT); first action: edit `services/notification/src/main/resources/application.yml` (add the producer serializers).
+
 ---
 
-## Sub-step 10 of 13 — notification: producer serializers + the DLT error handler 🧭 *(demand-account ✅ → **DLT config** → consumer → DLT test → harness)*
+## Sub-step 10 of 13 — notification: producer serializers + the DLT error handler · ≈1h 🧭 *(demand-account ✅ → **DLT config** → consumer → DLT test → harness)*
 
 🎯 **Goal:** switch services — give the notification consumer a **recovery policy**: retry a failing message
 twice, then republish it to `transfers.completed.DLT` and move on. Two pieces: producer serializers (the
@@ -1885,7 +1917,7 @@ DLT test exists precisely to catch this.
 
 ---
 
-## Sub-step 11 of 13 — let the consumer fail honestly 🧭 *(demand-account ✅ → DLT config ✅ → **consumer** → DLT test → harness)*
+## Sub-step 11 of 13 — let the consumer fail honestly · ≈30 min 🧭 *(demand-account ✅ → DLT config ✅ → **consumer** → DLT test → harness)*
 
 🎯 **Goal:** remove Step 20's swallow-and-log `try/catch` from `TransferEventConsumer` — a poison message must
 **throw** so the error handler can see it. Counter-intuitive but central: *the fix is to stop handling the
@@ -2032,7 +2064,7 @@ git commit -m "refactor(notification): stop swallowing consumer exceptions — l
 
 ---
 
-## Sub-step 12 of 13 — `DeadLetterTest` + the cached-context fix 🧭 *(demand-account ✅ → DLT config ✅ → consumer ✅ → **DLT test** → harness)*
+## Sub-step 12 of 13 — `DeadLetterTest` + the cached-context fix · ≈1.5h 🧭 *(demand-account ✅ → DLT config ✅ → consumer ✅ → **DLT test** → harness)*
 
 🎯 **Goal:** prove on a **real broker** that a poison message lands on `transfers.completed.DLT` (value
 preserved) while a good message beside it is still processed — and repair the Step-20 consumer test, which the
@@ -2261,9 +2293,11 @@ git commit -m "test(notification): DLT round-trip on real broker; delta-assert c
 to force separate contexts. It works — and silently multiplies your container count and suite time with every
 test class added, until CI falls over. Cached contexts are a feature; write state-tolerant assertions.
 
+✋ **Stopping here?** You have both halves committed: Saga + Redis idempotency (demand-account, 42 tests) and retries + DLT (notification, 4 tests). Next: Sub-step 13 of 13 (the step harness), then 🎮 Play With It; first action: edit the root `Makefile` (add the `play-21` target).
+
 ---
 
-## Sub-step 13 of 13 — the step harness: Makefile, smoke.sh, ADR 🧭 *(build ✅ → **harness** — then 🎮 play)*
+## Sub-step 13 of 13 — the step harness: Makefile, smoke.sh, ADR · ≈30 min 🧭 *(build ✅ → **harness** — then 🎮 play)*
 
 🎯 **Goal:** make the step reproducible in one command each way: `make play-21` (the three proof classes),
 `bash steps/step-21/smoke.sh` (the learner's conformance check), and ADR-0012 (why these designs — the
@@ -2441,7 +2475,7 @@ commits, and the next good record flows.*
 
 ---
 
-## 🎮 Play With It
+## 🎮 Play With It · ≈30 min
 
 Time to *feel* a compensating Saga from a REST client. Full flow in
 [`requests.http`](requests.http) (VS Code REST Client / IntelliJ HTTP client — or the curl equivalents below).
@@ -2512,6 +2546,8 @@ poison messages — demand-account 42 tests, notification 4, all green; `step-21
 - [ ] a poison message lands on `transfers.completed.DLT` while good messages still process;
 - [ ] `./mvnw verify` is green, `bash steps/step-21/smoke.sh` passes;
 - [ ] you've committed and tagged `step-21-end`.
+
+✋ **Stopping here?** You have everything built, played with, and both services committed. Next: Movement D — reproduce the Verification Log; first action: `bash steps/step-21/smoke.sh` and compare your output against the log below.
 
 ---
 
@@ -2585,7 +2621,7 @@ exist in refactored form at `HEAD`; the recorded §1 output (42 + 4 totals, `Dea
 
 ## 🚀 Go Deeper (Optional)
 
-<details><summary><strong>Saga vs 2PC — the longer answer</strong></summary>
+<details><summary><strong>Saga vs 2PC — the longer answer</strong> (+~5 min)</summary>
 
 Two-phase commit gives ACID across participants but needs a coordinator holding locks until everyone votes
 commit — slow and fragile (a stalled participant blocks all; a crashed coordinator can leave participants
@@ -2597,7 +2633,7 @@ is why the modern stack pushes coordination to the edges (Sagas, outboxes, idemp
 consensus (Raft) for infrastructure like the brokers themselves.
 </details>
 
-<details><summary><strong>Why the orchestrator isn't @Transactional</strong></summary>
+<details><summary><strong>Why the orchestrator isn't @Transactional</strong> (+~5 min)</summary>
 
 If `pay()` were `@Transactional`, the steps (called on a `REQUIRES_NEW` bean) would still commit
 independently, but the orchestrator wrapping them in an outer transaction muddies the model: an idle
@@ -2606,7 +2642,7 @@ that rollback exists. Keeping the orchestrator non-transactional makes it explic
 transaction — that's the whole reason compensation exists.
 </details>
 
-<details><summary><strong>Reserve-then-complete: closing the concurrent-duplicate window</strong></summary>
+<details><summary><strong>Reserve-then-complete: closing the concurrent-duplicate window</strong> (+~5 min)</summary>
 
 `pay()` *checks* the key, *executes*, then *records* — two Redis commands around a slow middle. Two
 simultaneous first-time submits with the same key can both miss the check and both pay. The hardened protocol
@@ -2617,7 +2653,7 @@ in Redis — and the same shape as the Step-14 DB idempotency table's unique-con
 exercise ②.
 </details>
 
-<details><summary><strong>What production adds to a DLT</strong></summary>
+<details><summary><strong>What production adds to a DLT</strong> (+~5 min)</summary>
 
 A dead-letter topic without **alerting** is a black hole with good intentions: page or ticket on DLT depth > 0
 (you'll wire metrics in Phase G/H). Then **re-drive** tooling: after fixing the bug that poisoned the
@@ -2687,18 +2723,18 @@ afford to stall the partition even for in-place retries — overkill here, worth
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-- **Quick ①:** add a `payment.failed` event (via the Step-20 Outbox) so a compensation also notifies the
+- **Quick ① (~20-30 min):** add a `payment.failed` event (via the Step-20 Outbox) so a compensation also notifies the
   customer. <details><summary>Hint</summary>Publish a domain event from the orchestrator's catch block —
   but the orchestrator has no transaction, and the Outbox write needs one. Cleanest: a small
   <code>@Transactional(REQUIRES_NEW)</code> method (own bean!) that writes the outbox row after the refund
   commits — compensation and its notification are separate facts.</details>
-- **Quick ②:** make the Redis idempotency **reserve-then-complete** (store `PENDING` first) to handle
+- **Quick ② (~20-30 min):** make the Redis idempotency **reserve-then-complete** (store `PENDING` first) to handle
   concurrent duplicate submits, not just sequential retries. <details><summary>Hint</summary>
   <code>setIfAbsent(key, "PENDING", TTL)</code> returns a <code>Boolean</code> — false means someone else
   holds the claim: return 409 or poll for the result. On success, overwrite with <code>set(key, paymentId,
   TTL)</code> (plain SET — you own the claim). Test it with two threads and a <code>CountDownLatch</code>,
   Step-11 style.</details>
-- 🎯 **Stretch — the choreographed Saga.** Re-implement the payment as a **choreographed** Saga over Kafka:
+- 🎯 **Stretch — the choreographed Saga (~3-4h).** Re-implement the payment as a **choreographed** Saga over Kafka:
   `debit` emits `payment.debited`; a credit consumer tries the credit and emits `payment.credited` or
   `payment.credit-failed`; a refund consumer compensates on `credit-failed` — same end state, plus a DLT for
   stuck steps. Then compare debuggability with the orchestrated version (trace one payment through the logs

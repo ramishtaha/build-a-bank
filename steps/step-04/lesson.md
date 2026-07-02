@@ -602,6 +602,8 @@ Allocated 5,000,000 blocks in <a few> ms (checksum=...)
 
 The point isn't the number yet — it's that the program runs and prints a checksum. We make it *talk* in the next four sub-steps.
 
+*(Real capture, 2026-07-02, clean worktree at `step-04-end`: `Allocated 5,000,000 blocks in 241 ms (checksum=637493856)`. Your ms will differ; the **checksum won't** — it's deterministic: 19,531 full 0–255 cycles × 32,640 + a 0–63 tail of 2,016 = 637,493,856. That determinism is exactly what sub-step 7's test pins.)*
+
 ✋ **Checkpoint:** the program compiles and prints an `Allocated 5,000,000 blocks …` line. If you get `ClassNotFoundException`, you didn't compile, or the `-cp` path is wrong.
 
 🔖 **Stopping here?** After the 💾 commit below you have both lab classes committed (end of sitting S3). Next: sub-step 3 (watch GC + the escape surprise); first action: run `java -Xmx64m -Xlog:gc -cp playground/java-basics/target/classes com.buildabank.basics.jvm.AllocationDemo 5000000`.
@@ -1175,6 +1177,68 @@ public final class com.buildabank.basics.jvm.BytecodeSample {
 
 > [!NOTE]
 > **Honest caveats:** `-XX:+PrintCompilation` and `-Xlog:gc` output is **nondeterministic** (JIT/GC race with execution) — ids, timestamps, pause counts, and exact MB values vary run-to-run; the *pattern* (G1 young evacuation pauses; `run` climbing C1→C2 via OSR with deopt) is stable, the exact numbers are not. The JFR sample counts are *samples*, not totals. No Docker was used or needed this step.
+
+### Re-run 1 — re-verified 2026-07-02 (aids pass)
+
+Re-verified from a clean `git worktree` checked out at the **`step-04-end`** tag. **Drift check:** `git diff step-04-end..HEAD -- playground/java-basics steps/step-04` touches only this step's docs (`lesson.md` / `capsule.md`) — **the `playground/java-basics` module is unchanged since the tag**, so these runs exercise exactly the code shown above. Same environment as the original log: `java -version` → `java version "25.0.3" 2026-04-21 LTS … (build 25.0.3+9-LTS-195, mixed mode, sharing)`.
+
+**1) Build + tests** — `./mvnw -B -pl playground/java-basics -am test` (tail):
+
+```
+[INFO] Running com.buildabank.basics.jvm.JvmLabTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.020 s -- in com.buildabank.basics.jvm.JvmLabTest
+...
+[INFO] Tests run: 22, Failures: 0, Errors: 0, Skipped: 0
+...
+[INFO] Build-a-Bank :: Playground :: Java Basics .......... SUCCESS [  5.987 s]
+[INFO] BUILD SUCCESS
+[INFO] Total time:  6.602 s
+[INFO] Finished at: 2026-07-02T11:01:38+05:30
+```
+
+**2) Smoke test** — `bash steps/step-04/smoke.sh` (from the worktree root):
+
+```
+==> 1/3 Build + test (JvmLabTest)
+==> 2/3 BytecodeSample runs and computes correctly
+==> 3/3 AllocationDemo runs under a small heap (forces GC)
+✅ Step 4 smoke test PASSED
+```
+
+**3) Bytecode re-disassembled** — `javap -c -p -cp playground/java-basics/target/classes com.buildabank.basics.jvm.BytecodeSample` reproduced §2's disassembly **instruction-for-instruction** (`add` = `iload_0`/`iload_1`/`iadd`/`ireturn`; `sumTo`'s loop = `if_icmpgt 20` … `iinc 3, 1` / `goto 4`). Two members the trimmed §2 capture didn't show also appeared in this full `-p` run — the private constructor (`aload_0` → `invokespecial Object."<init>"` → `return`) and `main`, whose string concatenation compiles to `invokedynamic … makeConcatWithConstants` (how modern `javac` concatenates strings — worth spotting):
+
+```
+  public static int add(int, int);
+    Code:
+         0: iload_0
+         1: iload_1
+         2: iadd
+         3: ireturn
+  ...
+  public static void main(java.lang.String[]);
+    Code:
+         0: getstatic     #7                  // Field java/lang/System.out:Ljava/io/PrintStream;
+         3: iconst_2
+         4: iconst_3
+         5: invokestatic  #13                 // Method add:(II)I
+         8: invokedynamic #19,  0             // InvokeDynamic #0:makeConcatWithConstants:(I)Ljava/lang/String;
+        13: invokevirtual #23                 // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+```
+
+**4) The demos, run plain** from `target/classes`:
+
+```
+$ java -cp playground/java-basics/target/classes com.buildabank.basics.jvm.BytecodeSample
+add(2, 3)   = 5
+sumTo(100)  = 5050
+
+$ java -cp playground/java-basics/target/classes com.buildabank.basics.jvm.AllocationDemo 5000000
+Allocated 5,000,000 blocks in 241 ms (checksum=637493856)
+```
+
+That checksum is deterministic and checks out by hand: 5,000,000 iterations = 19,531 full 0–255 cycles (19,531 × 32,640 = 637,491,840) plus a 0–63 tail (0+1+…+63 = 2,016) = **637,493,856** — the same math `JvmLabTest` pins with `run(256) == 32640`.
+
+**Not re-run this pass (and why):** the flag-based observations (§3 `-Xlog:gc`, §4 `+PrintCompilation`, §5 JFR, §6 `class+load`) are nondeterministic exploration whose tag-time captures above remain the record, and the escape-analysis experiment plus the §12.3-style "break-it" mutation both require temporarily editing `AllocationDemo` — this is a docs-only pass and **code is frozen** (ENRICHMENT §12.8). `javap` was re-run as the representative deterministic diagnostic, and it matched.
 
 ---
 
