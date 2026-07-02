@@ -56,3 +56,6 @@ tmp/
 
 # jqwik failure-sample database (property-based testing, Step 28) — local, not committed
 .jqwik-database
+
+# overnight-loop halt signal — created by the operator during a run, never committed
+STOP

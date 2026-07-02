@@ -22,6 +22,9 @@ $ErrorActionPreference = 'Continue'
 New-Item -ItemType Directory -Force logs | Out-Null
 
 # ── Preflight ────────────────────────────────────────────────────────────────
+# A STOP file is the mid-run halt signal; one lying around at startup is stale — clear it.
+if (Test-Path STOP) { Remove-Item STOP -Force; Write-Host "Removed stale STOP file from a previous run." -ForegroundColor Yellow }
+
 $branch = git branch --show-current
 if ($branch -ne 'main') { Write-Host "ABORT: on '$branch', not main. Run: git switch main" -ForegroundColor Red; exit 1 }
 
