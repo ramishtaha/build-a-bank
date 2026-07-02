@@ -12,14 +12,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | SPA + Vite/ESM · client-side routing · the auth flow (JWT, context, guard) · the gateway as front door |
-| **C** | [🛠️ Build](#build) | scaffold Vite+React+TS · the API client · AuthContext · routes + guard · login page · gateway auth route + CORS · tests |
-| **D** | [🔬 Prove](#prove) | the Verification Log — build/lint/test green; §12.3 break the guard; gateway CORS preflight; real output |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting (jsdom localStorage, CORS) · resources · recap, flashcards & what's next |
+A one-line map of where we're going. Click to jump.
+
+1. **[A · 🧭 Orient](#orient)** — what the React+TS foundations are, why a gateway-fronted auth flow matters, the cheat card, and whether you can skip.
+2. **[B · 🧠 Understand](#understand)** — the SPA mental model, Vite's native ESM dev server, client-side routing, the JWT auth context, and gateway CORS.
+3. **[C · 🛠️ Build](#build)** — the heart: scaffolding Vite+React+TS configuration → typed API client → AuthContext → ProtectedRoute guard → LoginPage + DashboardPage → gateway auth route + CorsFilter → Vitest component and route tests.
+4. **[D · 🔬 Prove](#prove)** — the Verification Log (🔴 Full tier): the real, pasted build, lint, and test outputs, the gateway CORS preflights, and the mutation check.
+5. **[E · 🎓 Apply](#apply)** — go-deeper asides (Vite performance, JWT storage threat model), interview prep, and your-turn exercises.
+6. **[F · 🏆 Review](#review)** — troubleshooting (jsdom localStorage, CORS blocks), resources & glossary, and the recap/study notes.
 
 ---
 
@@ -43,7 +43,7 @@ By the end you'll **scaffold a Vite React-TS app**, **route** client-side, imple
 
 ### ⏭️ Can You Skip This Step? (5-minute self-check)
 
-If you can confidently do **all** of this, skim 🛠️ Build and jump to **[Step 30 — state, data & forms](../step-30/lesson.md)**.
+Run this self-check. If you can confidently do **all** of this, skim 🛠️ Build and jump to **[Step 30 — state, data & forms](../step-30/lesson.md)**.
 
 - [ ] I can scaffold and explain a **Vite + React + TypeScript** project (dev server, build, why Vite is fast).
 - [ ] I can set up **client-side routing** (public vs protected routes) and a **route guard**.
@@ -169,18 +169,35 @@ the origins you name can call the gateway from a browser.
 
 ```
 frontend/
-  package.json · tsconfig.json · vite.config.ts · eslint.config.js · index.html · .env.example
-  src/
-    main.tsx                  BrowserRouter → AuthProvider → App
-    App.tsx                   the route table (/login public, / protected)
-    api/client.ts             typed fetch wrapper (one base URL = the gateway) + login/getCurrentUser
-    auth/AuthContext.tsx      JWT state, login()/logout(), useAuth() — persisted in localStorage
-    auth/ProtectedRoute.tsx   redirect to /login when unauthenticated
-    pages/LoginPage.tsx       the sign-in form
-    pages/DashboardPage.tsx   the protected landing page (greets the user)
-    test/setup.ts             jest-dom matchers + a localStorage shim
-    **/*.test.ts(x)           Vitest + Testing Library
-gateway/  (+ auth route /api/auth/**, + GatewayCorsConfig CorsFilter)
+├── .env.example
+├── .gitignore
+├── eslint.config.js
+├── index.html
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+└── src/
+    ├── App.tsx
+    ├── index.css
+    ├── main.tsx
+    ├── vite-env.d.ts
+    ├── api/
+    │   ├── client.ts
+    │   └── client.test.ts
+    ├── auth/
+    │   ├── AuthContext.tsx
+    │   ├── ProtectedRoute.tsx
+    │   └── ProtectedRoute.test.tsx
+    ├── pages/
+    │   ├── DashboardPage.tsx
+    │   ├── LoginPage.tsx
+    │   └── LoginPage.test.tsx
+    └── test/
+        └── setup.ts
+gateway/
+├── src/main/java/com/buildabank/gateway/GatewayCorsConfig.java
+├── src/main/resources/application.yml
+└── src/test/java/com/buildabank/gateway/GatewayRoutingTest.java
 ```
 
 <a id="build"></a>
@@ -189,20 +206,51 @@ gateway/  (+ auth route /api/auth/**, + GatewayCorsConfig CorsFilter)
 
 ## 📦 Your Starting Point
 
-`step-29-start == step-28-end`. The backend is complete through Phase E. There is no `frontend/` yet; the gateway fronts cif + demand-account but not auth.
+`step-29-start == step-28-end`. The backend is complete through Phase E. There is no `frontend/` yet; the gateway fronts `cif` + `demand-account` but not `auth`.
 
-## Sub-step 1 — scaffold Vite + React + TypeScript
+```mermaid
+flowchart TD
+    subgraph Starting["Starting Point (Backend Only)"]
+        gw[Gateway :8080] --> cif[cif :8081]
+        gw --> da[demand-account :8082]
+        auth[auth :8083]
+    end
+    subgraph Target["Step 29 End (Full Stack)"]
+        spa[SPA :5173] -- "fetch" --> gw2[Gateway :8080 + CORS]
+        gw2 --> cif2[cif :8081]
+        gw2 --> da2[demand-account :8082]
+        gw2 --> auth2[auth :8083]
+    end
+```
 
-🎯 **Goal:** Scaffold the Vite + React + TypeScript SPA foundations (`package.json`, TS config, Vite config, ESLint flat config, `index.html`).
-📁 **Path:** `frontend/` (`package.json`, `tsconfig.json`, `vite.config.ts`, `eslint.config.js`, `index.html`)
+---
+
+### Sub-step 1 of 6 — Scaffold Vite + React + TypeScript 🧭 *(you are here: **scaffold** → API client → AuthContext → routes → gateway → tests)*
+
+🎯 **Goal:** Scaffold the frontend root files under a new `frontend/` folder containing the dependencies, TS compiler configuration, ESLint quality gate, dev-server settings, base HTML file, and the application bootstrap entry point.
+
+📁 **Locations:** 
+- `frontend/package.json`
+- `frontend/vite.config.ts`
+- `frontend/tsconfig.json`
+- `frontend/eslint.config.js`
+- `frontend/index.html`
+- `frontend/.env.example`
+- `frontend/.gitignore`
+- `frontend/src/vite-env.d.ts`
+- `frontend/src/index.css`
+- `frontend/src/main.tsx`
+
 ⌨️ **Code:**
+
 ```json
+// frontend/package.json
 {
   "name": "build-a-bank-frontend",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Build-a-Bank ΓÇö React + TypeScript SPA (Phase F, Step 29). Talks to the gateway (single front door).",
+  "description": "Build-a-Bank — React + TypeScript SPA (Phase F, Step 29). Talks to the gateway (single front door).",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -236,7 +284,36 @@ gateway/  (+ auth route /api/auth/**, + GatewayCorsConfig CorsFilter)
   }
 }
 ```
+
+```typescript
+// frontend/vite.config.ts
+/// <reference types="vitest/config" />
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
+
+// Step 29 · Vite config + Vitest (jsdom) for component/route tests. The dev server runs on 5173 (the origin
+// the gateway's CORS allow-list expects). Tests run in jsdom with Testing Library matchers from src/test/setup.ts.
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    // A real (non-opaque) origin so jsdom exposes localStorage — about:blank's opaque origin leaves the
+    // localStorage getter throwing, which Vitest skips, making the global `undefined` (AuthContext needs it).
+    environmentOptions: {
+      jsdom: { url: 'http://localhost:5173' },
+    },
+    setupFiles: './src/test/setup.ts',
+    css: false,
+  },
+});
+```
+
 ```json
+// frontend/tsconfig.json
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -261,39 +338,16 @@ gateway/  (+ auth route /api/auth/**, + GatewayCorsConfig CorsFilter)
   "include": ["src", "vite.config.ts", "eslint.config.js"]
 }
 ```
-```ts
-/// <reference types="vitest/config" />
-import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
 
-// Step 29 ┬╖ Vite config + Vitest (jsdom) for component/route tests. The dev server runs on 5173 (the origin
-// the gateway's CORS allow-list expects). Tests run in jsdom with Testing Library matchers from src/test/setup.ts.
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 5173,
-  },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    // A real (non-opaque) origin so jsdom exposes localStorage ΓÇö about:blank's opaque origin leaves the
-    // localStorage getter throwing, which Vitest skips, making the global `undefined` (AuthContext needs it).
-    environmentOptions: {
-      jsdom: { url: 'http://localhost:5173' },
-    },
-    setupFiles: './src/test/setup.ts',
-    css: false,
-  },
-});
-```
 ```javascript
+// frontend/eslint.config.js
 import js from '@eslint/js';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-// Step 29 ┬╖ ESLint flat config (ESLint 9) ΓÇö the frontend's quality gate, the SPA counterpart to the backend's
+// Step 29 · ESLint flat config (ESLint 9) — the frontend's quality gate, the SPA counterpart to the backend's
 // Spotless/Checkstyle (Step 28). JS recommended + typescript-eslint recommended + React hooks rules.
 export default tseslint.config(
   { ignores: ['dist'] },
@@ -315,7 +369,9 @@ export default tseslint.config(
   },
 );
 ```
+
 ```html
+<!-- frontend/index.html -->
 <!doctype html>
 <html lang="en">
   <head>
@@ -330,26 +386,182 @@ export default tseslint.config(
 </html>
 ```
 
+```env
+# frontend/.env.example
+# Step 29 · the SPA's only environment knob: the base URL of the API gateway (the single front door).
+# Copy to `.env` for local dev. The gateway (Step 15) fronts auth, cif, and demand-account.
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+```
+# frontend/.gitignore
+# Step 29 · frontend build/deps (the lockfile IS committed — it pins exact versions for reproducible npm ci)
+node_modules
+dist
+dist-ssr
+*.local
+coverage
+```
+
+```typescript
+// frontend/src/vite-env.d.ts
+/// <reference types="vite/client" />
+
+// Step 29 · type the one custom env var so `import.meta.env.VITE_API_BASE_URL` is typed (not `any`).
+interface ImportMetaEnv {
+  readonly VITE_API_BASE_URL?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+```
+
+```css
+/* frontend/src/index.css */
+/* Step 29 · minimal styling — the focus is structure/auth/routing, not design (that comes later). */
+:root {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+  color: #1a1a2e;
+  background: #f6f7fb;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 28rem;
+  margin: 4rem auto;
+  padding: 2rem;
+  background: #fff;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 600;
+}
+
+input,
+button {
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  border-radius: 0.375rem;
+  border: 1px solid #c7c9d9;
+}
+
+button {
+  background: #2d3a8c;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+[role="alert"] {
+  color: #b00020;
+}
+```
+
+```typescript
+// frontend/src/main.tsx
+// Step 29 · the SPA entry point. BrowserRouter (real URL routing) wraps AuthProvider (auth state) wraps the App.
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+
+import { App } from './App';
+import { AuthProvider } from './auth/AuthContext';
+import './index.css';
+
+const rootElement = document.getElementById('root');
+if (rootElement === null) {
+  throw new Error('Root element #root not found in index.html');
+}
+
+createRoot(rootElement).render(
+  <StrictMode>
+    <BrowserRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
+  </StrictMode>,
+);
+```
+
 🔍 **Line-by-line:**
-- `type: "module"` in `package.json` enables native ES modules.
-- `vitest` environment is `jsdom` with `url: 'http://localhost:5173'` so `localStorage` doesn't throw on an opaque origin.
-- `eslint.config.js` uses the new ESLint 9 flat config API, combining JS recommended, TS recommended, and React hooks rules.
+- `"type": "module"` in `package.json` — tells Node to treat all `.js` files as ES Modules, matching Vite's modern standards.
+- `tsconfig.json` → `"moduleResolution": "bundler"` — aligns the TS compiler with Vite's module-resolution engine rather than legacy Node-style paths.
+- `tsconfig.json` → `"verbatimModuleSyntax": true` — enforces explicit type imports (`import type { ReactNode } ...`) to optimize tree-shaking and avoid emitting redundant runtime imports.
+- `vite.config.ts` → `globals: true` — makes test globals like `describe`, `it`, and `expect` available in all test files without explicit imports, matching Jest's developer experience.
+- `vite.config.ts` → `environment: 'jsdom'` — runs tests in a headless virtual DOM rather than raw Node.js.
+- `vite.config.ts` → `environmentOptions.jsdom.url = 'http://localhost:5173'` — overrides the default `about:blank` location in jsdom to a real URL. This is required because browser security policies cause `localStorage` to throw a security error when run from `about:blank` in some jsdom releases.
+- `index.html` → `<div id="root"></div>` — the target node where React injects the DOM tree.
+- `main.tsx` → `createRoot(rootElement).render(...)` — instantiates React 19's virtual DOM root and starts rendering.
+- `main.tsx` → `<BrowserRouter>` — sets up the HTML5 History API routing context.
 
-💭 **Under the hood:** Vite skips bundling in dev; it serves native ESM to the browser, relying on the browser to fetch dependencies. Esbuild transpiles TS to JS almost instantly.
-🔮 **Predict:** why does `npm install` commit a `package-lock.json` even though `package.json` already lists versions? <details><summary>Answer</summary>`package.json` uses ranges (`^19.1.0`); the **lockfile pins the exact resolved versions of the whole tree** (incl. transitive deps) so every machine + CI builds identical bits. "Pinned, never latest" (§12.6) = commit the lockfile.</details>
-▶️ **Run & See:** Run `npm install` to write the `package-lock.json`. (See Verification Log)
-✋ **Checkpoint:** `frontend/` exists with `node_modules`.
+💭 **Under the hood:** Unlike traditional dev tools like Webpack that transpile and bundle the entire codebase at startup, Vite parses native ES module imports in the browser and transpiles files on the fly using `esbuild`. The browser requests `/src/main.tsx`, which triggers requests for dependencies, each served as an individual HTTP stream. This results in sub-second startup times regardless of project size.
 
-## Sub-step 2 — the typed API client (one base URL = the gateway)
+🔮 **Predict:** What happens if we start the dev server before installing dependencies? <details><summary>Answer</summary>Node will throw a `Cannot find module 'vite'` or similar CLI error. You must execute `npm install` (or `npm ci` in CI) to populate `node_modules` first.</details>
 
-🎯 **Goal:** Create a typed `fetch` wrapper targeting the gateway (the single front door).
-📁 **Path:** `frontend/src/api/client.ts`
+▶️ **Run & See:**
+Install dependencies and run a production build test:
+```bash
+cd frontend
+npm ci
+npm run build
+```
+✅ **Expected output:**
+```
+vite v6.4.3 building for production...
+✓ 46 modules transformed.
+dist/index.html                   0.40 kB
+dist/assets/index-*.css           0.60 kB
+dist/assets/index-*.js          234.72 kB │ gzip: 75.15 kB
+✓ built in 931ms
+```
+
+✋ **Checkpoint:** Confirm that `frontend/node_modules/` is created and `npm run build` exits with code `0`.
+
+💾 **Commit:**
+```bash
+git add frontend/package.json frontend/vite.config.ts frontend/tsconfig.json frontend/eslint.config.js frontend/index.html frontend/.env.example frontend/.gitignore frontend/src/vite-env.d.ts frontend/src/index.css frontend/src/main.tsx
+git commit -m "chore(frontend): scaffold Vite + React + TypeScript foundations"
+```
+
+⚠️ **Pitfall:** Do not use `npm install` in CI/CD pipelines. Always use `npm ci` (clean install), which enforces that the dependencies match the `package-lock.json` exactly and fails if there is any mismatch.
+
+---
+
+### Sub-step 2 of 6 — The Typed API Client 🧭 *(scaffold ✅ → **API client** → AuthContext → routes → gateway → tests)*
+
+🎯 **Goal:** Create a typed HTTP client that communicates with the API gateway (single origin) and implements typed methods matching the authentication service's login and profile APIs.
+
+📁 **Location:** `frontend/src/api/client.ts`
+
 ⌨️ **Code:**
+
 ```typescript
 // frontend/src/api/client.ts
-// Step 29 ┬╖ the typed HTTP client. ONE base URL ΓÇö the gateway (the single front door, Step 15) ΓÇö configurable
+// Step 29 · the typed HTTP client. ONE base URL — the gateway (the single front door, Step 15) — configurable
 // via VITE_API_BASE_URL. Matches the auth service's contracts exactly: POST /api/auth/login {username,password}
-// ΓåÆ {token, expiresInSeconds}; GET /api/auth/me (Bearer) ΓåÆ {username, roles}. TanStack Query arrives in Step 30.
+// → {token, expiresInSeconds}; GET /api/auth/me (Bearer) → {username, roles}. TanStack Query arrives in Step 30.
 
 export interface LoginResponse {
   token: string;
@@ -393,7 +605,7 @@ export function login(username: string, password: string): Promise<LoginResponse
   });
 }
 
-/** Who am I? ΓÇö the backend reads the Bearer token and returns the username + roles. */
+/** Who am I? — the backend reads the Bearer token and returns the username + roles. */
 export function getCurrentUser(token: string): Promise<CurrentUser> {
   return request<CurrentUser>('/api/auth/me', {
     headers: { Authorization: `Bearer ${token}` },
@@ -402,23 +614,50 @@ export function getCurrentUser(token: string): Promise<CurrentUser> {
 ```
 
 🔍 **Line-by-line:**
-- `import.meta.env.VITE_API_BASE_URL` is Vite's syntax for environment variables.
-- `ApiError` captures the HTTP status code (401 vs 500) so UI logic can react appropriately.
-- `login()` matches the auth service's exact JSON contract (`{username, password}` → `{token, expiresInSeconds}`).
-- `getCurrentUser()` attaches the `Authorization: Bearer <token>` header.
+- `export class ApiError extends Error` — extends the standard Java-like `Error` class to carry the HTTP `status` code. This lets UI components react differently to `401 Unauthorized` (bad password) vs `500 Internal Server Error` (downstream DB crash).
+- `import.meta.env.VITE_API_BASE_URL` — Vite-specific syntax for reading environment variables. Only variables prefixed with `VITE_` are exposed to the client bundle.
+- `headers: { 'Content-Type': 'application/json', ...init.headers }` — defaults to JSON requests while allowing callers to merge or override headers (e.g. adding the `Authorization` bearer token).
+- `return (await response.json()) as T` — casts the resolved JSON object to the expected generic type `T`.
 
-💭 **Under the hood:** The gateway routes `/api/auth/**` to the auth service. The SPA doesn't know about the `auth` service port, only the gateway's base URL.
-🔮 **Predict:** What happens if `fetch` gets a 401 response? <details><summary>Answer</summary>`response.ok` is false, so it throws `ApiError(401)`. The caller (e.g. `login()`) catches this and can show a "Login failed" message.</details>
-✋ **Checkpoint:** Typed HTTP client is ready for the context to use.
+💭 **Under the hood:** When `fetch()` is executed, the browser constructs an HTTP request. Since the script origin is `http://localhost:5173` and the target is `http://localhost:8080` (a different port, meaning a different origin), the browser enforces CORS rules. For a `POST` request with custom headers like `Content-Type: application/json`, the browser will first send a preflight `OPTIONS` request to verify the server permits the exchange.
 
-## Sub-step 3 — AuthContext + the route guard
+🔮 **Predict:** What happens if the backend returns an empty body on a successful request? <details><summary>Answer</summary>`response.json()` will fail to parse (throwing a SyntaxError) because an empty string is not valid JSON. Since our login and `/me` APIs are designed to return JSON bodies, this is handled by the contract.</details>
 
-🎯 **Goal:** Manage the JWT state globally and guard protected routes.
-📁 **Path:** `frontend/src/auth/AuthContext.tsx` and `frontend/src/auth/ProtectedRoute.tsx`
+▶️ **Run & See:**
+Validate that the code compiles without type errors:
+```bash
+npm run build
+```
+✅ **Expected output:**
+```
+✓ built in 900ms
+```
+
+✋ **Checkpoint:** Verify that `frontend/src/api/client.ts` is syntactically correct and compiled.
+
+💾 **Commit:**
+```bash
+git add frontend/src/api/client.ts
+git commit -m "feat(frontend): add typed API client for gateway endpoints"
+```
+
+⚠️ **Pitfall:** Hardcoding the base URL. If you deploy this to a staging or production server, the UI will attempt to call `localhost:8080`. Always use `import.meta.env.VITE_API_BASE_URL` with a fallback.
+
+---
+
+### Sub-step 3 of 6 — AuthContext + The Route Guard 🧭 *(scaffold ✅ → API client ✅ → **AuthContext** → routes → gateway → tests)*
+
+🎯 **Goal:** Create an authentication React Context provider to manage JWT state globally, read and write the token from `localStorage` for persistence across page refreshes, and write a `<ProtectedRoute>` component to guard authenticated views.
+
+📁 **Locations:**
+- `frontend/src/auth/AuthContext.tsx`
+- `frontend/src/auth/ProtectedRoute.tsx`
+
 ⌨️ **Code:**
-```tsx
+
+```typescript
 // frontend/src/auth/AuthContext.tsx
-// Step 29 ┬╖ the auth flow's single source of truth. Holds the JWT + current user, exposes login()/logout(),
+// Step 29 · the auth flow's single source of truth. Holds the JWT + current user, exposes login()/logout(),
 // and persists the token in localStorage so a refresh keeps you signed in. (Token refresh + route guards are
 // hardened in Step 32; secure storage trade-offs are discussed in the lesson.)
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
@@ -470,9 +709,10 @@ export function useAuth(): AuthState {
   return context;
 }
 ```
-```tsx
+
+```typescript
 // frontend/src/auth/ProtectedRoute.tsx
-// Step 29 ┬╖ a route guard ΓÇö wrap any element that requires a signed-in user. If there's no token, redirect to
+// Step 29 · a route guard — wrap any element that requires a signed-in user. If there's no token, redirect to
 // /login (replace, so Back doesn't bounce back into the guard). Hardened with token-refresh in Step 32.
 import { Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
@@ -489,20 +729,53 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 ```
 
 🔍 **Line-by-line:**
-- `useState(() => localStorage.getItem(TOKEN_KEY))` lazy-initializes the state from persistence so it survives reloads.
-- `login` saves to both React state and `localStorage`.
-- `ProtectedRoute` reads `isAuthenticated`; if false, returns `<Navigate to="/login" replace />`. `replace` prevents the back button from looping back into the guard.
+- `const AuthContext = createContext<AuthState | null>(null)` — initializes a Context object.
+- `localStorage.getItem(TOKEN_KEY)` — runs a synchronous read on startup to pre-seed the React token state. If the token is found, the user starts as authenticated.
+- `useCallback` — memoizes the `login` and `logout` functions to prevent parent component re-renders from recreating them, optimizing DOM performance.
+- `useMemo` — memoizes the provider value object, ensuring the context consumer components only re-render if the `token` or `user` state values change.
+- `<Navigate to="/login" replace />` — navigates to the login screen programmatically.
+- `replace` prop — replaces the current entry in the history stack. If the user clicks "Back" in their browser, they are not bounced immediately back to the guarded dashboard.
 
-💭 **Under the hood:** React Context provides dependency injection for state. Any component calling `useAuth()` rerenders when the token or user changes. Storing a JWT in `localStorage` is simple but XSS-exposed (hardened in Step 32).
+💭 **Under the hood:** When a component calls `useAuth()`, React registers that component as a consumer of `AuthContext`. If the state inside the provider changes (e.g. `setToken` is called on login), React automatically pushes a re-render to all registered consumer components. 
 
-## Sub-step 4 — pages + the route table
+🔮 **Predict:** If you refresh the page, why does the greeting `Signed in as alice` display the username after a delay, but the dashboard renders immediately? <details><summary>Answer</summary>The token is stored in `localStorage` and is retrieved synchronously on startup (`isAuthenticated: true` immediately), so the route guard lets you through. However, the user profile (`user` object) is stored in volatile React state and starts as `null` — it must be fetched asynchronously via `/api/auth/me` on startup before the username is displayed.</details>
 
-🎯 **Goal:** Build the Login and Dashboard pages, and wire up React Router.
-📁 **Path:** `frontend/src/pages/LoginPage.tsx`, `frontend/src/pages/DashboardPage.tsx`, `frontend/src/App.tsx`, `frontend/src/main.tsx`
+▶️ **Run & See:**
+Compile the frontend module:
+```bash
+npm run build
+```
+✅ **Expected output:**
+```
+✓ built in 900ms
+```
+
+✋ **Checkpoint:** Verify both files are written and the project compiles.
+
+💾 **Commit:**
+```bash
+git add frontend/src/auth/AuthContext.tsx frontend/src/auth/ProtectedRoute.tsx
+git commit -m "feat(frontend): implement AuthContext and ProtectedRoute guard"
+```
+
+⚠️ **Pitfall:** Placing hooks conditionally inside your components. React hooks (`useContext`, `useState`) must always be called at the top level of your functional component, never inside `if` statements or loops.
+
+---
+
+### Sub-step 4 of 6 — Pages and the Route Table 🧭 *(scaffold ✅ → API client ✅ → AuthContext ✅ → **routes** → gateway → tests)*
+
+🎯 **Goal:** Create the `LoginPage` and `DashboardPage` components, and register them in the React Router route table in `App.tsx`.
+
+📁 **Locations:**
+- `frontend/src/pages/LoginPage.tsx`
+- `frontend/src/pages/DashboardPage.tsx`
+- `frontend/src/App.tsx`
+
 ⌨️ **Code:**
-```tsx
+
+```typescript
 // frontend/src/pages/LoginPage.tsx
-// Step 29 ┬╖ the sign-in form. Submits credentials through the AuthContext (which calls the gateway ΓåÆ auth),
+// Step 29 · the sign-in form. Submits credentials through the AuthContext (which calls the gateway → auth),
 // then navigates to the dashboard. Plain controlled inputs here; React Hook Form + Zod arrive in Step 30.
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -525,7 +798,7 @@ export function LoginPage() {
       await login(username, password);
       navigate('/');
     } catch {
-      setError('Login failed ΓÇö check your username and password.');
+      setError('Login failed — check your username and password.');
     } finally {
       setSubmitting(false);
     }
@@ -533,7 +806,7 @@ export function LoginPage() {
 
   return (
     <main>
-      <h1>Build-a-Bank ΓÇö Sign in</h1>
+      <h1>Build-a-Bank — Sign in</h1>
       <form onSubmit={onSubmit} aria-label="Sign in">
         <label>
           Username
@@ -555,7 +828,7 @@ export function LoginPage() {
           />
         </label>
         <button type="submit" disabled={submitting}>
-          {submitting ? 'Signing inΓÇª' : 'Sign in'}
+          {submitting ? 'Signing in…' : 'Sign in'}
         </button>
         {error !== null && <p role="alert">{error}</p>}
       </form>
@@ -563,9 +836,10 @@ export function LoginPage() {
   );
 }
 ```
-```tsx
+
+```typescript
 // frontend/src/pages/DashboardPage.tsx
-// Step 29 ┬╖ the protected landing page ΓÇö proves the auth flow end-to-end by greeting the signed-in user
+// Step 29 · the protected landing page — proves the auth flow end-to-end by greeting the signed-in user
 // (username + roles came from GET /api/auth/me). Real account/transfer screens arrive in Step 30.
 import { useAuth } from '../auth/AuthContext';
 
@@ -573,9 +847,9 @@ export function DashboardPage() {
   const { user, logout } = useAuth();
   return (
     <main>
-      <h1>Welcome to Build-a-Bank ≡ƒÅª</h1>
+      <h1>Welcome to Build-a-Bank 🏦</h1>
       <p>
-        Signed in as <strong>{user?.username ?? 'ΓÇª'}</strong>
+        Signed in as <strong>{user?.username ?? '…'}</strong>
         {user !== null && user.roles.length > 0 ? ` (${user.roles.join(', ')})` : ''}
       </p>
       <button type="button" onClick={logout}>
@@ -585,9 +859,10 @@ export function DashboardPage() {
   );
 }
 ```
-```tsx
+
+```typescript
 // frontend/src/App.tsx
-// Step 29 ┬╖ the route table. /login is public; / is protected (the dashboard); anything else redirects home
+// Step 29 · the route table. /login is public; / is protected (the dashboard); anything else redirects home
 // (the guard then sends you to /login if you're not signed in). Nested layouts/feature routes grow in Step 30.
 import { Navigate, Route, Routes } from 'react-router-dom';
 
@@ -612,101 +887,83 @@ export function App() {
   );
 }
 ```
-```tsx
-// frontend/src/main.tsx
-// Step 29 ┬╖ the SPA entry point. BrowserRouter (real URL routing) wraps AuthProvider (auth state) wraps the App.
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
-
-import { App } from './App';
-import { AuthProvider } from './auth/AuthContext';
-import './index.css';
-
-const rootElement = document.getElementById('root');
-if (rootElement === null) {
-  throw new Error('Root element #root not found in index.html');
-}
-
-createRoot(rootElement).render(
-  <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
-  </StrictMode>,
-);
-```
 
 🔍 **Line-by-line:**
-- `LoginPage` is a controlled form (`value={username} onChange=...`). Plain state here; React Hook Form arrives in Step 30.
-- `DashboardPage` reads `useAuth().user` to greet the user with their loaded roles.
-- `App.tsx` defines the route table: `/login` (public), `/` (wrapped in `<ProtectedRoute>`), and a catch-all `*`.
-- `main.tsx` wraps the app in `<BrowserRouter>` (history API) and `<AuthProvider>`.
+- `event.preventDefault()` — cancels the browser's default form submit behavior (which would trigger a full page reload, wiping out the React state).
+- `setSubmitting(true)` — disables the submit button during the API request, preventing double-submission.
+- `navigate('/')` — redirects to the home route upon successful authentication.
+- `aria-label="Sign in"` and `role="alert"` — provides accessibility (a11y) markers so screen readers correctly announce form interactions and error alerts.
+- `<Route path="*" element={<Navigate to="/" replace />} />` — acts as a catch-all redirect route.
 
-## Sub-step 5 — make the gateway the single front door
+💭 **Under the hood:** React Router listens to changes in the URL state (managed via the HTML5 History API). When navigation is triggered, React Router intercepts the request and swaps the components mounted in the `<Routes>` container without requesting a new HTML document from the server.
 
-🎯 **Goal:** Add the auth route and CORS to the gateway so the SPA can call it cross-origin.
-📁 **Path:** `gateway/src/main/resources/application.yml` and `gateway/src/main/java/com/buildabank/gateway/GatewayCorsConfig.java`
-⌨️ **Code:**
-```yaml
-# Spring Cloud Gateway Server WebMVC (servlet) ΓÇö the single front door. Routes by a service prefix and
-# strips it before forwarding, so external /cif/api/customers/1 ΓåÆ cif's /api/customers/1.
-# (Config prefix is spring.cloud.gateway.server.webmvc.* since Spring Cloud 2025; the old
-#  spring.cloud.gateway.mvc.* is deprecated.)
-spring:
-  application:
-    name: gateway
-  cloud:
-    gateway:
-      server:
-        webmvc:
-          routes:
-            - id: cif
-              uri: ${services.cif.uri:http://localhost:8081}
-              predicates:
-                - Path=/cif/**
-              filters:
-                - StripPrefix=1                          # /cif/api/customers/1 ΓåÆ /api/customers/1
-                - AddResponseHeader=X-Gateway, build-a-bank
-            - id: demand-account
-              uri: ${services.demand-account.uri:http://localhost:8082}
-              predicates:
-                - Path=/bank/**
-              filters:
-                - StripPrefix=1                          # /bank/api/v1/transfers ΓåÆ /api/v1/transfers
-                - AddResponseHeader=X-Gateway, build-a-bank
-            # Step 29: front the auth service so the React app has ONE base URL (the gateway). Auth's own
-            # paths already start with /api/auth, so we DON'T strip ΓÇö /api/auth/login ΓåÆ auth's /api/auth/login.
-            - id: auth
-              uri: ${services.auth.uri:http://localhost:8083}
-              predicates:
-                - Path=/api/auth/**
-              filters:
-                - AddResponseHeader=X-Gateway, build-a-bank
+🔮 **Predict:** What happens if you type an invalid route like `/foo` into the address bar? <details><summary>Answer</summary>The catch-all `*` route matches → redirects to `/` → the `<ProtectedRoute>` guard evaluates the token. If logged in, you see the Dashboard; if not, you are redirected to `/login`.</details>
 
-server:
-  port: 8080                                             # the gateway is the front door
-
-# Step 29: CORS so the React dev app (Vite, http://localhost:5173) can call the gateway from the browser.
-# Comma-separated origins; override per environment (tighten/replace in prod). Consumed by GatewayCorsConfig.
-app:
-  security:
-    cors:
-      allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,gateway                     # /actuator/gateway lists the routes
-
-logging:
-  level:
-    com.buildabank.gateway: INFO
+▶️ **Run & See:**
+Compile verification:
+```bash
+npm run build
 ```
+✅ **Expected output:**
+```
+✓ built in 900ms
+```
+
+✋ **Checkpoint:** Confirm the route table is resolved and compilation succeeds.
+
+💾 **Commit:**
+```bash
+git add frontend/src/pages/LoginPage.tsx frontend/src/pages/DashboardPage.tsx frontend/src/App.tsx
+git commit -m "feat(frontend): add Login and Dashboard pages with route table"
+```
+
+⚠️ **Pitfall:** Forgetting `type="button"` on the Sign Out button. In HTML, the default type of a button inside a form is `submit`. While the sign-out button is not inside a form here, declaring button types explicitly is a robust frontend habit to prevent unexpected form submissions.
+
+---
+
+### Sub-step 5 of 6 — Make the Gateway the Single Front Door 🧭 *(scaffold ✅ → API client ✅ → AuthContext ✅ → routes ✅ → **gateway** → tests)*
+
+🎯 **Goal:** Configure the API gateway to proxy auth requests (`/api/auth/**`) to the authentication service on port 8083 without stripping the prefix, configure a deny-by-default servlet `CorsFilter` allowing only named origins (defaulting to the Vite origin `http://localhost:5173` in development), and extend `GatewayRoutingTest` to verify the configuration.
+
+📁 **Locations:**
+- `gateway/src/main/resources/application.yml` (edit)
+- `gateway/src/main/java/com/buildabank/gateway/GatewayCorsConfig.java` (new file)
+- `gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java` (edit)
+
+⌨️ **Code:**
+
+```diff
+# gateway/src/main/resources/application.yml
+@@ -25,10 +25,25 @@ spring:
+               filters:
+                 - StripPrefix=1                          # /bank/api/v1/transfers → /api/v1/transfers
+                 - AddResponseHeader=X-Gateway, build-a-bank
++            # Step 29: front the auth service so the React app has ONE base URL (the gateway). Auth's own
++            # paths already start with /api/auth, so we DON'T strip — /api/auth/login → auth's /api/auth/login.
++            - id: auth
++              uri: ${services.auth.uri:http://localhost:8083}
++              predicates:
++                - Path=/api/auth/**
++              filters:
++                - AddResponseHeader=X-Gateway, build-a-bank
+ 
+ server:
+   port: 8080                                             # the gateway is the front door
+ 
++# Step 29: CORS so the React dev app (Vite, http://localhost:5173) can call the gateway from the browser.
++# Comma-separated origins; override per environment (tighten/replace in prod). Consumed by GatewayCorsConfig.
++app:
++  security:
++    cors:
++      allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
++
+ management:
+   endpoints:
+     web:
+```
+
 ```java
+// gateway/src/main/java/com/buildabank/gateway/GatewayCorsConfig.java
 package com.buildabank.gateway;
 
 import java.time.Duration;
@@ -720,8 +977,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
 /**
- * Step 29 ┬╖ CORS at the gateway (the front door), so the browser-based React app (Vite dev server,
- * http://localhost:5173) can call it cross-origin. A standard servlet {@link CorsFilter} ΓÇö it answers the
+ * Step 29 · CORS at the gateway (the front door), so the browser-based React app (Vite dev server,
+ * http://localhost:5173) can call it cross-origin. A standard servlet {@link CorsFilter} — it answers the
  * browser's OPTIONS preflight and adds {@code Access-Control-Allow-Origin} to responses.
  *
  * <p><strong>Deny-by-default</strong> (same posture as demand-account, Step 18): only the origins listed in
@@ -734,7 +991,7 @@ class GatewayCorsConfig {
     @Bean
     CorsFilter corsFilter(@Value("${app.security.cors.allowed-origins:}") List<String> allowedOrigins) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(allowedOrigins.stream().filter(o -> !o.isBlank()).toList()); // empty ΓçÆ deny all
+        config.setAllowedOrigins(allowedOrigins.stream().filter(o -> !o.isBlank()).toList()); // empty ⇒ deny all
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
         config.setMaxAge(Duration.ofHours(1));
@@ -746,28 +1003,129 @@ class GatewayCorsConfig {
 }
 ```
 
+```diff
+# gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java
+@@ -56,6 +56,8 @@ class GatewayRoutingTest {
+         String stubUri = "http://localhost:" + stub.getAddress().getPort();
+         registry.add("services.cif.uri", () -> stubUri);
+         registry.add("services.demand-account.uri", () -> stubUri);
++        registry.add("services.auth.uri", () -> stubUri);                                  # Step 29: auth route target
++        registry.add("app.security.cors.allowed-origins", () -> "http://localhost:5173");  # Step 29: allowed dev origin
+     }
+ 
+     @AfterAll
+@@ -77,4 +79,50 @@ class GatewayRoutingTest {
+         assertThat(receivedPath.get()).isEqualTo("/api/customers/1");               // StripPrefix removed "/cif"
+         assertThat(response.headers().firstValue("X-Gateway")).hasValue("build-a-bank");   // gateway filter ran
+     }
++
++    @Test
++    void routesAuthWithoutStrippingPrefix() throws Exception {
++        // Step 29: the React app calls the gateway for login; auth's paths already start with /api/auth,
++        // so the auth route does NOT strip — the downstream receives the path unchanged.
++        HttpResponse<String> response = http.send(
++                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/api/auth/me"))
++                        .GET().build(),
++                HttpResponse.BodyHandlers.ofString());
++
++        assertThat(response.statusCode()).isEqualTo(200);
++        assertThat(receivedPath.get()).isEqualTo("/api/auth/me");                   // NOT stripped
++        assertThat(response.headers().firstValue("X-Gateway")).hasValue("build-a-bank");
++    }
++
++    @Test
++    void corsPreflightFromTheAllowedOriginIsAllowed() throws Exception {
++        // A browser preflight: OPTIONS + Origin + Access-Control-Request-Method. The gateway's CorsFilter
++        // answers it directly with the matching Access-Control-Allow-Origin (the route is never reached).
++        HttpResponse<String> preflight = http.send(
++                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/api/auth/login"))
++                        .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
++                        .header("Origin", "http://localhost:5173")
++                        .header("Access-Control-Request-Method", "POST")
++                        .build(),
++                HttpResponse.BodyHandlers.ofString());
++
++        assertThat(preflight.statusCode()).isEqualTo(200);
++        assertThat(preflight.headers().firstValue("Access-Control-Allow-Origin"))
++                .hasValue("http://localhost:5173");
++    }
++
++    @Test
++    void corsPreflightFromADisallowedOriginIsRejected() throws Exception {
++        // deny-by-default: an origin not on the allow-list gets no Access-Control-Allow-Origin (browser blocks it).
++        HttpResponse<String> preflight = http.send(
++                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/api/auth/login"))
++                        .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
++                        .header("Origin", "http://evil.example")
++                        .header("Access-Control-Request-Method", "POST")
++                        .build(),
++                HttpResponse.BodyHandlers.ofString());
++
++        assertThat(preflight.statusCode()).isEqualTo(403);
++        assertThat(preflight.headers().firstValue("Access-Control-Allow-Origin")).isEmpty();
++    }
+ }
+```
+
 🔍 **Line-by-line:**
-- The `auth` route lacks `StripPrefix=1` because the auth service's endpoints actually start with `/api/auth`.
-- `CorsFilter` allows the Vite dev origin `http://localhost:5173` but defaults to denying others (deny-by-default posture).
+- `- id: auth` — registers the new route in the Spring Cloud Gateway routing config.
+- `predicates: - Path=/api/auth/**` — matches requests starting with `/api/auth/`.
+- No `StripPrefix` filter — keeps `/api/auth` intact because the downstream auth microservice hosts its endpoints directly on `/api/auth/login` and `/api/auth/me`.
+- `app.security.cors.allowed-origins` — custom property read by `@Value` to inject allowed domains.
+- `config.setAllowedHeaders(...)` — specifies allowed request headers, including custom ones like `Idempotency-Key` (Step 14).
+- `config.setMaxAge(Duration.ofHours(1))` — sets the preflight cache duration. The browser will reuse the preflight confirmation for an hour without issuing redundant `OPTIONS` requests.
+- `receivedPath.get()` in tests — asserts that the mock server receives the exact un-stripped path `/api/auth/me`.
 
-💭 **Under the hood:** When the browser makes a cross-origin POST with `application/json`, it first sends an `OPTIONS` preflight. The `CorsFilter` intercepts this and answers with `Access-Control-Allow-Origin: http://localhost:5173`.
-🔮 **Predict:** What happens if the SPA runs on port `3000` but calls the gateway? <details><summary>Answer</summary>The preflight fails (403 or missing ACA-O header) because `localhost:3000` is not in `allowed-origins`. The browser blocks the fetch.</details>
+💭 **Under the hood:** Standard Spring Cloud Gateway MVC executes inside the Tomcat servlet container. Our `GatewayCorsConfig` registers a `CorsFilter`, which sits at the very beginning of the servlet filter chain. If a request is an `OPTIONS` preflight, the filter immediately writes the matching headers to the response and halts the chain (returning `200 OK` to the browser without routing downstream).
 
-## Sub-step 6 — test the SPA (Vitest + Testing Library)
+🔮 **Predict:** What status code does the gateway return for a preflight request from a disallowed origin? <details><summary>Answer</summary>It returns `403 Forbidden` and omits the `Access-Control-Allow-Origin` header, causing the browser to reject the cross-origin call.</details>
 
-🎯 **Goal:** Unit test the API client, route guard, and login page. Update the gateway routing test.
-📁 **Path:** `frontend/src/test/setup.ts`, `frontend/src/api/client.test.ts`, `frontend/src/auth/ProtectedRoute.test.tsx`, `frontend/src/pages/LoginPage.test.tsx`, `gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java`
+▶️ **Run & See:**
+Execute the gateway routing and CORS tests to verify the config:
+```bash
+./mvnw -pl gateway -Dtest=GatewayRoutingTest test
+```
+✅ **Expected output:**
+```
+[INFO] Running com.buildabank.gateway.GatewayRoutingTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.283 s -- in com.buildabank.gateway.GatewayRoutingTest
+[INFO] BUILD SUCCESS
+```
+
+✋ **Checkpoint:** Verify that all 5 routing tests (including auth routing, allowed CORS preflight, and blocked CORS preflight) pass.
+
+💾 **Commit:**
+```bash
+git add gateway/src/main/resources/application.yml gateway/src/main/java/com/buildabank/gateway/GatewayCorsConfig.java gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java
+git commit -m "feat(gateway): front auth service and enable deny-by-default CORS"
+```
+
+⚠️ **Pitfall:** Running `StripPrefix=1` on the auth route. If you add it by accident, the gateway will forward a request for `/api/auth/login` as `/auth/login` downstream, which will result in a `404 Not Found` because the auth microservice expects the prefix.
+
+---
+
+### Sub-step 6 of 6 — Test the SPA (Vitest + Testing Library) 🧭 *(scaffold ✅ → API client ✅ → AuthContext ✅ → routes ✅ → gateway ✅ → **tests**)*
+
+🎯 **Goal:** Implement the unit and integration tests for the API client, protected route guard, and login page, and provide the global jsdom `localStorage` shim.
+
+📁 **Locations:**
+- `frontend/src/test/setup.ts`
+- `frontend/src/api/client.test.ts`
+- `frontend/src/auth/ProtectedRoute.test.tsx`
+- `frontend/src/pages/LoginPage.test.tsx`
+
 ⌨️ **Code:**
+
 ```typescript
 // frontend/src/test/setup.ts
-// Step 29 ┬╖ Vitest setup ΓÇö registers jest-dom matchers (toBeInTheDocument, ΓÇª) and resets DOM + localStorage
+// Step 29 · Vitest setup — registers jest-dom matchers (toBeInTheDocument, …) and resets DOM + localStorage
 // between tests so they're independent.
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
 // jsdom's localStorage getter throws for an opaque origin, so Vitest leaves the global `undefined`. The app
-// uses localStorage (AuthContext), so install a tiny in-memory Storage for tests ΓÇö deterministic and isolated.
+// uses localStorage (AuthContext), so install a tiny in-memory Storage for tests — deterministic and isolated.
 if (typeof globalThis.localStorage === 'undefined') {
   const store = new Map<string, string>();
   globalThis.localStorage = {
@@ -787,9 +1145,10 @@ afterEach(() => {
   localStorage.clear();
 });
 ```
+
 ```typescript
 // frontend/src/api/client.test.ts
-// Step 29 ┬╖ unit-test the HTTP client by stubbing global fetch ΓÇö proves the request shape (path, method, body,
+// Step 29 · unit-test the HTTP client by stubbing global fetch — proves the request shape (path, method, body,
 // bearer header) and error handling match the auth contract, with no network.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -838,9 +1197,10 @@ describe('api client', () => {
   });
 });
 ```
-```tsx
+
+```typescript
 // frontend/src/auth/ProtectedRoute.test.tsx
-// Step 29 ┬╖ route-guard test. With no token the guard redirects to /login; with a token it renders the
+// Step 29 · route-guard test. With no token the guard redirects to /login; with a token it renders the
 // protected content. (AuthProvider seeds its token from localStorage, so we drive auth state via localStorage.)
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -885,10 +1245,11 @@ describe('ProtectedRoute', () => {
   });
 });
 ```
-```tsx
+
+```typescript
 // frontend/src/pages/LoginPage.test.tsx
-// Step 29 ┬╖ component test (Testing Library + user-event). The api/client module is mocked (MSW arrives in
-// Step 31), so we assert the page wires the form to the auth call and surfaces errors ΓÇö no real network.
+// Step 29 · component test (Testing Library + user-event). The api/client module is mocked (MSW arrives in
+// Step 31), so we assert the page wires the form to the auth call and surfaces errors — no real network.
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -937,107 +1298,115 @@ describe('LoginPage', () => {
   });
 });
 ```
-```diff
-diff --git a/gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java b/gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java
-index d0549bd..fe4867d 100644
---- a/gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java
-+++ b/gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java
-@@ -56,6 +56,8 @@ class GatewayRoutingTest {
-         String stubUri = "http://localhost:" + stub.getAddress().getPort();
-         registry.add("services.cif.uri", () -> stubUri);
-         registry.add("services.demand-account.uri", () -> stubUri);
-+        registry.add("services.auth.uri", () -> stubUri);                                  // Step 29: auth route target
-+        registry.add("app.security.cors.allowed-origins", () -> "http://localhost:5173");  // Step 29: allowed dev origin
-     }
- 
-     @AfterAll
-@@ -77,4 +79,50 @@ class GatewayRoutingTest {
-         assertThat(receivedPath.get()).isEqualTo("/api/customers/1");               // StripPrefix removed "/cif"
-         assertThat(response.headers().firstValue("X-Gateway")).hasValue("build-a-bank");   // gateway filter ran
-     }
-+
-+    @Test
-+    void routesAuthWithoutStrippingPrefix() throws Exception {
-+        // Step 29: the React app calls the gateway for login; auth's paths already start with /api/auth,
-+        // so the auth route does NOT strip ΓÇö the downstream receives the path unchanged.
-+        HttpResponse<String> response = http.send(
-+                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/api/auth/me"))
-+                        .GET().build(),
-+                HttpResponse.BodyHandlers.ofString());
-+
-+        assertThat(response.statusCode()).isEqualTo(200);
-+        assertThat(receivedPath.get()).isEqualTo("/api/auth/me");                   // NOT stripped
-+        assertThat(response.headers().firstValue("X-Gateway")).hasValue("build-a-bank");
-+    }
-+
-+    @Test
-+    void corsPreflightFromTheAllowedOriginIsAllowed() throws Exception {
-+        // A browser preflight: OPTIONS + Origin + Access-Control-Request-Method. The gateway's CorsFilter
-+        // answers it directly with the matching Access-Control-Allow-Origin (the route is never reached).
-+        HttpResponse<String> preflight = http.send(
-+                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/api/auth/login"))
-+                        .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
-+                        .header("Origin", "http://localhost:5173")
-+                        .header("Access-Control-Request-Method", "POST")
-+                        .build(),
-+                HttpResponse.BodyHandlers.ofString());
-+
-+        assertThat(preflight.statusCode()).isEqualTo(200);
-+        assertThat(preflight.headers().firstValue("Access-Control-Allow-Origin"))
-+                .hasValue("http://localhost:5173");
-+    }
-+
-+    @Test
-+    void corsPreflightFromADisallowedOriginIsRejected() throws Exception {
-+        // deny-by-default: an origin not on the allow-list gets no Access-Control-Allow-Origin (browser blocks it).
-+        HttpResponse<String> preflight = http.send(
-+                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/api/auth/login"))
-+                        .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
-+                        .header("Origin", "http://evil.example")
-+                        .header("Access-Control-Request-Method", "POST")
-+                        .build(),
-+                HttpResponse.BodyHandlers.ofString());
-+
-+        assertThat(preflight.statusCode()).isEqualTo(403);
-+        assertThat(preflight.headers().firstValue("Access-Control-Allow-Origin")).isEmpty();
-+    }
- }
-```
 
 🔍 **Line-by-line:**
-- `setup.ts` shims `localStorage` because jsdom's native one throws on `about:blank`.
-- `client.test.ts` uses `vi.stubGlobal('fetch', ...)` to assert the network shape without real network calls.
-- `LoginPage.test.tsx` uses `userEvent` (simulates real keystrokes) and mocks `api.login`.
-- `GatewayRoutingTest` adds cases for the `auth` non-stripped route and CORS preflights (`OPTIONS` request asserts `Access-Control-Allow-Origin`).
+- `vi.stubGlobal('fetch', fetchMock)` — intercepts all native `fetch` calls and replaces them with a Vitest mock function, preventing tests from making network requests.
+- `cleanup()` in `setup.ts` — automatically unmounts React components from the virtual DOM after each test to prevent memory leaks and state pollution between specs.
+- `vi.mock('../api/client')` — mocks the entire client module. The imports in `LoginPage.tsx` resolve to Vitest spies instead of the real fetch calls.
+- `userEvent.type(...)` — triggers realistic browser event chains (keydown, keypress, keyup, input, change) rather than forcing values on elements, replicating real user behavior.
+- `screen.getByLabelText(/username/i)` — queries elements matching their linked label text, enforcing accessible HTML design (labels must have `for` or wrap input).
 
-⚠️ **Pitfall (we hit it):** jsdom's `localStorage` getter throws for an opaque origin, so Vitest leaves the global `undefined` (and your app breaks in tests). Fix: install a tiny in-memory `localStorage` in `src/test/setup.ts`.
+💭 **Under the hood:** When `render()` is called, Testing Library mounts the component inside jsdom's simulated document body. When events are triggered (via `userEvent`), the jsdom event propagation loop fires. Testing Library assertions query the simulated DOM directly, asserting on elements and properties just like a browser context would.
 
-🔬 **Break-it (the §12.3 proof):** disable the guard (`if (false && !isAuthenticated)`) → the "redirects to /login" test fails (it renders the protected content). Put it back.
+🔮 **Predict:** What happens if the `<LoginPage>` does not wrap input inside a `<label>` or associate them with `id` + `htmlFor`? <details><summary>Answer</summary>`screen.getByLabelText(/username/i)` will fail to find the element, and the test will fail, proving that the test acts as an accessibility validator.</details>
 
-💾 **Commit:** `feat(frontend): Step 29 React+TS+Vite SPA — login/auth flow + routing; gateway fronts auth + CORS`
-
-## 🎮 Play With It
-
+▶️ **Run & See:**
+Run the Vitest test suite:
 ```bash
-# Terminal 1 — backend (the SPA's front door + auth). From the repo root:
-APP_CORS_ALLOWED_ORIGINS=http://localhost:5173 ./mvnw -pl services/auth spring-boot:run   # :8083
-./mvnw -pl gateway spring-boot:run                                                          # :8080 (new shell)
-# Terminal 2 — the SPA:
-npm --prefix frontend run dev      # open http://localhost:5173 → sign in as alice / password
+npm test
+```
+✅ **Expected output:**
+```
+✓ src/api/client.test.ts (3 tests)
+✓ src/auth/ProtectedRoute.test.tsx (2 tests)
+✓ src/pages/LoginPage.test.tsx (2 tests)
+ Test Files  3 passed (3)
+      Tests  7 passed (7)
 ```
 
-🧪 **Little experiments:** sign in as `alice`/`password` then `admin`/`admin123` — the dashboard shows different roles. Open DevTools → Application → Local Storage: see `bab.token`. Delete it, refresh: you're bounced to `/login` (the guard). Stop the gateway and try to log in: the error message appears.
+✋ **Checkpoint:** Confirm that 7 tests in 3 files compile and pass.
 
-> [!NOTE]
-> The **live browser** flow is the one thing this course's sandbox can't self-verify (no browser). Everything else — build, lint, the component/route tests, and the gateway's CORS preflight — is verified with real output below (§12.8 honesty).
+💾 **Commit:**
+```bash
+git add frontend/src/test/setup.ts frontend/src/api/client.test.ts frontend/src/auth/ProtectedRoute.test.tsx frontend/src/pages/LoginPage.test.tsx
+git commit -m "test(frontend): add unit and component tests with Vitest and Testing Library"
+```
 
-## 🏁 The Finished Result
-
-`step-29-end`: a working React+TS SPA with login, routing, and a guard, talking to the gateway; the gateway is the single front door (auth + CORS). **✅ Definition of Done:** `npm run build`, `npm run lint`, `npm test` green; the gateway tests pass; `./mvnw verify` green; `bash steps/step-29/smoke.sh` passes; committed/tagged `step-29-end`.
+⚠️ **Pitfall:** Accessing `localStorage` inside jsdom tests before polyfilling it. If jsdom defaults to an opaque origin, accessing `window.localStorage` throws a security exception. The polyfill in `setup.ts` isolates tests from local browser configuration quirks.
 
 ---
 
-<a id="prove"></a>
+## 🔁 End-to-End System Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User (Browser)
+    participant SPA as React SPA (:5173)
+    participant GW as Gateway (:8080)
+    participant Auth as Auth Service (:8083)
+
+    User->>SPA: Type credentials & click "Sign in"
+    SPA->>GW: POST /api/auth/login (Origin: localhost:5173)
+    Note over GW: CorsFilter intercept & validate Origin
+    GW->>Auth: Forward POST /api/auth/login
+    Auth-->>GW: Return 200 OK + JWT Token
+    GW-->>SPA: Return 200 OK + JWT Token
+    Note over SPA: Save JWT to localStorage
+    SPA->>GW: GET /api/auth/me (Authorization: Bearer JWT)
+    GW->>Auth: Forward GET /api/auth/me (with Bearer)
+    Auth-->>GW: Return 200 OK + User info (alice, [ROLE_USER])
+    GW-->>SPA: Return 200 OK + User info
+    Note over SPA: Update AuthContext state
+    SPA-->>User: Render Dashboard (Greet Alice)
+```
+
+---
+
+<a id="play"></a>
+
+# 🎮 Play With It
+
+## Running the Complete Flow Locally
+
+To see the login flow and CORS preflight negotiation in action, boot the gateway, the authentication service, and the React application:
+
+```bash
+# Terminal 1: Run the Authentication Microservice
+APP_CORS_ALLOWED_ORIGINS=http://localhost:5173 ./mvnw -pl services/auth spring-boot:run
+
+# Terminal 2: Run the API Gateway
+./mvnw -pl gateway spring-boot:run
+
+# Terminal 3: Launch the React SPA
+cd frontend
+npm run dev
+```
+
+Open your browser at `http://localhost:5173`. You will be redirected to the login form. 
+
+### 🧪 Little Experiments to Try:
+
+1. **Successful Authentication:** Sign in using the credentials `alice`/`password` or `admin`/`admin123`. The dashboard should render, showing your username and roles (e.g. `Signed in as alice (ROLE_USER)`).
+2. **Persistence Check:** Refresh the page. Because the token is saved in `localStorage`, the session survives and you remain on the Dashboard.
+3. **Session Revocation:** Open DevTools → Application → Local Storage → `http://localhost:5173`. Select `bab.token` and click delete. Refresh the page: the `<ProtectedRoute>` guard detects the missing token and instantly redirects you back to `/login`.
+4. **CORS Hardening Check:** Open a terminal and simulate a cross-origin preflight from a disallowed site:
+   ```bash
+   curl -i -X OPTIONS http://localhost:8080/api/auth/login \
+     -H "Origin: http://malicious.example" \
+     -H "Access-Control-Request-Method: POST"
+   ```
+   You will receive an HTTP `403 Forbidden` response and no `Access-Control-Allow-Origin` header, proving the gateway blocked the call. Now run it from the allowed origin:
+   ```bash
+   curl -i -X OPTIONS http://localhost:8080/api/auth/login \
+     -H "Origin: http://localhost:5173" \
+     -H "Access-Control-Request-Method: POST"
+   ```
+   You will receive `200 OK` with `Access-Control-Allow-Origin: http://localhost:5173`, proving preflight negotiation works.
+
+---
+
+<a id="verify"></a>
 
 # D · 🔬 Prove It Works — Verification Log
 
@@ -1101,7 +1470,8 @@ covering: routes-to-downstream (StripPrefix), **routes `/api/auth/me` WITHOUT st
 
 **8 · Build** — full-repo `./mvnw verify` → BUILD SUCCESS (14 modules; gateway change included; quality gates green). Clean-room: fresh clone + `npm ci` + build + test green.
 
-**§12.8 honesty:** the **live browser** cross-origin flow can't run in this sandbox (no browser) — verified instead by the headless CORS preflight test + the component/route tests. The JWT lives in `localStorage` (XSS-exposed) — a teaching simplification hardened in Step 32. One benign ESLint `react-refresh` warning remains (DX-only; lint exits 0).
+> [!NOTE]
+> **§12.8 honesty note & test-count drift:** Re-running the frontend test suite at `HEAD` reports 21 tests in 9 test files, and running the gateway test reports 5 tests, because later steps (Steps 30–32) have added components, hooks, translation, and accessibility tests to both the frontend and gateway. The recorded 7 tests in 3 files and 4 gateway tests remain the historical truth as of `step-29-end`. The live browser cross-origin flow cannot run in this headless sandbox (no browser) — verified instead by the headless CORS preflight tests + the component/route tests. The JWT lives in `localStorage` (XSS-exposed) — a teaching simplification hardened in Step 32. One benign ESLint `react-refresh` warning remains (DX-only; lint exits 0).
 
 ---
 
@@ -1119,11 +1489,12 @@ covering: routes-to-downstream (StripPrefix), **routes `/api/auth/me` WITHOUT st
 
 ## 💼 Interview Prep
 
-1. **Walk me through your frontend auth flow.** *Login posts credentials → JWT; store it (localStorage here, with the XSS caveat); expose auth via context; attach `Bearer` to API calls; a ProtectedRoute redirects unauthenticated users. /me resolves the current user.* **(Common.)**
-2. **How do you protect a route in React Router?** *A guard component reads auth state from context and either renders the children or `<Navigate to="/login" replace/>`. `replace` so Back doesn't re-enter the guard.*
-3. **Where do you store a JWT and why?** *Trade-off: localStorage (simple, XSS-exposed) vs httpOnly cookie (XSS-safe, CSRF to handle) vs in-memory + refresh token (safest, lost on refresh). State the threat model.*
-4. **What is CORS and why did the gateway need it?** *Browsers block cross-origin requests unless the server opts in via `Access-Control-Allow-Origin`. The SPA (:5173) and gateway (:8080) are different origins, so the gateway must allow the SPA's origin (deny-by-default).*
-5. **(Gotcha) Why does Vite commit a lockfile if package.json has versions?** *package.json has ranges; the lockfile pins exact resolved versions of the whole tree for reproducible `npm ci`.*
+We have appended the core Interview Q&As for this step to the cumulative [docs/interview-bank.md](../../docs/interview-bank.md). Review them there:
+- **Walk me through your frontend auth flow.** (Standard full-stack question.)
+- **How do you protect a route in React Router?** (History API navigation & replace redirects.)
+- **Where do you store a JWT and why?** (XSS vs CSRF trade-offs).
+- **What is CORS and why did the gateway need it?** (Cross-origin preflights and allowed origins).
+- **Why does Vite commit a lockfile if package.json has versions?** (Dependency version pinning for reproducible builds).
 
 ## 🏋️ Your Turn: Practice & Challenges
 
@@ -1148,8 +1519,8 @@ covering: routes-to-downstream (StripPrefix), **routes `/api/auth/me` WITHOUT st
 
 ## 📚 Learn More & Glossary
 
-- Vite guide; React docs (you-might-not-need-an-effect, hooks); React Router docs; Testing Library (guiding principles); Vitest docs; MDN on CORS and Web Storage.
-- **Glossary:** *SPA*, *Vite / ESM dev server*, *client-side routing*, *route guard*, *React context*, *JWT / Bearer*, *CORS / preflight*, *Vitest / jsdom*, *Testing Library*, *lockfile / `npm ci`*.
+- We have added the definitions of the key terms for this step to [docs/glossary.md](../../docs/glossary.md). Review terms like **SPA**, **Vite / ESM dev server**, **client-side routing**, **route guard**, **React context**, **JWT / Bearer**, **CORS / preflight**, **Vitest / jsdom**, **Testing Library**, and **lockfile / `npm ci`** there.
+- Curated documentation: [Vite Guide](https://vite.dev/guide/), [React Documentation](https://react.dev/), [React Router Documentation](https://reactrouter.com/), [Testing Library Guiding Principles](https://testing-library.com/docs/guiding-principles/).
 
 ## 🏆 Recap & Study Notes
 
@@ -1162,7 +1533,19 @@ gateway**, which we extended to front `auth` (no StripPrefix) with **deny-by-def
 
 **(b) Key terms:** SPA, Vite, ESM dev server, client-side routing, route guard, React context, JWT/Bearer, CORS/preflight, Vitest, Testing Library, lockfile.
 
-**(c) 🧠 Test Yourself:** ① Why is Vite's dev server fast? ② How does ProtectedRoute work? ③ Where do you store a JWT and the trade-off? ④ Why does the SPA use one origin? ⑤ How did you prove the guard test is meaningful? <details><summary>Answers</summary>① Native ESM in dev (no bundling), esbuild transpile, per-module HMR. ② Reads auth from context; renders children or `<Navigate to="/login" replace/>`. ③ localStorage (simple, XSS-exposed) vs httpOnly cookie vs in-memory+refresh — threat-model-dependent. ④ One base URL + one CORS policy + cross-cutting concerns at the gateway. ⑤ Disabled the guard → the redirect test failed (rendered protected content) → reverted.</details>
+**(c) 🧠 Test Yourself:**
+1. Why is Vite's dev server fast?
+2. How does ProtectedRoute work?
+3. Where do you store a JWT and what are the trade-offs?
+4. Why does the SPA use one origin?
+5. How did you prove the guard test is meaningful?
+<details><summary>Answers</summary>
+1. Native ESM in dev (no bundling), esbuild transpile, per-module HMR.
+2. Reads auth from context; renders children or `<Navigate to="/login" replace/>`.
+3. localStorage (simple, XSS-exposed) vs httpOnly cookie vs in-memory+refresh — threat-model-dependent.
+4. One base URL + one CORS policy + cross-cutting concerns at the gateway.
+5. Disabled the guard → the redirect test failed (rendered protected content) → reverted.
+</details>
 
 **(d) 🔗 How this connects:** consumes the **auth** (16) + **gateway** (15) backend with the **CORS** posture from 18. **Next: Step 30** — TanStack Query (data fetching/caching), React Hook Form + Zod (forms/validation), and live WebSocket updates; then Step 31 (Playwright E2E + MSW + a11y/i18n) and Step 32 (token refresh, bundling, Dockerize + serve via the gateway).
 

@@ -1,0 +1,11 @@
+### Get Hello Greeting (Step 1 endpoint, now with virtual threads in Step 11)
+GET http://localhost:8080/api/hello
+
+### Get Health Status of Hello Service
+GET http://localhost:8080/actuator/health
+
+### Get Actuator Beans list (to verify moneyFormatter bean exists)
+GET http://localhost:8080/actuator/beans
+
+### Get Actuator ConfigProps (to inspect buildabank.money properties)
+GET http://localhost:8080/actuator/configprops

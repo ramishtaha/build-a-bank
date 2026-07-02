@@ -6,25 +6,6 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 
 ---
 
-## Step 9 — Hibernate Performance & Correctness
-
-- **persistence context** — Hibernate's 1st-level cache, scoped to the transaction. It holds all entities loaded or saved during that transaction.
-- **dirty checking** — Hibernate's mechanism for detecting changes. At flush time, it compares managed entities against their initial state and automatically issues `UPDATE` statements for any changes.
-- **flush** — The process of synchronizing the persistence context with the underlying database by emitting pending SQL statements. Distinct from *commit*.
-- **lazy loading (LAZY)** — Deferring the initialization of an association (like a collection) until it is explicitly accessed.
-- **proxy** — A lightweight stand-in object created by Hibernate to represent a lazily-loaded entity or collection.
-- **`LazyInitializationException`** — An error thrown when code tries to initialize a proxy after the session (persistence context) has closed.
-- **N+1 problem** — A performance anti-pattern where an application executes 1 query to fetch N parent records, and then N additional queries to fetch their children (1 + N queries).
-- **`@EntityGraph` / `JOIN FETCH`** — Solutions to the N+1 problem that instruct Hibernate to fetch associations eagerly in a single `LEFT JOIN` query.
-- **projection** — A Spring Data feature (via interfaces or DTOs) that allows selecting only a subset of columns from the database, bypassing entity management entirely.
-- **optimistic locking / `@Version`** — A concurrency control mechanism that uses a version number/timestamp to detect conflicts. It prevents lost updates without taking physical database locks.
-- **lost update** — A concurrency anomaly where a write silently overwrites another's changes because both transactions read the original state before either wrote.
-- **pessimistic locking** — A concurrency control mechanism that uses actual database row locks (e.g., `SELECT ... FOR UPDATE`) to block other transactions from reading or writing the locked rows.
-
-
-
----
-
 ## Step 11 — Concurrency & Thread Safety
 
 - **JMM (Java Memory Model)** — the JLS contract defining what one thread is guaranteed to see of another's actions. It governs three things: atomicity, visibility, and ordering.
@@ -449,43 +430,136 @@ A cumulative glossary: each step contributes its **Key Terms**, defined in plain
 - **C4 component diagram** — the level-3 view in the C4 model (Context → Container → Component → Code). Modulith renders the module graph as a C4 component diagram; isolated modules with no inter-module edges (e.g. `client`) are omitted from it but still counted by `verify()`.
 - **BOM (Bill of Materials), import scope** — a POM imported via `<type>pom</type><scope>import</scope>` into `dependencyManagement` that curates mutually-compatible versions; children then declare artifacts with **no `<version>`**. We import `spring-modulith-bom` so the Modulith deps need no explicit version (ArchUnit, with no BOM here, is pinned via the `archunit.version` property — note the asymmetry).
 
+---
 
-### Step 10
-- Seq Scan (read all rows)
-- Index Scan (B-tree → heap)
-- Bitmap Index Scan (index → page bitmap → ordered heap reads)
-- Index Only Scan (answer from index alone)
-- covering index (`INCLUDE` payload)
-- MVCC (multi-version concurrency control)
-- snapshot (a txn's visible-version set)
-- `xmin`/`xmax` (row-version system columns)
-- VACUUM (reclaim dead versions; set visibility map)
-- dirty/non-repeatable/phantom read
-- write skew
-- SSI (Serializable Snapshot Isolation)
-- SQLSTATE 40001 (serialization failure → retry)
-- partition pruning
-- connection pool
-- `connectionTimeout`
-- `CREATE INDEX CONCURRENTLY`
-- expand-contract.
+## Step 9 — Hibernate Performance & Correctness
 
-- **Mutation Testing**: A testing technique that introduces small changes (mutations) to the codebase and checks if the test suite catches them (fails). Measures test strength, not just coverage.
-- **Surviving Mutant**: A mutation that did not cause any tests to fail. Indicates a gap in the test suite's assertions.
-- **Property-based Testing**: A testing approach where properties or invariants of a system are defined, and thousands of randomized inputs are generated to verify that the properties hold for all generated cases.
-- **Spring Boot Starter**: A dependency descriptor that bundles a set of transitive dependencies, an `@AutoConfiguration`, and an `AutoConfiguration.imports` file to automatically provide a feature to any consumer placing it on their classpath.
-- **MockMvcTester**: The AssertJ-fluent successor to `MockMvc.perform` in Spring Framework 7.
-- **Code-Quality Gates**: Automated checks (e.g. Spotless, Checkstyle) wired into the build lifecycle (`verify` phase) to enforce formatting and style rules, failing the build on violation.
+- **persistence context** — Hibernate's per-transaction first-level cache (an in-memory map of id → managed entity) that ensures the same database row is loaded only once within a transaction.
+- **dirty checking** — the Hibernate mechanism that snapshots managed entities on load and, at flush time, compares their current state to the snapshot to auto-generate SQL `UPDATE`s for changed fields — you never write raw updates for managed entities.
+- **flush** — the operation where Hibernate pushes pending SQL writes to the database; it occurs automatically on commit, before queries that might be affected, or on explicit request, but does not commit the transaction (flush ≠ commit).
+- **LAZY fetching** — an ORM association strategy where related entities are not loaded from the database until they are explicitly accessed in the code (contrasted with EAGER, which loads them immediately).
+- **proxy (Hibernate)** — a dynamically generated subclass that stands in for a lazy association, triggering a database query only when one of its getters is invoked.
+- **`LazyInitializationException`** — the exception thrown when code attempts to access a lazy association after the Hibernate session (or transaction) that loaded the entity has been closed.
+- **OSIV (Open-Session-in-View)** — a Spring Boot default mechanism that keeps the Hibernate session open for the entire duration of an HTTP request; we disable it (`open-in-view: false`) to force disciplined, explicit fetching in the service layer.
+- **N+1 problem** — a common ORM performance anti-pattern where loading N parent entities and traversing their lazy associations fires 1 initial query followed by N subsequent queries (one per parent) to load the children.
+- **`@EntityGraph`** — a JPA query hint that specifies an association to load eagerly via a left join, overriding the default lazy fetching configuration for a specific query to fix the N+1 problem.
+- **interface projection** — a Spring Data feature where you declare a Java interface with getters to return a lightweight, proxy-backed subset of columns from a database query, preventing full entity hydration.
+- **optimistic locking** — a concurrency control strategy that assumes conflicts are rare and verifies that a row's version has not changed since it was read before committing an update.
+- **`@Version`** — the JPA annotation used to mark a version field (usually a `long`) that Hibernate increments on every update, using it in the `UPDATE` query's `WHERE` clause to detect concurrent modifications.
+- **lost update** — a concurrency anomaly where one transaction silently overwrites the uncommitted or concurrent changes of another transaction without detection.
+- **pessimistic locking** — a concurrency control strategy that takes a database-level lock (e.g., `SELECT … FOR UPDATE`) on read to prevent other transactions from modifying the row until the transaction commits (Step 12).
 
-## Step 29 — React SPA Foundations, Auth & Routing
+## Step 10 — Relational Databases Up Close
 
-- **SPA (Single-Page Application)**: A web app that loads a single HTML shell and relies on JavaScript to render content and fetch data via APIs, enabling fast, app-like transitions.
-- **Vite / ESM dev server**: A modern build tool. In dev, it serves native ES modules directly to the browser (no bundling) for near-instant starts and hot-module replacement (HMR).
-- **client-side routing**: Changing the URL and rendering different views using JavaScript (e.g., React Router) without making a full-page request to the server.
-- **route guard**: A component that intercepts navigation to a protected route and redirects the user (e.g., to `/login`) if they lack the required authentication or permissions.
-- **React context**: A built-in dependency injection mechanism in React to share state (like the current user) across the component tree without passing props down manually.
-- **JWT / Bearer**: JSON Web Token, passed in the `Authorization: Bearer <token>` header, used to securely transmit the user's identity and roles to stateless backends.
-- **CORS / preflight**: Cross-Origin Resource Sharing. A browser security feature. A preflight is an `OPTIONS` request the browser sends to check if a cross-origin server allows the upcoming request.
-- **Vitest**: A Vite-native test runner with a Jest-compatible API, designed to test frontend code using the exact same build pipeline as the app.
-- **Testing Library**: A family of testing utilities that encourage querying the DOM as a user would (e.g., by text or role) rather than asserting on component implementation details.
-- **lockfile**: A file (`package-lock.json`) that pins the exact, resolved versions of all direct and transitive dependencies, ensuring reproducible builds across machines.
+- **Seq Scan (Sequential Scan)** — a database access path where the engine scans every block of a table in physical order to filter rows matching a query predicate.
+- **Index Scan** — a database access path where the engine traverses a B-tree index to find matching keys, then fetches those specific rows from the table heap using random I/O.
+- **Bitmap Index Scan** — a cost-based hybrid scan where the engine walks an index to build a memory bitmap of matching table pages, then reads those pages in physical order (converting random I/O to sequential).
+- **Index Only Scan** — a high-performance access path where the query is answered entirely from the index page without consulting the table heap, requiring a covering index and an up-to-date visibility map.
+- **covering index** — an index that stores non-key payload columns (via `INCLUDE`) alongside index keys, allowing specific queries to run as Index Only Scans.
+- **MVCC (Multi-Version Concurrency Control)** — a concurrency control method where the database keeps multiple physical versions of rows so transactions can read stable snapshots of data without blocking or waiting on writers.
+- **snapshot (MVCC)** — an in-memory boundary representing the set of active and committed transaction IDs at a specific point in time, deciding which row versions are visible to a transaction.
+- **`xmin` / `xmax`** — hidden system columns in Postgres indicating the transaction IDs that created (`xmin`) and deleted or updated (`xmax`) a specific row version.
+- **VACUUM** — an administrative database process that reclaims storage occupied by dead row versions (garbage-collection) and updates the visibility map to enable Index Only Scans.
+- **dirty read** — an isolation anomaly where a transaction reads uncommitted changes made by another concurrent transaction (impossible in Postgres).
+- **non-repeatable read** — an isolation anomaly where a transaction re-reads a row and sees changed values because another transaction committed an update in between.
+- **phantom read** — an isolation anomaly where a transaction re-runs a range query and sees new rows added by another concurrent transaction that committed in between.
+- **write skew** — a concurrent anomaly surviving REPEATABLE READ snapshot isolation where two transactions read overlapping data, evaluate an invariant, and write to *different* rows, violating a cross-row system rule.
+- **SSI (Serializable Snapshot Isolation)** — the algorithm behind Postgres's SERIALIZABLE isolation that tracks read-write dependency cycles at runtime and aborts one transaction to prevent write skew.
+- **SQLSTATE 40001** (serialization failure) — the standard SQL error code returned by Postgres when a SERIALIZABLE transaction is aborted to prevent a concurrency conflict, indicating that the application must retry the operation.
+- **partition pruning** — an optimizer optimization where the planner discards irrelevant range, list, or hash partitions from a query plan based on the query's filter predicates.
+- **connection pool** — a managed queue of pre-allocated physical database connections (e.g., HikariCP) shared across application threads to bypass the high latency of connection setup.
+- **`connectionTimeout`** — the maximum duration in milliseconds that an application thread will wait to borrow a connection from the pool before throwing a timeout exception.
+- **`CREATE INDEX CONCURRENTLY`** — a Postgres command that builds an index without locking out concurrent writes, requiring autocommit to be active because it manages its own internal commits.
+- **expand-contract** — a multi-step zero-downtime database migration pattern where a new column or table is introduced (expand), writes are duplicated, and the old column or table is eventually removed (contract).
+- **read replica** — a secondary database instance that continuously replays the write-ahead log (WAL) from the primary database to serve read-only queries at scale.
+- **replication lag** — the delay in bytes or time between a transaction committing on the primary database and being replayed on a read replica, causing potential read-after-write consistency anomalies.
+
+## Step 28 — Testing & Quality Mastery + Your Own Starter
+
+- **mutation testing** — A test-quality analysis technique where a tool makes tiny edits to your compiled bytecode (mutating the logic) and re-runs your tests. If a test fails, the mutation is *killed*; if all tests pass, it *survived*, exposing an untested execution path or missing assertion.
+- **mutant / killed / survived** — In mutation testing, a **mutant** is a single altered version of your compiled code. A mutant is **killed** if the test suite fails when run against it (which is the goal, indicating the tests caught the bug). A mutant **survived** if all tests still pass despite the broken logic.
+- **mutation score** — The percentage of generated mutants that were successfully killed by your test suite (`killed ÷ total`). It measures test *effectiveness*, unlike line coverage which only measures test *execution*.
+- **mutation threshold** — A configured score (e.g. 90%) below which the mutation testing plugin (PITest) will fail the build, serving as a quality gate for tests.
+- **property-based testing** — A testing methodology where instead of asserting a single hand-picked example (e.g. input A gives output B), you define an *invariant* (a property that must hold true for any input within a domain) and the framework generates thousands of randomized test inputs to find failures.
+- **invariant / shrinking** — In property-based testing, an **invariant** is the rule that must always hold true. **Shrinking** is the framework's ability to, upon finding a failing randomized input, systematically reduce the input size to find the simplest, simplest counter-example that still breaks the test.
+- **auto-configuration** — Spring Boot's capability to automatically register beans in the application context based on classpath contents, properties, and conditions, enabling starters to provide instant functionality.
+- **`AutoConfiguration.imports`** — The modern file (located at `META-INF/spring/...`) used in Spring Boot 2.7+ and Boot 3/4 to declare the fully qualified names of auto-configuration classes to be processed at startup, replacing the older `spring.factories`.
+- **`@ConditionalOnMissingBean`** — A Spring condition indicating a bean should only be created if the application context does not already contain a bean of the same type. This allows starters to supply defaults that consumers can easily override.
+- **`ApplicationContextRunner`** — A utility from `spring-boot-test` designed to test auto-configurations in isolation by bootstrapping a micro-context, setting properties, adding mock beans, and asserting context state.
+- **`MockMvcTester`** — An AssertJ-based fluent web-slice test runner introduced in Spring Boot 4 / Spring Framework 7, replacing the legacy fluent chain `MockMvc.perform(...).andExpect(...)`.
+- **Spotless / Checkstyle** — Tools for static code analysis. **Spotless** enforces code formatting (whitespace, unused imports, line endings) and can auto-fix issues. **Checkstyle** checks code style and potential bugs (redundant statements, equals/hashCode contracts, default case positions).
+- **NullAway / Error Prone** — Google's **Error Prone** is a javac plugin that hooks into compile time to flag common bugs. Uber's **NullAway** is a plugin for Error Prone that enforces compile-time null safety, ensuring variables marked `@Nullable` are checked before dereference.
+
+## Step 29 — Frontend Foundations
+
+- **SPA (Single-Page Application)** — A web application architecture that loads a single HTML shell and dynamically updates that page as the user interacts with the app, using client-side JavaScript to fetch data and swap views instead of requesting new HTML pages from a server.
+- **Vite / ESM dev server** — A modern frontend build tool that serves source files using native ES modules (ESM) in development, allowing near-instantaneous startup and hot module replacement (HMR) by avoiding pre-bundling during development. For production, it bundles using Rollup.
+- **client-side routing** — The process of managing the application's URL and view state in the browser (via the HTML5 History API), allowing the user to navigate different routes (views) without a full page reload from the server.
+- **route guard** — A component or helper that intercept routing requests to check if a user is authorized or authenticated before rendering a route (e.g. redirecting to `/login` if unauthenticated).
+- **React context** — React's built-in mechanism for sharing state or services globally across the component tree without passing props down manually through every level (prop drilling); serves as a form of dependency injection.
+- **JWT / Bearer** — A JSON Web Token sent in the `Authorization: Bearer <token>` HTTP header to authenticate requests statelessly. The server validates the token cryptographic signature to verify identity.
+- **CORS / preflight** — Cross-Origin Resource Sharing is a browser security mechanism that restricts web pages from making requests to a different domain than the one that served the web page. A "preflight" is an HTTP `OPTIONS` request sent automatically by the browser to negotiate if the target origin permits the cross-origin call.
+- **Vitest / jsdom** — Vitest is a fast, Vite-native testing framework that supports Jest-compatible assertions. `jsdom` is a pure-JavaScript implementation of the DOM standards that runs in Node, letting component tests interact with a virtual browser context without a real browser.
+- **Testing Library** — A family of testing utilities (specifically React Testing Library) focused on testing components from the user's perspective (relying on queries like role, label, and text) rather than testing internal implementation details (state, props).
+- **lockfile / `npm ci`** — `package-lock.json` is a lockfile that records the exact resolved version of every package and transitive dependency in the tree. `npm ci` (clean install) reads the lockfile directly to install identical dependencies for reproducible builds across dev machines and CI.
+
+## Step 30 — Frontend pt.2 — State, Data Fetching & Forms
+
+- **Server State vs. UI State** — The distinction between data owned and persisted on the remote server (which requires async queries and can go stale) versus local, ephemeral layout state owned by the client browser (like active toggles, input values, or routing history).
+- **TanStack Query (React Query)** — An asynchronous state management library for TS/JS applications that handles fetching, caching, synchronizing, and updating server state. It eliminates the need to map API responses to local `useState`/`useEffect` hooks.
+- **query key** — A unique array (e.g., `['account', accountNumber]`) that acts as a cache key in TanStack Query. It uniquely identifies the cached query data and permits fine-grained cache invalidation, retrieval, and refetching.
+- **query invalidation** — The process of marking one or more cached query keys as stale (via `queryClient.invalidateQueries`). This triggers an automatic background refetch of any active queries on screen, maintaining UI consistency with the backend.
+- **React Hook Form** — A performance-focused library for managing form state in React. It reduces re-renders by utilizing uncontrolled inputs registered via ref callbacks, only triggering validation and updates when needed.
+- **Zod / schema validation** — A TypeScript-first schema declaration and validation library. It is used to define the structure, types, and constraints of data objects at runtime (e.g., inputs, request bodies), while automatically generating TypeScript types via type inference.
+- **Resolver** — A React Hook Form adapter (like `@hookform/resolvers/zod`) that bridges the form management library and a third-party validation engine. It evaluates form inputs against a schema on submission and translates validation errors into React Hook Form's standard error state.
+- **type coercion** — The process of converting a value from one type to another (e.g., converting a raw string input value like `"50.0"` from an HTML number field into a JavaScript float/number) during schema validation. In Zod, this is handled using `z.coerce`.
+- **Server-Sent Events (SSE)** — A unidirectional server-push communication technology where a client establishes a persistent HTTP connection using the standard `EventSource` interface, and the server streams events as `text/event-stream`. It features automatic reconnection and simple HTTP-level routing.
+- **`EventSource`** — The standard browser API interface used to open and consume a Server-Sent Events stream from an HTTP endpoint. It natively handles network reconnections and parses event names/payloads pushed by the server.
+- **Idempotency-Key (Frontend role)** — A unique request ID (typically a UUID generated in client memory via `crypto.randomUUID()`) attached to an HTTP header on mutating calls. If the request is retried (e.g., due to network disruption), the server detects the key and returns the cached result instead of executing the mutation twice.
+- **Problem Details (RFC 9457)** — A standardized JSON structure for API error responses. It includes fields like `title`, `status`, and `detail` to describe errors in a machine-readable yet human-friendly way. The frontend parses this to display exact failure reasons.
+
+## Step 1 — Setup, the Command Line, Linux & Git — and Your First Running Spring Boot App
+
+- **POM** — Maven's Project Object Model (`pom.xml`) containing project coordinates, settings, and dependencies.
+- **BOM** — Bill of Materials, a specialized POM that version-manages dependencies to ensure compatible libraries are used together without manual version specification in child POMs.
+- **Maven Wrapper (`mvnw`)** — A portable Maven bootstrap script committed to the repository that automatically downloads and runs the exact pinned Maven version.
+- **starter** — A curated set of convenient dependency descriptors provided by Spring Boot to bootstrap specific capabilities (e.g., `spring-boot-starter-web` for web development).
+- **auto-configuration** — Spring Boot's mechanism to automatically configure beans in the application context based on the contents of the classpath and defined properties, avoiding boilerplate setup.
+- **application context** — Spring's IoC container that acts as a registry for creating, configuring, managing, and wiring application beans.
+- **bean** — An object instantiated, configured, and managed by Spring's inversion-of-control container.
+- **embedded Tomcat** — A servlet container packaged directly inside the application's executable jar file and executed in-process, bypassing the need to deploy WAR files to external servers.
+- **Actuator** — A Spring Boot module that provides production-ready management and observation endpoints, such as health status (`/actuator/health`) and application info.
+- **virtual thread** — A JVM-scheduled, lightweight thread introduced in Project Loom / Java 21+ that enables concurrent request processing without pinning dedicated operating system threads.
+- **`Instant`** — A point on the UTC timeline (e.g. `2026-06-09T13:29:14.842392300Z`) used throughout the codebase as the single standard timestamp format to avoid timezone offsets and timezone-shifting bugs.
+- **secrets hygiene** — The security practice of keeping credentials, keys, and passwords out of source control (utilizing gitignored `.env` files and `.env.example` templates with fake placeholders).
+- **gitleaks** — A static analysis tool that scans the codebase and Git history for credentials, API keys, and private keys to prevent accidental commits of secrets.
+- **`RestClient`** — Spring's modern synchronous HTTP client designed for executing RESTful requests, replacing the legacy `RestTemplate` and `TestRestTemplate` in Spring Boot 4.
+
+## Step 2 — Java Language Primer
+
+- **record** — An immutable, transparent, value-based data carrier introduced in Java 16. The compiler automatically generates fields, a canonical constructor, accessors, and `equals`/`hashCode`/`toString` methods.
+- **compact constructor** — A parameter-less constructor body in a Java record used to validate or normalize inputs before the fields are assigned.
+- **sealed type** — A class or interface that explicitly restricts which other classes or interfaces may extend or implement it (using `sealed` and `permits`), closing the inheritance hierarchy for compile-time safety.
+- **pattern-matching `switch`** — A modern `switch` construct (finalized in Java 21) that tests-and-binds variables by type, enforcing compile-time exhaustiveness when switching over a sealed type with no `default` branch.
+- **generics** — Type parameters (`<T, ID>`) that enable code reuse with compile-time type-safety, which are checked by the compiler and then erased to their bounds at runtime (type erasure).
+- **type erasure** — The compilation process where generic type parameters are replaced with their bounds (typically `Object`) in the bytecode, ensuring backwards compatibility and zero runtime performance overhead.
+- **stream** — A lazy pipeline of operations (from the Java 8 Stream API) that describes bulk data transformations (intermediate operations like `filter`/`map` followed by a terminal operation like `reduce`/`collect`).
+- **lambda expression** — A compact, anonymous representation of a functional interface instance (e.g., `t -> t.isCredit()`), reducing boilerplates.
+- **method reference** — A compact lambda shorthand referring to an existing method by name (e.g., `BigDecimal::add` or `Transaction::type`).
+- **`Optional<T>`** — A container object that may or may not contain a non-null value, forcing callers to explicitly handle the possibility of absence to prevent `NullPointerException`.
+- **enum** — A special Java class representing a fixed set of named constant instances (like `TransactionType`), which are singletons and can be safely compared using `==`.
+- **checked exception** — An exception (extending `Exception` but not `RuntimeException`) that must be declared in the method signature or handled via a `try-catch` block, checked at compile time.
+- **unchecked exception** — An exception (extending `RuntimeException`) representing programming errors or system failures that does not need to be declared or caught, checked only at runtime.
+- **`BigDecimal`** — The standard Java class for exact arbitrary-precision signed decimal arithmetic, required for representing monetary values exactly to avoid floating-point errors.
+- **`RoundingMode.HALF_EVEN`** — Banker's rounding, which rounds towards the nearest neighbor unless both are equidistant, in which case it rounds toward the nearest even digit; standard for eliminating upward rounding bias in totals.
+- **`Instant`** — A class representing an absolute point on the UTC timeline (nanosecond resolution since the 1970 epoch), used for storing unambiguous transactional timestamps.
+- **`LocalDate`** — A zone-less calendar date (year-month-day) in `java.time`, used for birthdays or dates that represent a calendar day independent of timezone.
+- **`ZonedDateTime`** — A calendar date and time representation combined with a timezone ID and offset (like `America/New_York`), used exclusively at the display boundary.
+- **`Duration`** — A time-based amount of elapsed time (seconds and nanoseconds) between two instants, used for measuring time intervals.
+- **`Period`** — A calendar-date-based amount of time (years, months, and days) between two local dates, used for calculating calendar intervals like age.
+- **`ConcurrentHashMap`** — A thread-safe hash map implementation designed for high concurrency, permitting safe concurrent reads and striped locks for concurrent writes.
+- **`var`** — A local variable type-inference keyword introduced in Java 10, letting the compiler infer the static type from the initializer expression to reduce visual noise.
+- **text block** — A multi-line string literal starting and ending with triple quotes (`"""`), introduced in Java 15 to make structured text blocks highly readable without manual escape sequences.
+
+
+

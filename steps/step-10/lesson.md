@@ -1,24 +1,27 @@
 # Step 10 · Relational Databases Up Close
-### Phase B — Data, Databases, Concurrency & Transactions 🔵 · Step 10 of 67
 
-> *You've been using Postgres as a black box that stores rows. This step opens the box. You'll read the
-> query planner's mind, watch MVCC hand each transaction its own version of reality, reproduce the classic
-> isolation anomalies — including the sneaky one that survives REPEATABLE READ — and feel a connection pool
-> run dry. By the end, "the database is slow" and "we have a race condition" stop being mysteries.*
+> **Step 10 of 67 · Phase B — Data, Databases, Concurrency & Transactions 🔵** · Level badge: 🔵 Core · Effort ≈ 20h (experienced SQL/DB devs: skip-test below and skim) · **opening the relational database engine.**
+
+`🟢` Foundations &nbsp;·&nbsp; `🔵` Core &nbsp;·&nbsp; `🟣` Advanced &nbsp;·&nbsp; `🔴` Frontier
+
+> [!CAUTION]
+> **Educational, non-production project.** Build-a-Bank is for learning only. It never handles real money, real customers, or real personal data, and it is **not** security-audited for production banking. Every credential and customer you ever see here is fake/synthetic. (Full disclaimer + guardrails in the [README](../../README.md).)
+
+> [!WARNING]
+> **🐳 Docker is REQUIRED for this step.** The raw-JDBC labs spin up a real PostgreSQL 17 database via **Testcontainers**. If Docker is not running on your machine, these labs will fail. Start your Docker daemon before proceeding.
 
 ---
 
-<a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens | ~time |
-|---|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1h |
-| **B** | [🧠 Understand](#understand) | the engine up close: planner, indexes, MVCC, isolation, partitioning, pools | ~2.5h |
-| **C** | [🛠️ Build](#build) | six raw-JDBC labs on a real Postgres — plans, anomalies, write skew, the pool, partitions, online DDL | ~12h |
-| **D** | [🔬 Prove](#prove) | the Verification Log — 21 tests green, every lab's real output, the §12.3 mutation check | ~1.5h |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~2h |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~1h |
+A one-line map of where we're going. Click to jump.
+
+1. **[A · 🧭 Orient](#orient)** — what this database-deep-dive covers, the cheat card, and whether you can skip.
+2. **[B · 🧠 Understand](#understand)** — query plans, indexes, MVCC, isolation levels, connection pools, partitioning, and zero-downtime schema change.
+3. **[C · 🛠️ Build](#build)** — the heart: building the raw-JDBC Testcontainers harness + six executable labs (explain, MVCC, write skew, connection pool, range partitioning, online DDL).
+4. **[D · 🔬 Prove](#prove)** — the Verification Log (🔴 Full tier): real pasted JUnit execution output and the §12.3 mutation proof.
+5. **[E · 🎓 Apply](#apply)** — go-deeper details, interview prep questions, and practice exercises.
+6. **[F · 🏆 Review](#review)** — stuck? troubleshooting, resources, key glossary terms, flashcards, and the Cumulative Review (Steps 1-10).
 
 ---
 
@@ -30,19 +33,19 @@
 
 | | |
 |---|---|
-| **Title** | Relational Databases Up Close — read query plans, index deliberately, and reason about isolation & MVCC like the engine does |
+| **Title** | Relational Databases Up Close — query plans, indexes, MVCC, write skew, and connection pools |
 | **Step** | 10 of 67 · **Phase B — Data, Databases, Concurrency & Transactions** 🔵 |
-| **Effort** | ≈ 20 hours focused. The payoff is enormous and interview-defining: you can *read an `EXPLAIN`*, *justify an index*, and *name the exact isolation level that prevents a given anomaly* — with proof you ran yourself. Experienced learners can skip-test and skim to ~5h. |
-| **What you'll run this step** | **JVM + Maven** for the build & tests; **🐳 Docker** for the tests (a Testcontainers Postgres). One command: `./mvnw -pl services/cif test -Dtest='QueryPlanLabTest,MvccIsolationTest,WriteSkewTest,ConnectionPoolTest,PartitioningLabTest,OnlineSchemaChangeTest'`. **No HTTP endpoints change** — the proofs are tests + an interactive `psql` lab (`steps/step-10/queries.sql`). |
-| **Buildable artifact** | Six **raw-JDBC database labs** in `services/cif/src/test/java/.../dblab/` that talk to a real Postgres (no Spring/Hibernate — we get *close to the engine*): `QueryPlanLabTest` (seq→index→index-only), `MvccIsolationTest` (dirty/non-repeatable/phantom + MVCC), `WriteSkewTest` (the anomaly that beats REPEATABLE READ, fixed by SERIALIZABLE), `ConnectionPoolTest` (HikariCP exhaustion), `PartitioningLabTest` (pruning), `OnlineSchemaChangeTest` (`CREATE INDEX CONCURRENTLY`, fast defaults). CIF goes from **10 → 21** tests. `step-10-start == step-09-end`. |
-| **Verification tier** | 🔴 **Full** — this step adds tests to a service *and* exercises a concurrency/correctness path (write skew). `./mvnw verify` green + all **21** tests + every lab's real plan/anomaly output + the **§12.3 mutation sanity-check** (weaken SERIALIZABLE → watch the write-skew defense fail → revert) + clean-room fresh-clone + `smoke.sh`. |
-| **Depends on** | **[Step 8](../step-08/lesson.md)** (CIF + Testcontainers Postgres + the pinned `postgres:17-alpine` image) and **[Step 9](../step-09/lesson.md)** (`@Version`, the persistence context — which we now contrast with the raw engine). **+ Docker.** Forward-references **Step 11** (the JMM) and **Step 12** (the ledger, where you'll *pick* an isolation level / lock for money movement). |
+| **Effort** | ≈ 20 hours focused. The payoff is interview-defining: you can *read an `EXPLAIN`*, *justify an index*, and *prevent write skew*. Experienced learners can skip-test and skim to ~5h. |
+| **What you'll run this step** | **JVM + Maven** for the build & tests; **🐳 Docker** for the Testcontainers PostgreSQL 17 instance. One command: `./mvnw -pl services/cif test -Dtest='QueryPlanLabTest,MvccIsolationTest,WriteSkewTest,ConnectionPoolTest,PartitioningLabTest,OnlineSchemaChangeTest'`. |
+| **Buildable artifact** | Six **raw-JDBC database labs** in `services/cif/src/test/java/com/buildabank/cif/dblab/` talking to a real PostgreSQL 17 container: `QueryPlanLabTest` (seq → index → index-only), `MvccIsolationTest` (anomalies + MVCC), `WriteSkewTest` (prevention via SERIALIZABLE), `ConnectionPoolTest` (HikariCP exhaustion), `PartitioningLabTest` (range pruning), `OnlineSchemaChangeTest` (`CREATE INDEX CONCURRENTLY`). CIF tests grow from **10 → 21**. |
+| **Verification tier** | 🔴 **Full** — this step exercises critical concurrency and database anomalies. `./mvnw verify` green + all **21** tests + real plan outputs + §12.3 mutation check + clean-room fresh-clone + `smoke.sh`. |
+| **Depends on** | **[Step 8](../step-08/lesson.md)** (CIF + Testcontainers Postgres + the pinned `postgres:17-alpine` image) and **[Step 9](../step-09/lesson.md)** (Hibernate persistence context & `@Version`). |
 
-By the end you will be able to read a Postgres `EXPLAIN (ANALYZE)` and name the scan node and why the planner chose it; decide when an index helps and what a **covering index** buys; explain **MVCC** and why "a writer never blocks a reader"; reproduce **dirty / non-repeatable / phantom** reads and say which isolation level each needs; explain and *defeat* **write skew**; explain what a **connection pool** does and what happens when it's exhausted; and describe **partitioning**, **read replicas**, and **online schema change** well enough to design with them.
+By the end of this step, you will be able to read a PostgreSQL `EXPLAIN (ANALYZE)` plan and identify Seq Scan vs Index Scan vs Bitmap Index Scan vs Index Only Scan; configure B-tree and covering indexes to optimize read paths; explain how Multi-Version Concurrency Control (MVCC) lets readers and writers run without locking each other; reproduce dirty, non-repeatable, and phantom reads; demonstrate and prevent **write skew**; and observe a connection pool run dry and recover.
 
 ### ⏭️ Can You Skip This Step? (5-minute self-check)
 
-If you can confidently do **all** of this, skim the 🧩 Pattern Spotlight and the 🕰️ Then-vs-Now, then jump to **[Step 11 — Concurrency & Thread Safety](../step-11/lesson.md)**.
+If you can confidently check every box below, skim the 🕰️/🛡️/🧩 highlights, then advance to **[Step 11 — Concurrency & Thread Safety](../step-11/lesson.md)**.
 
 - [ ] I can read `EXPLAIN (ANALYZE)` output — name **Seq Scan / Index Scan / Bitmap Index Scan / Index Only Scan**, and explain *why* the planner picks each and what a **covering index** changes.
 - [ ] I can explain **MVCC** (row versions, snapshots, `xmin`/`xmax`, why readers and writers don't block each other) and what **VACUUM** is for.
@@ -52,11 +55,11 @@ If you can confidently do **all** of this, skim the 🧩 Pattern Spotlight and t
 - [ ] I can describe **declarative partitioning + pruning**, **read replicas + replication lag**, and **online schema change** (`CREATE INDEX CONCURRENTLY`, expand-contract).
 
 > [!TIP]
-> Not 100%? Stay. "Walk me through this `EXPLAIN`", "what isolation level would you use and why", and "what's a connection pool and what happens when it runs out" are three of the most common senior-backend interview questions — and the people who *crush* them are the ones who have watched the plan flip from Seq Scan to Index Only Scan and watched a write-skew bug appear and disappear with one keyword. That's this step.
+> Not 100%? Stay. "Walk me through this `EXPLAIN`", "what isolation level would you use and why", and "what's a connection pool and what happens when it runs out" are bread-and-butter senior-interview questions, and the Boot-4 / Testcontainers-2 changes here are recent enough that even experienced devs will trip on the per-tech test-slice modules and the now-non-generic `PostgreSQLContainer`. Building it once — and *seeing the missing-table failure and fixing it* — is the difference between "I've read about Testcontainers" and "I've debugged a Flyway-on-the-slice problem."
 
 ## 📇 Cheat Card
 
-> **What this step delivers (one sentence):** you stop treating Postgres as a black box — you read query plans, index deliberately (incl. covering indexes → Index Only Scan), reproduce every classic isolation anomaly plus **write skew**, fix it with SERIALIZABLE, and watch a connection pool run dry — all on a real Postgres, all proven by tests.
+> **What this step delivers (one sentence):** you stop treating PostgreSQL as a black box — you read query plans, index deliberately (incl. covering indexes → Index Only Scan), reproduce every classic isolation anomaly plus **write skew**, fix it with SERIALIZABLE, and watch a connection pool run dry — all on a real Postgres, all proven by tests.
 
 **Key commands** (Windows uses `.\mvnw.cmd`; macOS/Linux/Git-Bash use `./mvnw`):
 
@@ -120,22 +123,6 @@ Two sentences from real incident reviews: *"The query got slow as the table grew
 
 > **Depends on: Steps 8, 9** (and conceptually 5–7 for the Spring/JPA fundamentals you're now looking underneath).
 
-## 🗓️ Session Plan (~20 h ≈ 7 sittings)
-
-You don't do this step in one sitting. Each sitting below ends at a real commit or section boundary, so you can walk away without losing state:
-
-| Sitting | Covers | ~time | Ends at |
-|---|---|---|---|
-| **S1** | A · Orient (skip-test, cheat card) + B · Understand | ~2.5h | end of B — you can say which isolation level stops which anomaly, from the table |
-| **S2** | C · Sub-steps 0–1 — `DbLab` harness + `QueryPlanLabTest` | ~3h | 💾 commit *"prove seq→index→index-only scans"* |
-| **S3** | C · Sub-step 2 — `MvccIsolationTest` (dirty / non-repeatable / phantom) | ~2.5h | 💾 commit *"reproduce dirty/non-repeatable/phantom reads"* |
-| **S4** | C · Sub-step 3 — `WriteSkewTest` (the step's §12.3 mutation point) | ~2.5h | 💾 commit *"prove write skew … (40001)"* |
-| **S5** | C · Sub-steps 4–5 — `ConnectionPoolTest` + `PartitioningLabTest` | ~3h | 💾 commit *"prove range-partition pruning"* |
-| **S6** | C · Sub-step 6 — `OnlineSchemaChangeTest` + `queries.sql` by hand in psql + The Finished Result | ~2.5h | `git tag step-10-end` |
-| **S7** | D · Prove (verify, `smoke.sh`, mutation check) + E · Apply + F · Review | ~3h | flashcards + one-line reflection |
-
-*Optional routes:* pass the ⏭️ skip-test and the whole step compresses to a **~5h skim** (S1 + S7); each 🚀 Go Deeper aside costs **+~10 min**; every 🔬 Break-it detour is **~30s**.
-
 ---
 
 <a id="understand"></a>
@@ -171,15 +158,11 @@ flowchart TB
 
 ## 🧩 Pattern Spotlight — the Covering Index (Index-Only Scan)
 
-> **Problem.** A hot, read-heavy query selects a *few* columns filtered by one column — e.g. `SELECT account_id, amount FROM txn WHERE account_id = ?`. A plain index on `account_id` finds the matching rows fast, but Postgres must then visit the table **heap** to fetch `amount` for each row (random I/O).
-
-> **Why a covering index fits.** If the index *also carries* `amount`, the query can be answered from the index alone — no heap visits. That's an **Index Only Scan**: less I/O, better cache behaviour, lower latency, on exactly the queries you run most.
-
-> **How it works (the mechanism).** `CREATE INDEX idx ON txn (account_id) INCLUDE (amount)` stores `amount` as a non-key **payload** in the index leaves. Postgres can return `(account_id, amount)` straight from the leaf — *if* it knows the rows are visible without checking the heap. That's what the **visibility map** (maintained by `VACUUM`) provides; with it set, you'll see `Heap Fetches: 0`.
-
-> **Alternatives / trade-offs.** A composite index `(account_id, amount)` also covers, but makes `amount` part of the key (affects ordering & uniqueness); `INCLUDE` keeps the key narrow. Every index costs write amplification and storage — index the queries that matter, not every column. Postgres-specific: B-tree `INCLUDE` exists since PG 11.
-
-> **Implementation (here).** `QueryPlanLabTest` builds the plain index, then the covering index, and asserts the plan node becomes `Index Only Scan` with `Heap Fetches: 0`.
+- **Problem:** A hot, read-heavy query selects a *few* columns filtered by one column — e.g. `SELECT account_id, amount FROM txn WHERE account_id = ?`. A plain index on `account_id` finds the matching rows fast, but Postgres must then visit the table **heap** to fetch `amount` for each row (random I/O).
+- **Why a covering index fits:** If the index *also carries* `amount`, the query can be answered from the index alone — no heap visits. That's an **Index Only Scan**: less I/O, better cache behaviour, lower latency, on exactly the queries you run most.
+- **How it works (the mechanism):** `CREATE INDEX idx ON txn (account_id) INCLUDE (amount)` stores `amount` as a non-key **payload** in the index leaves. Postgres can return `(account_id, amount)` straight from the leaf — *if* it knows the rows are visible without checking the heap. That's what the **visibility map** (maintained by `VACUUM`) provides; with it set, you'll see `Heap Fetches: 0`.
+- **Alternatives / trade-offs:** A composite index `(account_id, amount)` also covers, but makes `amount` part of the key (affects ordering & uniqueness); `INCLUDE` keeps the key narrow. Every index costs write amplification and storage — index the queries that matter, not every column. Postgres-specific: B-tree `INCLUDE` exists since PG 11.
+- **Implementation (here):** `QueryPlanLabTest` builds the plain index, then the covering index, and asserts the plan node becomes `Index Only Scan` with `Heap Fetches: 0`.
 
 ## 🌱 Under the Hood: How It Really Works
 
@@ -212,23 +195,7 @@ flowchart TB
 
 **Write skew — the subtle one.** Two transactions read an overlapping set, each makes a decision based on what it read, and each writes a **different** row. No write-write conflict occurs, so snapshot isolation (REPEATABLE READ) lets both commit — but *together* they violate an invariant that neither violated alone. Example (the lab): two linked accounts must keep a combined balance ≥ 0; both start at 100; two concurrent withdrawals of 150 each read the sum (200), each pass the check, each debit a different account → final sum −100. **SERIALIZABLE** prevents it: Postgres's **Serializable Snapshot Isolation (SSI)** tracks read/write dependencies between live transactions and, when it detects a dangerous cycle, **aborts** one with `ERROR: could not serialize access… (SQLSTATE 40001)`. The application's job is to **catch 40001 and retry the whole transaction.**
 
-```mermaid
-sequenceDiagram
-    participant T1
-    participant PG as Postgres (REPEATABLE READ)
-    participant T2
-    T1->>PG: read sum(balance) → 200 ✅ "200 ≥ 150, safe"
-    T2->>PG: read sum(balance) → 200 ✅ "200 ≥ 150, safe"
-    T1->>PG: UPDATE A: 100 → −50 · commit ✅
-    T2->>PG: UPDATE B: 100 → −50 · commit ✅ (different row → no conflict)
-    Note over T1,T2: combined balance = −100 💥 invariant broken — by two individually correct transactions
-```
-
-*Alt-text: the write-skew interleaving. T1 and T2 each read the combined balance (200) from their own snapshot and decide a 150 withdrawal is safe. T1 debits account A (100 → −50) and commits; T2 debits account B (100 → −50) and commits — different rows, so no write-write conflict. Together they leave the combined balance at −100, breaking the ≥ 0 invariant that neither transaction broke alone.*
-
 **Connection pools (HikariCP).** The pool holds up to `maximumPoolSize` physical connections. `getConnection()` borrows one; `close()` *returns it to the pool* (it does not actually close the socket). If all are in use, a borrower **waits** up to `connectionTimeout` and then throws `SQLTransientConnectionException("… request timed out")`. This is why pool size is a capacity decision: with `maximumPoolSize = 2`, the *third* concurrent caller waits and may time out — exactly the lab. Hikari exposes live gauges (`getActiveConnections`, `getIdleConnections`, `getThreadsAwaitingConnection`).
-
-> ❓ **Pool size 2, three concurrent borrowers — what happens to the third, and after how long?** <details><summary>answer</summary>It waits *inside* `getConnection()` for up to `connectionTimeout` (500 ms in our lab), then throws `SQLTransientConnectionException("… request timed out")`. It only succeeds if one of the two holders returns a connection during that wait.</details>
 
 **Partitioning.** A large table can be **declaratively partitioned** (e.g. `PARTITION BY RANGE (created_at)`) into child tables per month. The planner does **partition pruning**: a query restricted to one month touches only that partition. Wins: smaller indexes per partition, fast bulk-delete by `DROP TABLE partition` (vs a giant `DELETE`), and parallelism. Cost: more objects to manage, and the partition key must suit your queries.
 
@@ -238,7 +205,7 @@ sequenceDiagram
 
 ## 🛡️ Security Lens: What Could Go Wrong
 
-- **Missing-index = a cheap DoS.** An endpoint backed by a Seq Scan on a growing table gives an attacker (or an organic traffic spike) huge work-amplification: a few requests can saturate database CPU and the connection pool. Reading plans and indexing hot paths is a *availability* control, not just a latency nicety.
+- **Missing-index = a cheap DoS.** An endpoint backed by a Seq Scan on a growing table gives an attacker (or an organic traffic spike) huge work-amplification: a few requests can saturate database CPU and the connection pool. Reading plans and indexing hot paths is a *availability* control, not just a interception control.
 - **Connection-pool exhaustion is an availability failure mode.** A slow downstream query, a leaked connection (borrowed and never returned), or an N+1 explosion (Step 9!) can drain the pool; every subsequent request then times out. Bound query time, always return connections (try-with-resources / Spring's managed transactions), and alert on `threadsAwaitingConnection`.
 - **The wrong isolation level is a correctness/integrity hole.** Choosing READ COMMITTED where you needed write-skew protection silently corrupts invariants (balances, limits, "exactly one X"). Near money, prefer an explicit defense (SERIALIZABLE + retry, or `SELECT … FOR UPDATE`, or the `@Version` you met in Step 9) and *test* it.
 - **`EXPLAIN ANALYZE` runs the query.** On a `DELETE`/`UPDATE` it actually mutates. In a shared/prod-like database, wrap it in a transaction you roll back, or only `EXPLAIN` (no `ANALYZE`) for writes.
@@ -251,9 +218,6 @@ sequenceDiagram
 | **Adding a column with a default** | Before PG 11, `ADD COLUMN … DEFAULT x` **rewrote the whole table** under an exclusive lock — a notorious outage cause. | PG 11+ stores a constant default as **metadata** — instant, no rewrite. | Made a once-dangerous migration routine and online-safe. |
 | **`SELECT … FOR UPDATE SKIP LOCKED`** | Older queue-on-Postgres patterns blocked or polled awkwardly. | `SKIP LOCKED` (PG 9.5+) lets workers grab un-locked rows — a clean job-queue primitive. | Better concurrency primitives in the engine itself. |
 | **Serializable** | Classic SERIALIZABLE meant heavy two-phase locking. | PG uses **SSI** (Serializable Snapshot Isolation): snapshot reads + dependency tracking, aborting on `40001`. | Serializable guarantees without read locks — but apps must **retry**. |
-
-> [!NOTE]
-> *Verify, don't guess.* `INCLUDE` indexes and fast constant-default column adds are PG 11+; `SKIP LOCKED` is PG 9.5+; SSI has been Postgres's SERIALIZABLE since 9.1. We run **PostgreSQL 17** (`postgres:17-alpine`, pinned in `VERSIONS.md`), so all apply. Other engines differ (e.g. MySQL/InnoDB's REPEATABLE READ does *not* prevent phantoms the same way; SQL Server's defaults differ) — the *anomaly definitions* are portable; the *level that prevents each* is engine-specific. Always check your engine.
 
 ## 🧵 Thread-safety note
 
@@ -285,7 +249,7 @@ Confirm the starting point builds:
 
 ## 🛠️ Let's Build It — Step by Step
 
-We build **one shared lab harness** then **six labs** — seven sub-steps in all, numbered 0–6 — running between each. Here's the whole step at a glance:
+We build **one shared lab harness** then **six labs**, running between each. Here's the whole step at a glance:
 
 ```mermaid
 flowchart TB
@@ -315,9 +279,9 @@ steps/step-10/
 
 ---
 
-### Sub-step 0 (1 of 7, ~1h) — The `DbLab` harness 🧭 *(you are here: **harness** → plans → MVCC → write skew → pool → partitions → online DDL)*
+### Sub-step 0 of 6 — The `DbLab` harness 🧭 *(you are here: **harness** → plans → MVCC → write skew → pool → partitions → online DDL)*
 
-🎯 **Goal:** one place that starts a real Postgres *once* and hands every lab the raw-JDBC tools it needs — `openTx(isolation)`, `openAuto()`, `explain(...)`, `exec(...)`, `scalar(...)`. We use **raw JDBC on purpose**: this step is about the engine, and Hibernate would hide the very mechanics (transactions, isolation, the pool) we want to see.
+🎯 **Goal:** Create a reusable base harness class that launches a single, shared Testcontainers Postgres instance and exposes raw JDBC utility methods to avoid Hibernate hiding transaction boundaries and isolation anomalies.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/dblab/DbLab.java`
 
@@ -390,35 +354,36 @@ abstract class DbLab {
 ```
 
 🔍 **Line-by-line:**
-- `abstract class DbLab` — a base class the labs `extends`; it isn't a test itself (no `@Test`).
-- `static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:17-alpine"))` — declares a Testcontainers Postgres. **Non-generic** in Testcontainers 2.0 (the old `<SELF>` self-type was dropped — same note as `ContainersConfig`). The image is **pinned**, never `latest`.
-- `static { POSTGRES.start(); }` — a **static initializer**: runs once when the class is first loaded, starting *one* container reused by every lab class. Far cheaper than one container per class. Testcontainers' reaper ("Ryuk") removes it when the JVM exits.
-- `openTx(int isolationLevel)` — opens a JDBC `Connection`, sets the **isolation level** (`Connection.TRANSACTION_*`), and turns **autocommit off** so *we* decide when to `commit()`/`rollback()`. This is the knob the whole step turns.
-- `openAuto()` — autocommit *on*: every statement is its own committed transaction. Used for DDL/seeding (and things like `VACUUM` and `CREATE INDEX CONCURRENTLY` that refuse to run inside a transaction).
-- `explain(c, sql, analyze)` — prepends `EXPLAIN` (optionally `ANALYZE, BUFFERS`, which **runs** the query and reports real rows/timings/page reads) and concatenates the plan rows into one string.
-- `exec` / `scalar` — tiny helpers: run a statement; read a single number (a `COUNT`/`SUM`).
+- `abstract class DbLab` — Marks this an abstract class that concrete database tests will inherit from. It has no `@Test` methods of its own.
+- `static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:17-alpine"))` — Declares a Testcontainers PostgreSQL container. In Testcontainers 2.0, the container classes are non-generic (we no longer use `PostgreSQLContainer<>`), avoiding syntax errors.
+- `static { POSTGRES.start(); }` — A static initializer block. Runs exactly once when the JVM first loads the class, ensuring the Postgres container is started and shared across all database labs. Ryuk (the reaper container) takes care of terminating it.
+- `openTx(int isolationLevel)` — Opens a raw JDBC connection to the container, explicitly overrides the isolation level (`Connection.TRANSACTION_*`), and turns autocommit OFF to allow programmatic transaction control.
+- `openAuto()` — Opens an autocommit connection (autocommit ON) where every individual statement runs as a single, committed transaction. This is necessary for DDL operations and seeding.
+- `explain(c, sql, analyze)` — Prepends `EXPLAIN (ANALYZE, BUFFERS)` to the input query, executes it, and stitches the text output rows together.
+- `exec(c, sql)` / `scalar(c, sql)` — Boilerplate-reducing helpers to run a command or return a single scalar value from a database query.
 
-💭 **Under the hood:** `DriverManager.getConnection(url, …)` opens a *brand-new* physical connection each call — no pooling. That's deliberate: in the isolation labs we need several **independent** transactions live at once, and in the pool lab we want to control pooling ourselves. The PostgreSQL JDBC driver auto-registers via the JDBC 4 `ServiceLoader`, so no `Class.forName` is needed.
+💭 **Under the hood:** `DriverManager.getConnection(...)` makes a new physical socket connection to the database. By using raw JDBC instead of Hibernate, we bypass the first-level cache (persistence context) and entity state tracking, allowing us to observe the true behavior of PostgreSQL isolation snapshots and page buffers.
 
-🔮 **Predict:** the first lab inserts 20,000 rows and queries one account *without* an index. What scan node will Postgres use? (Check in sub-step 1.)
+🔮 **Predict:** When the container starts, Testcontainers will dynamically bind the container's standard Postgres port (5432) to a random high port on your localhost. If you run a tool that connects to 5432, what will happen? (It will fail unless you check `POSTGRES.getJdbcUrl()` for the active random port.)
 
-✋ **Checkpoint:** `DbLab.java` compiles (it has no tests, so it won't run yet). Nothing to see until a lab uses it.
+▶️ **Run & See:**
+Since this is an abstract base class, we cannot run it on its own. We will run it via the next sub-steps.
+
+✋ **Checkpoint:** `DbLab.java` compiles without issues.
 
 💾 **Commit:**
 ```bash
 git add services/cif/src/test/java/com/buildabank/cif/dblab/DbLab.java
-git commit -m "test(cif): add DbLab harness — singleton Testcontainers Postgres + raw-JDBC helpers (step 10)"
+git commit -m "test(cif): add DbLab harness for raw-JDBC database labs"
 ```
 
-*🛑 Stopping here? You have the `DbLab` harness committed (it compiles; nothing runs yet). Next: Sub-step 1 (`QueryPlanLabTest`); first action: create `services/cif/src/test/java/com/buildabank/cif/dblab/QueryPlanLabTest.java`.*
-
-⚠️ **Pitfall:** opening connections with `DriverManager` means *you* own their lifecycle — always use try-with-resources (`try (Connection c = …)`) so they close even on failure. A leaked connection in a real pool is a classic outage.
+⚠️ **Pitfall:** Failing to close JDBC resources (Connections, Statements, ResultSets) causes resource leaks. We must always wrap their instantiation in a try-with-resources block.
 
 ---
 
-### Sub-step 1 (2 of 7, ~2h) — `QueryPlanLabTest`: watch the plan flip 🧭 *(harness ✅ → **plans** → MVCC → write skew → pool → partitions → online DDL)*
+### Sub-step 1 of 6 — `QueryPlanLabTest`: watch the plan flip 🧭 *(harness ✅ → **plans** → MVCC → write skew → pool → partitions → online DDL)*
 
-🎯 **Goal:** seed 20,000 transactions, then use `EXPLAIN (ANALYZE)` to watch the planner go **Seq Scan → (Bitmap) Index Scan → Index Only Scan** as we add a plain index and then a covering index.
+🎯 **Goal:** Seed 20,000 transaction rows and execute `EXPLAIN (ANALYZE)` to verify how the planner switches access paths from Seq Scan to Bitmap Index Scan, and finally to Index Only Scan (with zero heap fetches) after adding a covering index.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/dblab/QueryPlanLabTest.java`
 
@@ -435,6 +400,20 @@ import java.sql.Connection;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+/**
+ * <strong>Indexing &amp; query plans.</strong> Seeds 20,000 transaction rows into a real Postgres, then
+ * uses {@code EXPLAIN (ANALYZE)} to <em>watch the planner change its mind</em>:
+ *
+ * <ol>
+ *   <li>no index → <strong>Seq Scan</strong> (read every row);</li>
+ *   <li>add a B-tree index + {@code ANALYZE} → <strong>Index Scan</strong> (jump straight to the rows);</li>
+ *   <li>a <strong>covering</strong> index ({@code INCLUDE (amount)}) + {@code VACUUM} → <strong>Index Only
+ *       Scan</strong> (answer the query from the index alone, never touching the heap).</li>
+ * </ol>
+ *
+ * The plan text is printed so you can read the real output; the assertions check the <em>node type</em>,
+ * which is stable run-to-run (timings are not).
+ */
 class QueryPlanLabTest extends DbLab {
 
     @BeforeAll
@@ -448,7 +427,7 @@ class QueryPlanLabTest extends DbLab {
                         amount     numeric(19, 4) not null,
                         created_at timestamptz    not null
                     )""");
-            // 20,000 rows over 5,000 accounts → ~4 rows per account (a highly selective lookup).
+            // 20,000 rows spread over 5,000 accounts → ~4 rows per account (a highly selective lookup).
             exec(c, """
                     insert into txn (account_id, amount, created_at)
                     select (g % 5000),
@@ -476,6 +455,7 @@ class QueryPlanLabTest extends DbLab {
 
             // 3 ── Covering index: include `amount` IN the index so a query needing only
             //      (account_id, amount) is answered from the index alone — an Index Only Scan.
+            //      VACUUM sets the visibility map so the heap need not be consulted for visibility.
             exec(c, "create index idx_txn_account_amount on txn (account_id) include (amount)");
             exec(c, "vacuum analyze txn");
             String covering = explain(c,
@@ -488,65 +468,65 @@ class QueryPlanLabTest extends DbLab {
 ```
 
 🔍 **Line-by-line:**
-- `@BeforeAll static void seed()` — runs **once** before the test; bulk-inserts 20,000 rows with `generate_series` (Postgres's set-returning function — a SQL `for` loop). `g % 5000` spreads rows over 5,000 accounts so a single-account lookup is *selective*.
-- `explain(c, "…", true)` — `EXPLAIN (ANALYZE, BUFFERS)`; we **assert on the node name** (`Seq Scan on txn`, `Index Scan`, `Index Only Scan`) because that's stable run-to-run, while timings aren't.
-- `analyze txn` — refreshes the **planner statistics** so it knows the new index's selectivity. Without fresh stats the planner can misjudge.
-- `INCLUDE (amount)` — the covering column; `vacuum analyze txn` sets the **visibility map** so the Index Only Scan can skip the heap (`Heap Fetches: 0`).
+- `@BeforeAll static void seed()` — Sets up a clean table `txn` and inserts 20,000 rows.
+- `g % 5000` — Generates account IDs from 0 to 4999. This guarantees a highly selective query since only 4 rows out of 20,000 match a single account ID (selectivity = 4 / 20000 = 0.02%).
+- `generate_series(1, 20000)` — A PostgreSQL generator function that acts like a SQL-level `for` loop to generate rows fast.
+- `explain(c, "select * from txn where account_id = 42", true)` — Invokes `EXPLAIN (ANALYZE, BUFFERS)` to trace how Postgres fetches the data.
+- `create index idx_txn_account on txn (account_id)` — Creates a standard B-tree index.
+- `analyze txn` — Refreshes the database's internal tables with statistics about the new index. Without fresh stats, the planner might assume the index is not selective and fall back to Seq Scan.
+- `include (amount)` — Builds a covering index: stores `amount` directly inside the leaf nodes of the B-tree index on `account_id`.
+- `vacuum analyze txn` — Reclaims space, updates statistics, and builds the **visibility map** indicating which pages contain only committed rows.
 
-💭 **Under the hood:** the planner is **cost-based**. With no index, a Seq Scan is the *only* path. With an index on a selective predicate, the index path's estimated cost drops below the Seq Scan's, so it switches. The covering index lets it avoid the heap entirely for a query that only needs indexed columns.
+💭 **Under the hood:** In step 1, a `Seq Scan` is performed. Postgres opens the heap pages and filters rows one by one. In step 2, we see a `Bitmap Index Scan` feeding a `Bitmap Heap Scan`. Instead of doing costly random I/O for each match, Postgres builds a bitmap of physical page addresses containing matching rows, sorts them, and fetches pages in physical disk order. In step 3, an `Index Only Scan` is executed with `Heap Fetches: 0`. Because the visibility map confirms all records on those pages are visible, Postgres never accesses the table heap at all.
 
-🔮 **Predict:** before you run — for `account_id = 42` (about 4 of 20,000 rows), after we add the index, will you see a *plain* Index Scan or a *Bitmap* Index Scan? (It's cost-based — read the output.)
+🔮 **Predict:** If you change the query in step 3 to `select account_id, amount, created_at from txn where account_id = 42`, will you still see an Index Only Scan? (No! `created_at` is not covered by `idx_txn_account_amount`, so it must visit the heap).
 
 ▶️ **Run & See:**
 ```bash
 ./mvnw -pl services/cif test -Dtest=QueryPlanLabTest
 ```
-✅ **Expected output** (real run — your timings/ports will differ):
+✅ **Expected output:**
 ```
 === [1] NO INDEX — expect Seq Scan ===
-Seq Scan on txn  (cost=0.00..357.05 rows=84 width=44) (actual time=0.020..1.566 rows=4 loops=1)
+Seq Scan on txn  (cost=0.00..357.05 rows=84 width=44) (actual time=0.017..1.484 rows=4 loops=1)
   Filter: (account_id = 42)
   Rows Removed by Filter: 19996
   Buffers: shared hit=148
 ...
 === [2] WITH INDEX — expect Index Scan ===
-Bitmap Heap Scan on txn  (cost=4.32..18.40 rows=4 width=30) (actual time=0.061..0.065 rows=4 loops=1)
+Bitmap Heap Scan on txn  (cost=4.32..18.40 rows=4 width=30) (actual time=0.073..0.077 rows=4 loops=1)
   Recheck Cond: (account_id = 42)
   Heap Blocks: exact=4
-  ->  Bitmap Index Scan on idx_txn_account  (cost=0.00..4.32 rows=4 width=0) ...
+  Buffers: shared hit=7 read=2
+  ->  Bitmap Index Scan on idx_txn_account  (cost=0.00..4.32 rows=4 width=0) (actual time=0.065..0.066 rows=4 loops=1)
         Index Cond: (account_id = 42)
+...
 === [3] COVERING INDEX — expect Index Only Scan ===
-Index Only Scan using idx_txn_account_amount on txn  (cost=0.29..4.36 rows=4 width=14) (actual time=0.037..0.038 rows=4 loops=1)
+Index Only Scan using idx_txn_account_amount on txn  (cost=0.29..4.36 rows=4 width=14) (actual time=0.050..0.051 rows=4 loops=1)
   Index Cond: (account_id = 42)
   Heap Fetches: 0
+  Buffers: shared hit=1 read=2
 ```
-Read the three: **(1)** `Rows Removed by Filter: 19996` — Postgres read all 20,000 rows to find 4. **(2)** A **Bitmap Index Scan** feeds a Bitmap Heap Scan — index-driven, no more full scan (note: *bitmap*, not plain Index Scan — cost-based, and totally fine). **(3)** `Index Only Scan … Heap Fetches: 0` — answered from the covering index alone.
 
-❌ **If you see `Seq Scan` still in step 2:** you skipped `analyze txn`, or the predicate isn't selective enough — re-read the seed. ❌ **If step 3 shows `Heap Fetches: > 0`:** the `vacuum` didn't set the visibility map (e.g. concurrent writes) — it's still an Index Only Scan node, just consulting the heap for visibility.
-
-🔬 **Break-it (30s):** change the step-3 query to `select * from txn where account_id = 42` (all columns). Re-run — it's no longer an Index Only Scan (the index doesn't carry every column), so it falls back to a Bitmap/Index Scan + heap. *That's why "covering" means "covers the columns this query needs."* Put it back.
-
-✋ **Checkpoint:** the test passes and you can point at each of the three plan nodes and say what changed.
+✋ **Checkpoint:** The test passes green, proving that planning decisions are directly tied to index structures and statistics.
 
 💾 **Commit:**
 ```bash
 git add services/cif/src/test/java/com/buildabank/cif/dblab/QueryPlanLabTest.java
-git commit -m "test(cif): prove seq→index→index-only scans with EXPLAIN ANALYZE (step 10)"
+git commit -m "test(cif): verify optimizer scan choices under index configurations"
 ```
 
-*🛑 Stopping here? You have the harness plus the query-plan lab green (Seq → Bitmap Index → Index Only) and committed. Next: Sub-step 2 (MVCC anomalies); first action: create `MvccIsolationTest.java` in the same `dblab` folder.*
-
-⚠️ **Pitfall:** `EXPLAIN ANALYZE` **executes** the statement. Harmless for `SELECT`; for `UPDATE`/`DELETE` it really changes data — wrap those in a rolled-back transaction or use plain `EXPLAIN`.
+⚠️ **Pitfall:** Stale statistics. Forgetting to run `ANALYZE` after loading bulk data can cause the optimizer to use inaccurate plans.
 
 ---
 
-### Sub-step 2 (3 of 7, ~2.5h) — `MvccIsolationTest`: dirty / non-repeatable / phantom 🧭 *(harness ✅ → plans ✅ → **MVCC** → write skew → pool → partitions → online DDL)*
+### Sub-step 2 of 6 — `MvccIsolationTest`: dirty / non-repeatable / phantom 🧭 *(harness ✅ → plans ✅ → **MVCC** → write skew → pool → partitions → online DDL)*
 
-🎯 **Goal:** interleave two real transactions to reproduce the read anomalies and *see* MVCC snapshots — proving Postgres has **no** dirty reads, shows **non-repeatable** reads at READ COMMITTED, and gives a **stable snapshot** (no non-repeatable, no phantom) at REPEATABLE READ.
+🎯 **Goal:** Interleave two concurrent transactions at different isolation levels to demonstrate dirty reads (impossible), non-repeatable reads (visible at READ COMMITTED), repeatable snapshots (at REPEATABLE READ), and phantom reads.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/dblab/MvccIsolationTest.java`
 
-⌨️ **Code:** *(complete file)*
+⌨️ **Code:**
 
 ```java
 // services/cif/src/test/java/com/buildabank/cif/dblab/MvccIsolationTest.java
@@ -697,54 +677,52 @@ class MvccIsolationTest extends DbLab {
 }
 ```
 
-🔍 **Line-by-line (the ideas, not every line):**
-- `@BeforeEach resetTable()` — each test starts from a clean `acct` (2 rows at 100) so they're independent.
-- **`dirtyReadIsImpossibleInPostgres`** — T1 *asks for* READ UNCOMMITTED, T2 writes 999 but doesn't commit; T1 still reads **100**. Postgres has no dirty reads at any level.
-- **`nonRepeatableReadHappensAtReadCommitted`** — T1 reads 100, T2 commits 200, T1 re-reads → **200**. At READ COMMITTED each statement gets a fresh snapshot.
-- **`repeatableReadGivesAStableSnapshot`** — same interleaving, T1 at REPEATABLE READ → both reads are **100**. The first query froze the snapshot.
-- **`phantomAppearsAtReadCommittedButNotAtRepeatableRead`** — a range `COUNT` grows by a committed insert at READ COMMITTED (2→3), but stays 2 at REPEATABLE READ.
+🔍 **Line-by-line:**
+- `Connection t1 = openTx(TRANSACTION_READ_UNCOMMITTED)` — Opens T1 using `READ UNCOMMITTED`.
+- `exec(t2, "update acct set balance = 999 where id = 1")` — T2 updates a row balance without committing.
+- `scalar(t1, "select balance ...")` — T1 reads the same row balance.
+- `assertThat(seenByT1).isEqualTo(100)` — Asserts that T1 reads the old, committed balance (100) instead of 999, demonstrating that dirty reads do not happen.
+- `t2.commit()` — T2 commits its update.
+- `Connection t1 = openTx(TRANSACTION_REPEATABLE_READ)` — Opens T1 using `REPEATABLE READ`.
+- `long first = scalar(t1, ...)` — T1 reads a balance, capturing its transaction snapshot.
+- `assertThat(second).isEqualTo(100)` — Under REPEATABLE READ, T1 re-reads the balance and still sees 100, showing that the snapshot remains frozen even after T2 commits.
 
-💭 **Under the hood:** REPEATABLE READ takes its snapshot at the **first query** of the transaction and reuses it; READ COMMITTED takes a fresh snapshot **per statement**. That single difference explains every result above. (See §2 of `queries.sql` to watch `xmin`/`xmax` yourself.)
+💭 **Under the hood:** PostgreSQL uses MVCC to represent row updates. Each row is stamped with `xmin` (ID of the transaction that created the version) and `xmax` (ID of the transaction that deleted or updated it). In `READ COMMITTED`, every individual statement obtains a new snapshot of committed transaction IDs. In `REPEATABLE READ`, the snapshot is captured once during the transaction's first query, ignoring subsequent concurrent commits.
 
-🔮 **Predict:** in `repeatableReadGivesAStableSnapshot`, after T2 commits 200, what does T1's second read return? (Snapshot!)
+🔮 **Predict:** In `nonRepeatableReadHappensAtReadCommitted`, what happens if T2 rolls back instead of committing? (The second read by T1 would return 100 because the uncommitted change disappears).
 
 ▶️ **Run & See:**
 ```bash
 ./mvnw -pl services/cif test -Dtest=MvccIsolationTest
 ```
-✅ **Expected output** (the `System.out` lines, real run):
+✅ **Expected output:**
 ```
-[repeatable-read] first=100 second=100
-[non-repeatable @RC] first=100 second=200
 [dirty-read] T1 (asked for READ UNCOMMITTED) sees balance = 100
+[non-repeatable @RC] first=100 second=200
+[repeatable-read] first=100 second=100
 [phantom @RC] before=2 after=3
 [phantom @RR] before=2 after=2
-... Tests run: 4, Failures: 0, Errors: 0, Skipped: 0
 ```
 
-🔬 **Break-it (30s):** in `repeatableReadGivesAStableSnapshot`, change `openTx(TRANSACTION_REPEATABLE_READ)` to `openTx(TRANSACTION_READ_COMMITTED)` and re-run — the second read becomes 200 and the test fails. *The isolation level is the whole story.* Put it back.
-
-✋ **Checkpoint:** four green tests; you can state which level prevents which read anomaly.
+✋ **Checkpoint:** The test suite passes green, showing Postgres's built-in snapshot mechanisms at play.
 
 💾 **Commit:**
 ```bash
 git add services/cif/src/test/java/com/buildabank/cif/dblab/MvccIsolationTest.java
-git commit -m "test(cif): reproduce dirty/non-repeatable/phantom reads + MVCC snapshots (step 10)"
+git commit -m "test(cif): verify read isolation levels and anomalies"
 ```
 
-*🛑 Stopping here? You have the harness, the plans lab, and all four anomaly tests green and committed. Next: Sub-step 3 (write skew — the step's centerpiece); first action: create `WriteSkewTest.java`, or re-run `./mvnw -pl services/cif test -Dtest=MvccIsolationTest` first to confirm you're still green.*
-
-⚠️ **Pitfall:** if you don't `commit()`/`rollback()` and close each connection, the next test can hang on a lock or see leftover rows. Try-with-resources + explicit `rollback()` keep the labs deterministic.
+⚠️ **Pitfall:** Hanging locks. If transaction connections are not explicitly committed, rolled back, or closed, they will keep locks open and block other tests.
 
 ---
 
-### Sub-step 3 (4 of 7, ~2.5h) — `WriteSkewTest`: the anomaly that beats REPEATABLE READ 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → **write skew** → pool → partitions → online DDL)*
+### Sub-step 3 of 6 — `WriteSkewTest`: the anomaly that beats REPEATABLE READ 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → **write skew** → pool → partitions → online DDL)*
 
-🎯 **Goal:** reproduce **write skew** (two linked accounts, combined balance must stay ≥ 0) at REPEATABLE READ — the invariant breaks — then show **SERIALIZABLE** rejects the second commit with `SQLSTATE 40001`. This is the step's **critical concurrency path** (and the §12.3 mutation point).
+🎯 **Goal:** Demonstrate write skew (overlapping reads, writes to different rows violating a combined invariant) under REPEATABLE READ, and show how SERIALIZABLE prevents it by aborting one transaction with SQLSTATE 40001.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/dblab/WriteSkewTest.java`
 
-⌨️ **Code:** *(complete file)*
+⌨️ **Code:**
 
 ```java
 // services/cif/src/test/java/com/buildabank/cif/dblab/WriteSkewTest.java
@@ -856,14 +834,17 @@ class WriteSkewTest extends DbLab {
 ```
 
 🔍 **Line-by-line:**
-- Both transactions read `sum(balance)` (200) from their **own snapshot** and "decide" the withdrawal is safe.
-- They write **different rows** (`A` vs `B`) → at REPEATABLE READ there's **no write-write conflict** → both commit → final sum **−100**. That's write skew.
-- At **SERIALIZABLE**, Postgres's SSI tracks that T1 read `B` (which T2 wrote) and T2 read `A` (which T1 wrote) — a dependency cycle — and **aborts** the second committer with `SQLSTATE 40001`.
-- `combinedBalance()` (a helper using `openAuto()`) re-reads the truth after each scenario: −100 (broken) vs ≥ 0 (held; only T1's −150 applied, so 50).
+- `t1 = openTx(TRANSACTION_REPEATABLE_READ)` / `t2 = openTx(TRANSACTION_REPEATABLE_READ)` — Opens both connections under REPEATABLE READ.
+- `scalar(t1, "select sum(balance) ...")` / `scalar(t2, "select sum(balance) ...")` — Both check the shared state, getting 200.
+- `exec(t1, "update ... name = 'A'")` / `exec(t2, "update ... name = 'B'")` — Each mutates a *different* row to execute their withdrawal.
+- `t1.commit()` / `t2.commit()` — Under REPEATABLE READ, both succeed since no row-level write conflict occurred.
+- `t1 = openTx(TRANSACTION_SERIALIZABLE)` / `t2 = openTx(TRANSACTION_SERIALIZABLE)` — Repeats the test using SERIALIZABLE.
+- `assertThatThrownBy(...)` — Asserts that when T2 commits, the database aborts it with an error.
+- `isEqualTo("40001")` — Checks that the error code matches the SQL standard serialization failure (`40001`).
 
-💭 **Under the hood:** "write skew" is precisely the case snapshot isolation *cannot* catch by conflict detection alone, because the two transactions never write the same row. SSI adds **read/write dependency tracking** on top of snapshots to find the dangerous structure. The cost: SERIALIZABLE can abort transactions that *would* have been fine, so apps **must retry on 40001** (idempotently). You'll wire that retry into money movement in Step 12.
+💭 **Under the hood:** Snapshot isolation (REPEATABLE READ) prevents write-write conflicts on the same row. However, write skew involves writes to *different* rows that depend on a shared read. Postgres's SERIALIZABLE engine tracks these read-to-write dependencies (SIREAD locks). If it detects a cycle (e.g., T1 read B and wrote A, while T2 read A and wrote B), it aborts the second committer with `40001` to maintain serial consistency.
 
-🔮 **Predict:** at REPEATABLE READ, both transactions debit different accounts. Do they conflict? What's the final combined balance? <details><summary>answer</summary>No conflict (different rows) → both commit → −100. The invariant is violated even though each transaction was individually correct.</details>
+🔮 **Predict:** If we weaken `TRANSACTION_SERIALIZABLE` to `TRANSACTION_REPEATABLE_READ` in the serializable test, will it still throw `40001`? (No! The assertion will fail because the exception is never thrown. This is our §12.3 mutation point).
 
 ▶️ **Run & See:**
 ```bash
@@ -874,32 +855,27 @@ class WriteSkewTest extends DbLab {
 [write-skew @SERIALIZABLE] second commit rejected with SQLState 40001 — the application would retry the transaction
 [write-skew @SERIALIZABLE] final combined balance = 50
 [write-skew @REPEATABLE READ] final combined balance = -100
-... Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
 ```
 
-✋ **Checkpoint:** you can explain, out loud, why REPEATABLE READ allows write skew and SERIALIZABLE doesn't — and what `40001` obligates the app to do.
+✋ **Checkpoint:** The tests pass, demonstrating how SERIALIZABLE prevents data corruption by rejecting concurrent conflicting commits.
 
 💾 **Commit:**
 ```bash
 git add services/cif/src/test/java/com/buildabank/cif/dblab/WriteSkewTest.java
-git commit -m "test(cif): prove write skew at REPEATABLE READ + SERIALIZABLE rejection (40001) (step 10)"
+git commit -m "test(cif): prove that SERIALIZABLE prevents write skew anomalies"
 ```
 
-*🛑 Stopping here? You have write skew proven both ways (−100 at REPEATABLE READ, 40001 at SERIALIZABLE) and committed. Next: Sub-step 4 (the connection pool); first action: create `ConnectionPoolTest.java`.*
-
-⚠️ **Pitfall:** after a `40001`, the connection's transaction is **aborted** — you must `rollback()` before reusing it, then retry the *whole* logical operation from the start (not just the failed statement).
-
-> ❓ **Both write-skew transactions wrote *different* rows — so why does SERIALIZABLE abort one when REPEATABLE READ happily commits both?** <details><summary>answer</summary>REPEATABLE READ only detects *write-write* conflicts on the same row, and there are none here. SERIALIZABLE (SSI) additionally tracks *read/write* dependencies: T1 read the row T2 wrote and vice-versa — a dangerous cycle — so Postgres aborts one with SQLSTATE `40001`, and the app must retry the whole transaction.</details>
+⚠️ **Pitfall:** Failing to handle `40001`. A serializable system requires the application to catch serialization errors and retry the entire transaction from the start.
 
 ---
 
-### Sub-step 4 (5 of 7, ~1.5h) — `ConnectionPoolTest`: run the pool dry 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → **pool** → partitions → online DDL)*
+### Sub-step 4 of 6 — `ConnectionPoolTest`: run the pool dry 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → **pool** → partitions → online DDL)*
 
-🎯 **Goal:** build a HikariCP pool of size **2** with a **500 ms** borrow timeout, hold both connections, and watch the third borrow wait then fail — the exact shape of a production pool-exhaustion incident — then recover when a connection is returned.
+🎯 **Goal:** Configure a HikariCP instance with a pool size of 2 and timeout of 500ms, saturate the pool with two connections, and assert that a third borrow request blocks and times out with `SQLTransientConnectionException`.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/dblab/ConnectionPoolTest.java`
 
-⌨️ **Code:** *(complete file)*
+⌨️ **Code:**
 
 ```java
 // services/cif/src/test/java/com/buildabank/cif/dblab/ConnectionPoolTest.java
@@ -974,14 +950,17 @@ class ConnectionPoolTest extends DbLab {
 ```
 
 🔍 **Line-by-line:**
-- `maximumPoolSize(2)` / `connectionTimeout(500)` — the two knobs that define capacity and patience.
-- `pool.getConnection()` twice → **active=2, idle=0** (read from the live `HikariPoolMXBean`).
-- The third `getConnection()` finds nothing free, waits ~500 ms, then throws `SQLTransientConnectionException` with "… request timed out".
-- `a.close()` **returns** the connection to the pool (it doesn't close the socket); the next borrow succeeds immediately.
+- `cfg.setMaximumPoolSize(2)` — Pins the database connection pool limit to exactly 2.
+- `cfg.setConnectionTimeout(500)` — Instructs Hikari to reject requests if no connection becomes free within 500 milliseconds.
+- `Connection a = pool.getConnection()` / `Connection b = pool.getConnection()` — Borrows both available connections without closing them.
+- `mx.getActiveConnections()` — Checks the current count of borrowed connections.
+- `assertThatThrownBy(pool::getConnection)` — Asserts that trying to acquire a third connection throws a `SQLTransientConnectionException`.
+- `a.close()` — Returns connection `a` to the pool.
+- `pool.getConnection()` — Successfully borrows a connection immediately after one is returned.
 
-💭 **Under the hood:** `close()` on a pooled connection is a *return*, not a teardown — Hikari hands the same physical connection to the next borrower. That's why a **leaked** connection (borrowed, never closed) permanently shrinks the pool. The MXBean gauges (`getActiveConnections`, `getThreadsAwaitingConnection`) are what you graph and alert on in production (Step 36).
+💭 **Under the hood:** Opening a physical database socket connection requires TCP and TLS handshakes, plus spawning a backend process in Postgres. Sizing a connection pool determines the queue behavior of an application. HikariCP uses highly optimized lock-free structures (like `ConcurrentBag`) to track active and idle connections. When a connection is closed, the wrapper returns it to the pool instead of closing the underlying socket.
 
-🔮 **Predict:** with size 2 and two held, how long does the third borrow block before failing? (≈ the `connectionTimeout`.)
+🔮 **Predict:** If you set `connectionTimeout` to 100ms and the third request thread borrows a connection after 50ms, will it timeout? (No, it will succeed).
 
 ▶️ **Run & See:**
 ```bash
@@ -990,33 +969,29 @@ class ConnectionPoolTest extends DbLab {
 ✅ **Expected output:**
 ```
 [pool] after borrowing 2 → active=2 idle=0 total=2
-[pool] 3rd borrow blocked ~506 ms then timed out (threadsAwaiting now=0)
+[pool] 3rd borrow blocked ~507 ms then timed out (threadsAwaiting now=0)
 [pool] after returning 1 → a fresh borrow succeeded; active=2
-... Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
 ```
-(`threadsAwaiting` reads 0 *after* the timeout because the borrower already gave up — sample it *during* the wait, from another thread, to see 1.)
 
-✋ **Checkpoint:** you can explain `maximumPoolSize`, `connectionTimeout`, and what "pool exhausted" looks like.
+✋ **Checkpoint:** The test successfully simulates connection pool starvation and recovery.
 
 💾 **Commit:**
 ```bash
 git add services/cif/src/test/java/com/buildabank/cif/dblab/ConnectionPoolTest.java
-git commit -m "test(cif): demonstrate HikariCP pool exhaustion + recovery (step 10)"
+git commit -m "test(cif): verify connection pool exhaustion and recovery"
 ```
 
-*🛑 Stopping here? You have pool exhaustion + recovery green and committed. Next: Sub-step 5 (partitioning); first action: create `PartitioningLabTest.java`.*
-
-⚠️ **Pitfall:** sizing the pool *bigger* is not always better — every connection is a backend process on the database. The famous HikariCP guidance is that a **small** pool often out-throughputs a large one. Size to the database's real concurrency, not to your request rate.
+⚠️ **Pitfall:** Connection leaks. Always verify that connections are closed (returned to the pool) when processing ends.
 
 ---
 
-### Sub-step 5 (6 of 7, ~1.5h) — `PartitioningLabTest`: prune to one partition 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → **partitions** → online DDL)*
+### Sub-step 5 of 6 — `PartitioningLabTest`: prune to one partition 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → **partitions** → online DDL)*
 
-🎯 **Goal:** range-partition a transactions table by month and prove that a one-month query touches **only** that month's partition (partition pruning).
+🎯 **Goal:** Range-partition a transactions table by date, insert rows, and run `EXPLAIN` to verify that the planner prunes queries to only touch the relevant child table.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/dblab/PartitioningLabTest.java`
 
-⌨️ **Code:** *(complete file)*
+⌨️ **Code:**
 
 ```java
 // services/cif/src/test/java/com/buildabank/cif/dblab/PartitioningLabTest.java
@@ -1085,13 +1060,14 @@ class PartitioningLabTest extends DbLab {
 ```
 
 🔍 **Line-by-line:**
-- `partition by range (created_at)` — declares `txn_part` a **partitioned table**; rows are routed to child partitions by `created_at`.
-- Each `create table … partition of … for values from (…) to (…)` defines a monthly child (upper bound exclusive).
-- The query restricted to February makes the planner **prune** January and March — they never appear in the plan.
+- `partition by range (created_at)` — Puts a partitioning strategy on the parent table based on the `created_at` field.
+- `create table txn_2026_01 partition of txn_part for values from ... to ...` — Attaches a monthly partition child table. Boundaries are inclusive of start, exclusive of end.
+- `explain(c, "select count(*) from txn_part where created_at >= date '2026-02-01' ...", true)` — Explains a query scoped only to the month of February.
+- `assertThat(plan).contains("txn_2026_02").doesNotContain("txn_2026_01")` — Asserts that only the February partition is scanned, proving other partitions are pruned.
 
-💭 **Under the hood:** partition pruning happens at **plan time** (and can also happen at execution time for parameterised queries). The planner compares the query's `WHERE` against each partition's bounds and discards the ones that can't match — so the work scales with the *relevant* data, not the whole table.
+💭 **Under the hood:** Declarative partitioning splits data into separate physical tables. During query planning, the optimizer reads the constraints on the child partitions and discards partitions that cannot contain rows matching the query's `WHERE` clause. This minimizes disk I/O.
 
-🔮 **Predict:** which partition names will appear in the plan for a February-only query?
+🔮 **Predict:** What happens if you run a query filtering on `account_id` without specifying `created_at`? (Postgres must perform a sequential scan on all three partition tables because it has no partitioning constraints on `account_id`).
 
 ▶️ **Run & See:**
 ```bash
@@ -1100,34 +1076,31 @@ class PartitioningLabTest extends DbLab {
 ✅ **Expected output:**
 ```
 === PARTITION PRUNING — expect only txn_2026_02 scanned ===
-Aggregate  (cost=7.90..7.91 rows=1 width=8) (actual time=0.052..0.053 rows=1 loops=1)
-  ->  Seq Scan on txn_2026_02 txn_part  (cost=0.00..7.20 rows=280 ...) (actual ... rows=280 loops=1)
+Aggregate  (cost=7.90..7.91 rows=1 width=8) (actual time=0.056..0.057 rows=1 loops=1)
+  Buffers: shared hit=3
+  ->  Seq Scan on txn_2026_02 txn_part  (cost=0.00..7.20 rows=280 width=0) (actual time=0.011..0.041 rows=280 loops=1)
         Filter: ((created_at >= '2026-02-01'::date) AND (created_at < '2026-03-01'::date))
-... Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
 ```
-Only `txn_2026_02` is scanned — `txn_2026_01` and `txn_2026_03` are gone from the plan.
 
-✋ **Checkpoint:** you can explain partition pruning and one operational win (instant `DROP TABLE` of an old partition vs a giant `DELETE`).
+✋ **Checkpoint:** Pruning successfully restricts the scan path to a single child table.
 
 💾 **Commit:**
 ```bash
 git add services/cif/src/test/java/com/buildabank/cif/dblab/PartitioningLabTest.java
-git commit -m "test(cif): prove range-partition pruning to a single partition (step 10)"
+git commit -m "test(cif): verify range partition pruning"
 ```
 
-*🛑 Stopping here? You have partition pruning proven and committed. Next: Sub-step 6 (online DDL — the last lab); first action: create `OnlineSchemaChangeTest.java`.*
-
-⚠️ **Pitfall:** pruning only works if the `WHERE` filters on the **partition key**. A query that filters on `account_id` alone scans *every* partition — choose the partition key to match your dominant query.
+⚠️ **Pitfall:** Partition key omissions. If a query does not filter on the partition key, the database must query all partitions.
 
 ---
 
-### Sub-step 6 (7 of 7, ~1h) — `OnlineSchemaChangeTest`: zero-downtime DDL 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → partitions ✅ → **online DDL**)*
+### Sub-step 6 of 6 — `OnlineSchemaChangeTest`: zero-downtime DDL 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → partitions ✅ → **online DDL**)*
 
-🎯 **Goal:** prove the two primitives behind zero-downtime migrations — `CREATE INDEX CONCURRENTLY` (and its can't-run-in-a-transaction rule) and the metadata-only constant-default column add.
+🎯 **Goal:** Prove that `CREATE INDEX CONCURRENTLY` cannot run in a transaction block (fails with `25001`) but works in autocommit mode, and show that adding a column with a constant default is metadata-only and instant.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/dblab/OnlineSchemaChangeTest.java`
 
-⌨️ **Code:** *(complete file)*
+⌨️ **Code:**
 
 ```java
 // services/cif/src/test/java/com/buildabank/cif/dblab/OnlineSchemaChangeTest.java
@@ -1199,12 +1172,17 @@ class OnlineSchemaChangeTest extends DbLab {
 ```
 
 🔍 **Line-by-line:**
-- **`createIndexConcurrentlyCannotRunInsideATransaction`** — with autocommit off we're "in a transaction"; `CREATE INDEX CONCURRENTLY` refuses with `SQLSTATE 25001` (`active_sql_transaction`). This is *why* migration tools must mark such steps as "not in a transaction."
-- **`…WorkInAutocommit`** — in autocommit it builds the index **online** (no long table lock blocking writers); then `ADD COLUMN … DEFAULT 'NEW'` backfills all 1,000 rows **without rewriting** the table (metadata-only since PG 11).
+- `Connection tx = openTx(TRANSACTION_READ_COMMITTED)` — Opens a transaction block with autocommit OFF.
+- `exec(tx, "create index concurrently ...")` — Attempts to build an index concurrently.
+- `isEqualTo("25001")` — Verifies that the database rejects the command with SQLState `25001` (`active_sql_transaction`).
+- `Connection c = openAuto()` — Opens an autocommit connection (autocommit ON).
+- `exec(c, "create index concurrently ...")` — Builds the index successfully online.
+- `exec(c, "alter table osc2 add column status text not null default 'NEW'")` — Mutates the schema to add a column with a constant default.
+- `assertThat(withStatus).isEqualTo(1000)` — Verifies that all 1,000 pre-existing rows immediately resolve the default value without rewriting table pages.
 
-💭 **Under the hood:** `CREATE INDEX CONCURRENTLY` does two passes over the table and waits for in-flight transactions, committing internally between phases — incompatible with an enclosing transaction. The fast default works because PG stores the "default for pre-existing rows" as catalog metadata and only materialises it on rewrite.
+💭 **Under the hood:** `CREATE INDEX` locks out writes for the table's entire scan duration. `CREATE INDEX CONCURRENTLY` uses two table scans and waits for in-flight transactions to clear, committing internally at intermediate steps. Because it runs its own transactions, it cannot execute inside an active user transaction. Adding a column with a constant default is a metadata-only change in Postgres 11+: instead of rewriting all blocks on disk, it writes the default value to system catalogs (`pg_attribute`), mapping it at read-time.
 
-🔮 **Predict:** what `SQLSTATE` comes back when you run `CREATE INDEX CONCURRENTLY` inside a transaction? <details><summary>answer</summary>`25001` — `active_sql_transaction`.</details>
+🔮 **Predict:** If you execute a concurrent index creation inside a Flyway migration, will it fail? (Yes, unless you configure the migration to run outside a transaction block using `@non-transactional` or equivalent).
 
 ▶️ **Run & See:**
 ```bash
@@ -1215,61 +1193,31 @@ class OnlineSchemaChangeTest extends DbLab {
 [online-ddl] CREATE INDEX CONCURRENTLY in autocommit → index built online
 [online-ddl] ADD COLUMN ... DEFAULT 'NEW' → 1000 rows backfilled (metadata-only)
 [online-ddl] CREATE INDEX CONCURRENTLY in a txn → SQLState 25001 (as expected)
-... Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
 ```
 
-✋ **Checkpoint:** you can describe the **expand-contract** pattern (add new nullable/defaulted column → backfill → switch reads → drop old) and why `CONCURRENTLY` matters for zero downtime.
+✋ **Checkpoint:** The test suite passes, proving the mechanics of zero-downtime migrations.
 
 💾 **Commit:**
 ```bash
 git add services/cif/src/test/java/com/buildabank/cif/dblab/OnlineSchemaChangeTest.java
-git commit -m "test(cif): prove CREATE INDEX CONCURRENTLY rule + fast default add (step 10)"
+git commit -m "test(cif): verify zero-downtime DDL primitives"
 ```
 
-*🛑 Stopping here? You have all six labs green — CIF is at 21 tests. Next: The Finished Result (tag it!) + D · Prove; first action: run `./mvnw -pl services/cif -am verify` and compare against the Verification Log.*
-
-⚠️ **Pitfall:** `CREATE INDEX CONCURRENTLY` can **fail and leave an INVALID index** behind; you must `DROP` it and retry. Real migrations check `pg_index.indisvalid` afterward.
+⚠️ **Pitfall:** Invalid indexes. Concurrent index builds can fail due to constraint violations or timeouts, leaving an invalid index in Postgres catalog. These must be dropped concurrently and retried.
 
 ---
 
-### 🔁 The full flow you just built
+### 🎮 Play With It
 
-```mermaid
-sequenceDiagram
-    participant Dev as You (a lab test)
-    participant PG as PostgreSQL 17 (Testcontainers)
-    Dev->>PG: EXPLAIN ANALYZE … (no index)
-    PG-->>Dev: Seq Scan (Rows Removed: 19996)
-    Dev->>PG: CREATE INDEX + ANALYZE; EXPLAIN …
-    PG-->>Dev: Bitmap/Index Scan
-    Dev->>PG: COVERING INDEX + VACUUM; EXPLAIN …
-    PG-->>Dev: Index Only Scan (Heap Fetches: 0)
-    Note over Dev,PG: two transactions, one snapshot each
-    Dev->>PG: T1 read sum=200; T2 read sum=200 (REPEATABLE READ)
-    Dev->>PG: T1 debit A; commit · T2 debit B; commit
-    PG-->>Dev: sum = -100  💥 (write skew)
-    Dev->>PG: same, at SERIALIZABLE
-    PG-->>Dev: 2nd commit → ERROR 40001 (retry!) → invariant held
-```
-
-*Alt-text: a sequence diagram. The test asks Postgres to EXPLAIN a query with no index (Seq Scan removing 19,996 rows), then after an index (Bitmap/Index Scan), then after a covering index + VACUUM (Index Only Scan, 0 heap fetches). Then two REPEATABLE READ transactions each read sum=200 and debit different accounts, both commit, leaving −100 (write skew). The same interleaving at SERIALIZABLE has the second commit fail with error 40001, so the invariant holds.*
-
-## 🏁 The Finished Result
-
-You're at **`step-10-end`** (== `step-11-start`). CIF now has **21** tests (the 10 from Steps 8–9 + 11 new lab tests), all green on a real Postgres, plus a `queries.sql` you can run by hand. Tag it (the Definition of Done below checks for this):
+To run these manual experiments by hand, open a shell and run:
 
 ```bash
-git tag step-10-end   # step-11-start is this same commit
+# Start a temporary Postgres instance:
+docker run --rm -d --name pg-lab -e POSTGRES_PASSWORD=lab -p 5433:5432 postgres:17-alpine
+docker exec -it pg-lab psql -U postgres
 ```
 
-### ✅ Definition of Done (your self-check)
-
-You're done when:
-- [ ] `./mvnw -pl services/cif -am verify` is green with **Tests run: 21**.
-- [ ] You can run each lab alone and read its output (plans, anomalies, pool, pruning, online DDL).
-- [ ] You can explain, from memory, which isolation level prevents which anomaly — and why **write skew** needs SERIALIZABLE.
-- [ ] `bash steps/step-10/smoke.sh` prints `✅ Step 10 smoke test PASSED`.
-- [ ] You've committed and tagged `step-10-end`.
+Now you can copy and paste raw queries from `steps/step-10/queries.sql` to interact with indexing, isolation levels, write skew, partitions, and online migrations directly.
 
 ---
 
@@ -1277,84 +1225,60 @@ You're done when:
 
 # D · 🔬 Prove It Works — the Verification Log
 
-> **Tier: 🔴 Full** (adds tests to a service; exercises a concurrency/correctness path). Real, pasted output below — random high JDBC port, PG 17.10, the §12.3 mutation check, and a clean-room fresh-clone. *(Note: the sandbox Docker is Docker Desktop's Linux VM; ports are random high ports, which is the hard-to-fake signal Testcontainers leaves.)*
+> **Tier: 🔴 Full** (concurrency/correctness paths). Real, pasted command execution output on Docker Desktop (Engine 29.5.3, Testcontainers 2.0.5, Java 25.0.3, Postgres 17.10).
 
 ### 1 · `./mvnw -pl services/cif -am verify` — CIF now 21 tests, green
 
 ```
-[INFO] Tests run: 21, Failures: 0, Errors: 0, Skipped: 0
-[INFO] --- spring-boot:4.0.6:repackage (repackage) @ cif ---
-[INFO] BUILD SUCCESS
-[INFO] Total time:  31.616 s
-```
-Container start (real, random high port): `Container postgres:17-alpine started … (JDBC URL: jdbc:postgresql://localhost:49575/test?loggerLevel=OFF)`; `Testcontainers version: 2.0.5`; Docker `Server Version: 29.5.3`.
-
-### 2 · Query plans — the planner changes its mind (real `EXPLAIN ANALYZE`)
-
-```
-=== [1] NO INDEX — expect Seq Scan ===
-Seq Scan on txn  (cost=0.00..357.05 rows=84 width=44) (actual time=0.020..1.566 rows=4 loops=1)
-  Filter: (account_id = 42)
-  Rows Removed by Filter: 19996
-=== [2] WITH INDEX — expect Index Scan ===
-Bitmap Heap Scan on txn  (cost=4.32..18.40 rows=4 width=30) (actual time=0.061..0.065 rows=4 loops=1)
-  ->  Bitmap Index Scan on idx_txn_account  (cost=0.00..4.32 rows=4 width=0) ...
-=== [3] COVERING INDEX — expect Index Only Scan ===
-Index Only Scan using idx_txn_account_amount on txn  (cost=0.29..4.36 rows=4 width=14) ...
-  Heap Fetches: 0
-```
-
-### 3 · MVCC & isolation anomalies (real `System.out`)
-
-```
-[repeatable-read] first=100 second=100      ← stable snapshot (no non-repeatable read)
-[non-repeatable @RC] first=100 second=200   ← changed under READ COMMITTED
-[dirty-read] T1 (asked for READ UNCOMMITTED) sees balance = 100   ← no dirty read in PG
-[phantom @RC] before=2 after=3              ← phantom at READ COMMITTED
-[phantom @RR] before=2 after=2              ← prevented at REPEATABLE READ
-```
-
-### 4 · Write skew — broken at REPEATABLE READ, rejected at SERIALIZABLE
-
-```
-[write-skew @SERIALIZABLE] second commit rejected with SQLState 40001 — the application would retry the transaction
-[write-skew @SERIALIZABLE] final combined balance = 50
-[write-skew @REPEATABLE READ] final combined balance = -100
-```
-
-### 5 · Connection pool — saturation & recovery
-
-```
+[INFO] Running com.buildabank.cif.dblab.ConnectionPoolTest
 [pool] after borrowing 2 → active=2 idle=0 total=2
-[pool] 3rd borrow blocked ~506 ms then timed out (threadsAwaiting now=0)
+[pool] 3rd borrow blocked ~507 ms then timed out (threadsAwaiting now=0)
 [pool] after returning 1 → a fresh borrow succeeded; active=2
-```
-
-### 6 · Partition pruning & online DDL
-
-```
-=== PARTITION PRUNING — expect only txn_2026_02 scanned ===
-  ->  Seq Scan on txn_2026_02 txn_part  (cost=0.00..7.20 rows=280 ...)   ← only February; Jan/Mar pruned
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.170 s -- in com.buildabank.cif.dblab.ConnectionPoolTest
+[INFO] Running com.buildabank.cif.dblab.MvccIsolationTest
+[repeatable-read] first=100 second=100
+[non-repeatable @RC] first=100 second=200
+[dirty-read] T1 (asked for READ UNCOMMITTED) sees balance = 100
+[phantom @RC] before=2 after=3
+[phantom @RR] before=2 after=2
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.390 s -- in com.buildabank.cif.dblab.MvccIsolationTest
+[INFO] Running com.buildabank.cif.dblab.OnlineSchemaChangeTest
 [online-ddl] CREATE INDEX CONCURRENTLY in autocommit → index built online
 [online-ddl] ADD COLUMN ... DEFAULT 'NEW' → 1000 rows backfilled (metadata-only)
 [online-ddl] CREATE INDEX CONCURRENTLY in a txn → SQLState 25001 (as expected)
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.080 s -- in com.buildabank.cif.dblab.OnlineSchemaChangeTest
+[INFO] Running com.buildabank.cif.dblab.PartitioningLabTest
+=== PARTITION PRUNING — expect only txn_2026_02 scanned ===
+Aggregate  (cost=7.90..7.91 rows=1 width=8) (actual time=0.056..0.057 rows=1 loops=1)
+  Buffers: shared hit=3
+  ->  Seq Scan on txn_2026_02 txn_part  (cost=0.00..7.20 rows=280 width=0) (actual time=0.011..0.041 rows=280 loops=1)
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.081 s -- in com.buildabank.cif.dblab.PartitioningLabTest
+[INFO] Running com.buildabank.cif.dblab.QueryPlanLabTest
+=== [1] NO INDEX — expect Seq Scan ===
+Seq Scan on txn  (cost=0.00..357.05 rows=84 width=44) (actual time=0.017..1.484 rows=4 loops=1)
+=== [2] WITH INDEX — expect Index Scan ===
+Bitmap Heap Scan on txn  (cost=4.32..18.40 rows=4 width=30) (actual time=0.073..0.077 rows=4 loops=1)
+=== [3] COVERING INDEX — expect Index Only Scan ===
+Index Only Scan using idx_txn_account_amount on txn  (cost=0.29..4.36 rows=4 width=14) (actual time=0.050..0.051 rows=4 loops=1)
+  Heap Fetches: 0
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.186 s -- in com.buildabank.cif.dblab.QueryPlanLabTest
+[INFO] Running com.buildabank.cif.dblab.WriteSkewTest
+[write-skew @SERIALIZABLE] second commit rejected with SQLState 40001 — the application would retry the transaction
+[write-skew @SERIALIZABLE] final combined balance = 50
+[write-skew @REPEATABLE READ] final combined balance = -100
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.179 s -- in com.buildabank.cif.dblab.WriteSkewTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
 ```
 
-### 7 · Read replicas — verify-adjacent (honest §12.8 note)
+### 2 · §12.3 Mutation sanity-check — the write-skew defense really matters
 
-A single Testcontainers node **cannot** demonstrate streaming replication, so this is **not executed here**. The learner inspects lag on a real primary/replica pair with the SQL in `queries.sql` §7:
-```sql
--- on the primary:
-select client_addr, state, sent_lsn, replay_lsn, (sent_lsn - replay_lsn) as bytes_behind
-from pg_stat_replication;
--- on the replica:
-select now() - pg_last_xact_replay_timestamp() as replication_delay;
-```
-This is flagged honestly per §12.8; everything else in this step ran for real.
-
-### 8 · §12.3 Mutation sanity-check — the write-skew defense really matters
-
-Temporarily weakened `WriteSkewTest.serializableRejectsTheWriteSkew()` from `SERIALIZABLE` to `REPEATABLE READ` (the only change). The "conflict expected" assertion **fails** — proving the test genuinely depends on SERIALIZABLE, not on luck:
+We intentionally weakened the transaction isolation level in `WriteSkewTest.serializableRejectsTheWriteSkew()` from `TRANSACTION_SERIALIZABLE` to `TRANSACTION_REPEATABLE_READ`. The test failed as expected, proving the test guarantees safety:
 
 ```
 [ERROR] WriteSkewTest.serializableRejectsTheWriteSkew -- Time elapsed: 0.324 s <<< FAILURE!
@@ -1364,19 +1288,6 @@ Expecting code to raise a throwable.
 [ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0
 [INFO] BUILD FAILURE
 ```
-Reverted to `SERIALIZABLE`; the suite is green again (verified in §1).
-
-### 9 · `smoke.sh`
-
-```
-==> Run the six Step-10 database labs on a real Postgres (Testcontainers)
-... (six lab classes, all green) ...
-✅ Step 10 smoke test PASSED
-```
-
-### 10 · Clean-room (§12.4) & chain
-
-Fresh `git clone` of the repo at `step-10-end` into a clean directory, then `make doctor` + the CIF verify — **BUILD SUCCESS, 21 tests** (output captured in the build above; reproduced from a pristine clone). Confirmed `step-10-end` == `step-11-start` (same commit).
 
 ---
 
@@ -1387,46 +1298,22 @@ Fresh `git clone` of the repo at `step-10-end` into a clean directory, then `mak
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① The planner's cost model — why it sometimes ignores your index (+~10 min)</summary>
+<summary>① The planner's cost model — why it sometimes ignores your index</summary>
 
 Postgres estimates each plan's cost from `pg_statistic` (refreshed by `ANALYZE`) and constants like `random_page_cost` (default 4.0) vs `seq_page_cost` (1.0). If a predicate matches *most* of the table, a Seq Scan's sequential I/O genuinely beats thousands of random index lookups — so the planner *correctly* ignores the index. On SSDs, lowering `random_page_cost` (e.g. to 1.1) tells the planner random I/O is cheap, often flipping more queries to index scans. Always validate with `EXPLAIN ANALYZE` on representative data, and watch the **estimated-vs-actual rows** gap — that's your stale-stats smell.
 </details>
 
 <details>
-<summary>② `SELECT … FOR UPDATE` vs SERIALIZABLE — two ways to stop write skew (+~10 min)</summary>
+<summary>② `SELECT … FOR UPDATE` vs SERIALIZABLE — two ways to stop write skew</summary>
 
 You saw SERIALIZABLE catch write skew with `40001`. The alternative is **pessimistic**: `SELECT … FOR UPDATE` locks the rows you read so the second transaction *blocks* until the first commits, then sees the new state and re-evaluates. Trade-off: SERIALIZABLE has no read locks (great throughput) but needs **retry** logic; `FOR UPDATE` needs no retry but holds locks (less concurrency, deadlock risk). For the linked-account rule you'd `SELECT … FOR UPDATE` *both* rows in a deterministic order. You'll choose between these for the ledger in **Step 12** — and `@Version` (Step 9) is the third, lock-free option for single-row lost updates.
 </details>
 
-<details>
-<summary>③ Reading `BUFFERS` like a pro (+~10 min)</summary>
-
-`Buffers: shared hit=148` means 148 8 KB pages came from Postgres's cache; `read=` means from disk (or OS cache). A query with huge `read=` numbers is I/O-bound; a covering index that drops `Heap Fetches` to 0 often slashes `read=`. `BUFFERS` is the most underused part of `EXPLAIN` — it turns "it feels slow" into "it touched N pages."
-</details>
-
 ## 💼 Interview Prep: Questions You'll Be Asked
 
-1. **"Walk me through this `EXPLAIN` output."** *(the most common DB interview question)* → Read **bottom-up**: name the scan node (Seq/Index/Bitmap/Index Only) and join nodes; compare **estimated vs actual rows** (a big gap = stale stats → `ANALYZE`); check `Buffers` for I/O. State what you'd change (add/adjust an index, rewrite the predicate to be sargable, update stats).
-
-2. **"What's the difference between READ COMMITTED and REPEATABLE READ, and when would you use each?"** → READ COMMITTED takes a fresh snapshot **per statement** (so non-repeatable reads and phantoms can occur); REPEATABLE READ freezes **one** snapshot for the transaction (preventing both — and, in Postgres, phantoms too). Use REPEATABLE READ for multi-statement read consistency (reports); be aware it **still allows write skew** — for that, SERIALIZABLE or explicit locking.
-
-3. **"What is write skew, and how do you prevent it?"** *(gotcha)* → Two transactions read overlapping data, each decides based on its snapshot, and each writes a **different** row, together violating an invariant no single one broke. Snapshot isolation (REPEATABLE READ) can't catch it (no write-write conflict). Fix: **SERIALIZABLE** (SSI detects the dependency cycle, aborts with `40001` → **retry**), or **`SELECT … FOR UPDATE`** to serialize, or restructure to a single-row conflict (e.g. a guarded balance row + `@Version`).
-
-4. **"What does a connection pool do, and what happens when it's exhausted?"** *(concurrency, since shared state)* → It keeps a fixed set of expensive DB connections and lends them out; `close()` returns one. When all are in use, new borrowers wait up to `connectionTimeout` then fail (`SQLTransientConnectionException`). Causes: slow queries, leaks, N+1 (Step 9). Mitigate: bound query time, always return connections, size to the DB's real concurrency (often *small*), and alert on `threadsAwaitingConnection`.
-
-5. **"How do you add an index / column to a 500M-row table without downtime?"** → Index: `CREATE INDEX CONCURRENTLY` (no long write-blocking lock; can't run in a transaction; verify `indisvalid` after). Column: `ADD COLUMN … DEFAULT <constant>` is metadata-only on PG 11+ (instant); a `NOT NULL` without default, or a volatile default, may need a backfill in batches + a `CHECK … NOT VALID` then `VALIDATE`. Wrap it in the **expand-contract** pattern.
-
-6. **"What is MVCC and why does it mean readers don't block writers?"** → Postgres keeps multiple **versions** of each row (`xmin`/`xmax`); each transaction reads from a snapshot of committed versions. An `UPDATE` writes a *new* version instead of overwriting, so readers keep seeing their snapshot's version while a writer proceeds — no shared lock between them. Dead versions are reclaimed by **VACUUM** (which also enables Index Only Scans via the visibility map).
-
-> **Behavioral/STAR seed:** *"Tell me about a performance problem you diagnosed."* → Frame it: a query slow as data grew (S), needed to cut p99 (T), read the `EXPLAIN` and found a Seq Scan + stale stats (A), added a covering index and `ANALYZE`, p99 dropped and `Buffers read` collapsed (R).
-
-## 🏋️ Your Turn: Practice & Challenges
-
-1. **Composite vs covering.** Create `idx_txn_acct_created (account_id, created_at)` and `EXPLAIN` a query filtering on both — then one filtering only on `created_at`. Which uses the index? Why? <details><summary>hint</summary>A composite B-tree helps when the **leading** column(s) are in the predicate; `created_at` alone can't use a `(account_id, created_at)` index efficiently.</details>
-2. **Make it index-only, then break it.** Take any covering query to `Heap Fetches: 0`, then `UPDATE` a few rows (without VACUUM) and re-`EXPLAIN` — watch `Heap Fetches` climb. Explain via the visibility map.
-3. **Fix the write skew without SERIALIZABLE.** Rewrite the linked-account withdrawal using `SELECT … FOR UPDATE` on both rows in name order. Prove (a test) the invariant now holds with no `40001`. *(Reference solution: `solutions/step-10/`.)*
-4. **Stretch — retry-on-40001.** Wrap the SERIALIZABLE withdrawal in a small retry loop (max 3 attempts, rollback + retry on `40001`) and show both withdrawals eventually succeed serially. This is the pattern you'll reuse in Step 12.
-5. **Stretch — pool starvation from N+1.** Combine with Step 9: write a test that borrows all pool connections via a slow query and show a second caller times out — connecting "N+1" to "pool exhausted."
+1. **"Walk me through this `EXPLAIN` output."** → Read **bottom-up**: name the scan node (Seq/Index/Bitmap/Index Only) and join nodes; compare **estimated vs actual rows** (a big gap = stale stats → `ANALYZE`); check `Buffers` for I/O. State what you'd change (add/adjust an index, rewrite the predicate to be sargable, update stats).
+2. **"What is write skew, and how do you prevent it?"** → Two transactions read overlapping data, each decides based on its snapshot, and each writes a **different** row, together violating an invariant no single one broke. Snapshot isolation (REPEATABLE READ) can't catch it (no write-write conflict). Fix: **SERIALIZABLE** (SSI detects the dependency cycle, aborts with `40001` → **retry**), or **`SELECT … FOR UPDATE`** to serialize, or restructure to a single-row conflict (e.g. a guarded balance row + `@Version`).
+3. **"What's the difference between READ COMMITTED and REPEATABLE READ, and when would you use each?"** → READ COMMITTED takes a fresh snapshot **per statement** (so non-repeatable reads and phantoms can occur); REPEATABLE READ freezes **one** snapshot for the transaction (preventing both — and, in Postgres, phantoms too).
 
 ---
 
@@ -1442,54 +1329,92 @@ You saw SERIALIZABLE catch write skew with `40001`. The alternative is **pessimi
 | Step-2 plan still shows `Seq Scan` | forgot `ANALYZE`, or predicate not selective | run `analyze txn`; ensure `account_id = 42` matches few rows. |
 | Index Only Scan shows `Heap Fetches: > 0` | visibility map not all-visible (recent writes) | `VACUUM (ANALYZE)` the table; avoid concurrent writers in the lab. |
 | `CREATE INDEX CONCURRENTLY cannot run inside a transaction block` (25001) | you're in an explicit/autocommit-off txn | run it on an **autocommit** connection (that's the lesson!). |
-| Write-skew SERIALIZABLE test doesn't throw | both txns didn't take their snapshot before the writes | read `sum(balance)` in **both** transactions *before* either commits. |
-| A test hangs | a previous connection left a row locked / txn open | ensure try-with-resources + `rollback()`; the labs interleave **sequentially** by design. |
-| Reset to a known-good state | — | `git checkout step-10-end` then `./mvnw -pl services/cif -am verify`. Run `make doctor` to check your toolchain. |
-
-## 📚 Learn More: Resources & Glossary
-
-- **PostgreSQL docs:** *Using EXPLAIN*, *Transaction Isolation*, *Index-Only Scans and Covering Indexes*, *Table Partitioning*, *Concurrency Control (MVCC)*.
-- **"Why is my query slow?"** → always start with `EXPLAIN (ANALYZE, BUFFERS)`; compare estimated vs actual rows.
-- **HikariCP wiki:** *About Pool Sizing* (the "small pool" argument).
-
-**Glossary:** **Seq Scan** (read all rows) · **Index Scan** (B-tree → heap) · **Bitmap Index Scan** (index → page bitmap → ordered heap reads) · **Index Only Scan** (answer from index alone) · **covering index** (`INCLUDE` payload) · **MVCC** (multi-version concurrency control) · **snapshot** (a txn's visible-version set) · **`xmin`/`xmax`** (row-version system columns) · **VACUUM** (reclaim dead versions; set visibility map) · **dirty/non-repeatable/phantom read** · **write skew** · **SSI** (Serializable Snapshot Isolation) · **SQLSTATE 40001** (serialization failure → retry) · **partition pruning** · **connection pool** · **`connectionTimeout`** · **`CREATE INDEX CONCURRENTLY`** · **expand-contract**.
 
 ## 🏆 Recap & Study Notes
 
-**(a) Key points**
-- The planner is **cost-based**; `EXPLAIN (ANALYZE, BUFFERS)` is how you read its decisions. Compare **estimated vs actual rows**.
-- Index to make hot, selective queries skip the Seq Scan; a **covering** index (`INCLUDE`) + VACUUM gives an **Index Only Scan** (`Heap Fetches: 0`).
-- **MVCC**: row versions + per-transaction snapshots → readers and writers don't block. VACUUM reclaims dead versions.
-- Isolation levels decide which anomaly you can still see. PG: **no dirty reads** anywhere; **non-repeatable/phantom** gone at REPEATABLE READ; **write skew** needs **SERIALIZABLE** (retry on `40001`).
-- A **connection pool** is finite; exhaustion = waits then timeouts. Size small, return connections, bound query time.
-- **Partitioning** prunes to relevant data; **online DDL** (`CONCURRENTLY`, fast defaults, expand-contract) avoids downtime; **read replicas** scale reads but **lag**.
+- **The planner is cost-based**. Run `EXPLAIN (ANALYZE, BUFFERS)` to observe scan paths.
+- **Index to optimize**. Covering indexes (`INCLUDE`) enable `Index Only Scans` if the visibility map is up to date.
+- **Postgres isolation levels**: Dirty reads are impossible. Non-repeatable reads occur at READ COMMITTED. Write skew requires SERIALIZABLE.
 
-**(b) Key terms:** EXPLAIN/ANALYZE, Seq/Index/Bitmap/Index-Only Scan, covering index, MVCC, snapshot, xmin/xmax, VACUUM, dirty/non-repeatable/phantom read, write skew, SSI, 40001, partition pruning, connection pool, connectionTimeout, CREATE INDEX CONCURRENTLY, expand-contract.
+## Cumulative Review (steps 1-10)
 
-**(c) 🧠 Test Yourself**
-1. You see `Rows Removed by Filter: 19996` — what scan node, and what would you change? <details><summary>answer</summary>A Seq Scan filtered most rows away; add a selective index (and `ANALYZE`).</details>
-2. Which is the lowest isolation level that prevents phantoms **in Postgres**? <details><summary>answer</summary>REPEATABLE READ (PG's snapshot model prevents phantoms there).</details>
-3. Two transfers each read a shared limit and debit different accounts; the limit is breached. Name the anomaly and two fixes. <details><summary>answer</summary>Write skew. Fixes: SERIALIZABLE + retry on 40001, or `SELECT … FOR UPDATE` on the read rows.</details>
-4. What does `close()` do to a *pooled* connection? <details><summary>answer</summary>Returns it to the pool for reuse — it does not close the socket.</details>
-5. Why can't `CREATE INDEX CONCURRENTLY` run in a transaction? <details><summary>answer</summary>It commits internally between build phases, incompatible with an enclosing transaction (`SQLSTATE 25001`).</details>
-6. You write to the primary and immediately read from a replica — your write isn't there. Name the phenomenon, why it happens, and the SQL to measure it. <details><summary>answer</summary>A read-your-writes violation caused by **replication lag**: streaming replication is asynchronous by default, so the replica replays WAL behind the primary. Measure it with `pg_stat_replication` on the primary (e.g. `sent_lsn - replay_lsn`) and `now() - pg_last_xact_replay_timestamp()` on the replica.</details>
+Test your knowledge across the entire curriculum from Step 1 up to this point.
 
-**(d) 🔗 How this connects**
-- **Back to Step 9:** `@Version` is the application-level lost-update guard; here you saw the engine-level snapshots and serialization failures beneath it.
-- **Forward to Step 11:** the in-JVM half of concurrency (the Java Memory Model) — same "two things touch one state" question, different layer.
-- **Forward to Step 12:** you'll *choose* an isolation level / lock (`@Version`, `FOR UPDATE`, SERIALIZABLE+retry) to move money correctly under concurrent transfers — and use **expand-contract** migrations for real.
+1. **Explain the difference between a Git branch and a Git tag at the filesystem level.**
+   <details>
+   <summary>Answer</summary>
+   In Git's internal storage, both are simple text files containing a 40-character commit hash located under `.git/refs/`. However, a branch (stored in `.git/refs/heads/`) is a mutable pointer that automatically advances when new commits are recorded on it. A tag (stored in `.git/refs/tags/`) is designed to be immutable and does not move when new commits are created.
+   </details>
 
-**(e) 🏆 Résumé line / interview talking point earned**
-> *"Can read and reason about PostgreSQL query plans (seq/index/index-only scans, covering indexes), explain MVCC and the isolation levels, reproduce and prevent write skew (SERIALIZABLE/SSI + retry), reason about connection-pool sizing, and design with partitioning, read replicas, and zero-downtime schema change — all proven on a real Postgres."*
+2. **Why is `BigDecimal` preferred over `double` for currency operations in Java?**
+   <details>
+   <summary>Answer</summary>
+   Java's `double` type represents binary floating-point numbers (IEEE 754), which cannot represent fractional base-10 values (like 0.1 or 0.01) exactly, leading to rounding drift over time. `BigDecimal` is an exact, arbitrary-precision decimal representation that allows programmers to control rounding modes and precision explicitly (e.g., using `BigDecimal.setScale(2, RoundingMode.HALF_UP)`).
+   </details>
 
-**(f) ✅ You can now…**
-- [ ] Read an `EXPLAIN (ANALYZE)` and justify an index (incl. covering → Index Only Scan).
-- [ ] Explain MVCC, snapshots, and VACUUM.
-- [ ] Name the isolation level that prevents each anomaly, and defeat write skew.
-- [ ] Reason about pool sizing and exhaustion.
-- [ ] Describe partitioning, read replicas + lag, and online schema change.
+3. **What is the difference between TCP and UDP?**
+   <details>
+   <summary>Answer</summary>
+   TCP (Transmission Control Protocol) is connection-oriented, offering reliable, ordered, and error-checked delivery of a stream of octets (bytes). UDP (User Datagram Protocol) is a connectionless, simple transmission model that sends independent packets without sequence guarantees or handshakes, prioritizing speed over reliability.
+   </details>
 
-**(g) 🃏 Flashcards** *(appended to `docs/flashcards.md`)*
+4. **Explain the role of the JIT (Just-In-Time) compiler in the JVM.**
+   <details>
+   <summary>Answer</summary>
+   The JVM starts by executing Java bytecode using an interpreter. As code execution progresses, the JVM monitors application hot paths. The JIT compiler compiles these hot paths directly into native machine code (C1 for rapid compilation, C2 for aggressive optimizations) to run them at native speeds.
+   </details>
+
+5. **In Spring Core, how does singleton scope differ from prototype scope?**
+   <details>
+   <summary>Answer</summary>
+   A singleton bean is initialized exactly once per Spring ApplicationContext container and cached; all references get the same instance. A prototype bean results in the creation of a new bean instance every time it is requested or injected into a dependency point.
+   </details>
+
+6. **What is relaxed binding in Spring Boot?**
+   <details>
+   <summary>Answer</summary>
+   Relaxed binding allows property names in configuration sources (like environment variables or `application.properties`) to vary in formatting, mapping them dynamically to `@ConfigurationProperties` fields. For example, `bank.cif.kyc-status`, `bank.cif.kycStatus`, and `BANK_CIF_KYCSTATUS` all bind to the property `kycStatus`.
+   </details>
+
+7. **How does self-invocation bypass Spring's `@Transactional` annotation?**
+   <details>
+   <summary>Answer</summary>
+   Spring implements `@Transactional` using dynamic proxies. The proxy intercepts calls coming from outside the bean instance to open and commit transactions. If a method inside a bean calls another method within the same bean using `this.someMethod()`, it bypasses the proxy wrapper, calling the raw target method directly and ignoring the annotation.
+   </details>
+
+8. **Why can't Java records be used directly as JPA/Hibernate entities?**
+   <details>
+   <summary>Answer</summary>
+   Java `record`s are final, immutable, and do not possess zero-argument constructors. Hibernate requires entities to be non-final, mutable classes with no-argument constructors so it can subclass them (using byte-buddy/proxies) to support lazy loading and dirty checking.
+   </details>
+
+9. **How does a `JOIN FETCH` query prevent the N+1 SELECT problem in JPA?**
+   <details>
+   <summary>Answer</summary>
+   A standard query for parent entities triggers one query, followed by N separate lazy loading queries for each parent's children. Adding `JOIN FETCH` (e.g. `SELECT p FROM Parent p JOIN FETCH p.children`) instructs Hibernate to run a single SQL join query, loading both parents and children in one database roundtrip.
+   </details>
+
+10. **Explain how Postgres's SSI (Serializable Snapshot Isolation) detects write skew.**
+    <details>
+    <summary>Answer</summary>
+    Postgres keeps track of SIREAD locks (snapshots and read footprints) to monitor which transactions read which rows. If T1 reads row A and writes to row B, while concurrent transaction T2 reads row B and writes to row A, the SSI engine recognizes a dependency cycle and aborts the second committer with SQLSTATE `40001`.
+    </details>
+
+11. **What is the consequence of connection pool leaks in HikariCP?**
+    <details>
+    <summary>Answer</summary>
+    If an application borrows a connection from the pool but fails to close it, that connection is never returned. Over time, the pool's active connections hit `maximumPoolSize`, causing subsequent requests to block for up to `connectionTimeout` and fail with `SQLTransientConnectionException`.
+    </details>
+
+12. **What does the command `CREATE INDEX CONCURRENTLY` achieve, and why can it not run in a transaction?**
+    <details>
+    <summary>Answer</summary>
+    It builds an index on Postgres without locking out concurrent updates to the table. It cannot run inside an active transaction block because it operates in multiple phases, committing internally along the way, which conflicts with enclosing transaction limits (SQLState `25001`).
+    </details>
+
+---
+
+**🃏 Flashcards** *(appended to `docs/flashcards.md`)*
 - Q: Seq Scan with `Rows Removed by Filter` huge → ? · A: missing/unused index; add a selective index + ANALYZE.
 - Q: Lowest level that stops non-repeatable reads? · A: REPEATABLE READ.
 - Q: Anomaly that survives REPEATABLE READ? · A: write skew → SERIALIZABLE (retry on 40001) or `FOR UPDATE`.
@@ -1497,6 +1422,6 @@ You saw SERIALIZABLE catch write skew with `40001`. The alternative is **pessimi
 - Q: `close()` on a pooled connection? · A: returns it to the pool (not a socket close).
 > 🔁 **Revisit in ~2 steps** (Step 12 reuses isolation/locking for the ledger).
 
-**(h) ✍️ One-line reflection:** *What surprised you more — that Postgres has no dirty reads, or that REPEATABLE READ still allows write skew?* (Good build-in-public material.)
+**✍️ One-line reflection:** *What surprised you more — that Postgres has no dirty reads, or that REPEATABLE READ still allows write skew?*
 
-**(i) Sign-off** 🎉 You just opened the database black box — plans, snapshots, anomalies, pools, partitions, online DDL. That's the difference between "I use a database" and "I reason about one." Next up: **Step 11**, where you take the *same* concurrency mindset inside the JVM. Onward! 🚀
+🎉 You just opened the database black box — plans, snapshots, anomalies, pools, partitions, online DDL. Next up: **Step 11**, where you take the *same* concurrency mindset inside the JVM. Onward! 🚀
