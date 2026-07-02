@@ -11,9 +11,18 @@
 
 ## 🧭 The Six Movements of This Step
 
-[A · Orient](#a--orient) · [B · Understand](#b--understand) · [C · Build](#c--build) · [D · Prove](#d--prove) · [E · Apply](#e--apply) · [F · Review](#f--review)
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · session plan | ~1 h |
+| **B** | [🧠 Understand](#understand) | where a session lives · rotation + reuse detection · cookies, CAS & route-order law | ~2 h |
+| **C** | [🛠️ Build](#build) | 11 sub-steps: store → endpoints → wire-tests → client → context → tests → CORS → bundle → ship → 🎓 capstone → smoke | ~13 h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — 🔴 Full tier: mutation drills both sides, wire transcripts, full-stack run, clean-room | ~45 min |
+| **E** | [🎓 Apply](#apply) | BFF/CSP asides · interview prep · your-turn · cumulative review | ~2 h |
+| **F** | [🏆 Review](#review) | war-story troubleshooting · glossary · recap, flashcards, Phase-F close-out | ~45 min |
 
 ---
+
+<a id="orient"></a>
 
 # A · 🧭 Orient
 
@@ -130,6 +139,8 @@ labeled `+~N min`. Shortest honest path: sittings 1–2, 3–4, 6–7 (the perf 
 log it in your own debt register if you do 😉).
 
 ---
+
+<a id="understand"></a>
 
 # B · 🧠 Understand ⏱ ~2 h
 
@@ -261,6 +272,8 @@ re-create the same bug shape — five 401s must share ONE refresh (single-flight
 trip your own alarm. Same discipline, different runtime.
 
 ---
+
+<a id="build"></a>
 
 # C · 🛠️ Build
 
@@ -2282,6 +2295,32 @@ the smoke fails. Grace is a race-window dial, not a comfort dial: keep it in sec
 ⚠️ **Pitfall:** writing the smoke's happy-path first and the assertions never. Steal this script's pattern:
 every security property in this step exists as a *line that can fail*.
 
+🔁 **The flow you just shipped, end to end:**
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant G as Gateway :8080
+  participant N as nginx SPA
+  participant A as auth
+  participant D as demand-account
+  participant K as Redpanda
+  participant No as notification
+  B->>G: GET /  →  G->>N: (catch-all, LAST route)
+  N-->>B: index.html (no-cache) + hashed chunks (immutable)
+  B->>G: POST /api/auth/login → A: JWT₁₀ₘ + Set-Cookie bab_refresh (HttpOnly)
+  B->>G: GET /bank/api/accounts/ACC-A (Bearer) → D: balance from Postgres
+  B->>G: POST /bank/api/v1/transfers (+Idempotency-Key) → D: double-entry commit + outbox
+  D->>K: relay publishes transfers.completed
+  K->>No: consumer (idempotent) → SSE event
+  No-->>B: (SSE through G, streamed) → UI notification + query refetch
+  Note over B: reload → POST /refresh (cookie) → session restored, localStorage empty
+```
+
+*(Diagram alt-text: browser → gateway fan-out — SPA static from nginx via the catch-all, login/refresh to
+auth with the httpOnly cookie, money to demand-account, then the async leg ledger→outbox→Redpanda→
+notification→SSE back through the gateway; a reload note shows silent refresh restoring the session.)*
+
 ## 🎮 Play With It ⏱ ~30 min
 
 Stack up (cheat card) → open **http://localhost:8080** — the bank, one origin:
@@ -2312,6 +2351,8 @@ hoped:
 - [ ] `bash steps/step-32/smoke.sh` → `SMOKE step-32: PASSED`
 
 ---
+
+<a id="prove"></a>
 
 # D · 🔬 Prove ⏱ ~45 min
 
@@ -2419,6 +2460,8 @@ Phase J's IaC capstone covers the cloud path with `validate`/`plan` discipline. 
 ran for real.
 
 ---
+
+<a id="apply"></a>
 
 # E · 🎓 Apply ⏱ ~2 h
 
@@ -2537,6 +2580,8 @@ hides from every terminal test.
 <details><summary>5 · Step 28: which quality gate would have flagged a survived `if (usedAt != null)` deletion even without our manual drill?</summary>PITest (mutation testing, `-Pmutation`) — the RemoveConditional mutant on that branch would survive iff no test kills it; our manual drill is the same idea, aimed.</details>
 
 ---
+
+<a id="review"></a>
 
 # F · 🏆 Review ⏱ ~45 min
 
