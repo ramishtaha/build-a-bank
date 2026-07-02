@@ -11,14 +11,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | server vs UI state · TanStack Query (cache/invalidation) · RHF + Zod · SSE vs WebSocket |
-| **C** | [🛠️ Build](#build) | the data hooks · AccountPanel · the Zod transfer form + mutation · the SSE hook · the gateway notification route |
-| **D** | [🔬 Prove](#prove) | the Verification Log — build/lint/15 tests; §12.3 break the schema; gateway 5 routes; real output |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting (EventSource in jsdom, coerce types) · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~30 min |
+| **B** | [🧠 Understand](#understand) | server vs UI state · TanStack Query (cache/invalidation) · RHF + Zod · SSE vs WebSocket | ~1.5 h |
+| **C** | [🛠️ Build](#build) | the data hooks · AccountPanel · the Zod transfer form + mutation · the SSE hook · the gateway notification route | ~10 h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — build/lint/15 tests; §12.3 break the schema; gateway 5 routes; real output | ~1 h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~1.5 h |
+| **F** | [🏆 Review](#review) | troubleshooting (EventSource in jsdom, coerce types) · resources · recap, flashcards & what's next | ~45 min |
 
 ---
 
@@ -95,6 +95,24 @@ Hand-rolling data fetching with `useEffect`/`useState` leads to stale data, race
 - **Connects to what you know:** consumes demand-account's paginated ledger (Step 14), idempotent transfer + Idempotency-Key (Steps 14/21), and the notification SSE stream (Step 20) — all behind the gateway (Step 29).
 - **Depends on:** Steps **29, 14, 20, 21**.
 
+## 🗓️ Session Plan
+
+≈16 hours won't fit one sitting. Seven sittings, each ending at a safe save point:
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| 1 | **A · Orient + B · Understand** (all four concept sections) | ~2 h | the ❓ knowledge-check at the end of B |
+| 2 | **Sub-steps 1–2** — install + `QueryClientProvider`, then the query/mutation hooks | ~2.5 h | Sub-step 2's ✋ checkpoint (wip commit) |
+| 3 | **Sub-step 3** — `AccountPanel` (loading / error / data) | ~1.5 h | Sub-step 3's ✋ checkpoint |
+| 4 | **Sub-step 4** — the RHF + Zod transfer form + idempotent mutation | ~3 h | Sub-step 4's ✋ checkpoint |
+| 5 | **Sub-step 5** — the SSE hook + gateway route, then the 🔬 break-it and 💾 commit | ~2.5 h | the Sub-step 5 commit |
+| 6 | **🎮 Play With It** — live end-to-end run (4 JVM backends + the SPA) | ~1.5 h | the little experiments done |
+| 7 | **D · Prove + E · Apply + F · Review** | ~2 h | recap + flashcards |
+
+**Optional routes:** the ⏭️ skip-test (~5 min) can route you past the whole step; the three 🚀 Go Deeper asides are +~10 min each; 🏋️ Your Turn challenges (+~30 min–2 h) can wait until after Step 31.
+
+✋ **Stopping after orientation?** Nothing is built yet — Sitting 1 continues straight into [B · Understand](#understand); first action: reopen this file at the Big Idea.
+
 ---
 
 <a id="understand"></a>
@@ -108,6 +126,8 @@ stale) like **UI state** (local, ephemeral — a form field, a toggle). **TanSta
 properly: it caches by a **query key**, dedupes concurrent requests, tracks `isLoading`/`isError`/`data`, and
 **refetches** when you tell it the data changed. You don't store fetched data in `useState` or fetch in
 `useEffect` — you declare a query and read its result.
+
+🪞 **Analogy:** the query cache is a hotel concierge. Components ask the concierge (never the back office directly); the concierge answers instantly from their notes, and when told "room 4 changed" (**invalidation**) they re-check with the back office before answering again.
 
 ```mermaid
 flowchart TB
@@ -154,9 +174,38 @@ twice. ProblemDetail bodies (e.g. 422 "Insufficient funds") are parsed and shown
   `Authorization`) — fine here (notifications aren't user-scoped); for authed streams you'd pass a token in the URL
   or use a WebSocket.
 
+❓ **Quick check:** which of these is server state — the ledger page, the form's `amount` field, or a modal-open flag? <details><summary>Answer</summary>Only the ledger page: it lives on the server, is shared, and can go stale — so a query owns it. The amount field and modal flag are UI state (local, ephemeral) and stay in plain React state.</details>
+
+✋ **Stopping here?** You have the concepts; nothing is typed yet. Next: C · Build, Sub-step 1; first action: `cd frontend` and run the `npm install` line at the top of Sub-step 1.
+
 ---
 
-# B→C bridge: 🌳 files we'll touch
+<a id="build"></a>
+
+# C · 🛠️ Let's Build It — Step by Step
+
+## 📦 Your Starting Point
+
+`step-30-start == step-29-end`: the SPA logs in + guards routes; the gateway fronts auth/cif/demand-account.
+
+### 🗺️ What we're building
+
+```mermaid
+flowchart LR
+    DP["DashboardPage"] --> AP["AccountPanel"]
+    DP --> TF["TransferForm (RHF + Zod)"]
+    DP --> LN["LiveNotifications"]
+    AP --> Q["useAccount · useEntries"]
+    TF --> M["useTransfer (+ Idempotency-Key)"]
+    LN --> S["useNotificationStream (EventSource)"]
+    Q -->|"/bank/**"| GW["Gateway :8080"]
+    M -->|"/bank/**"| GW
+    S -->|"/notifications/**"| GW
+    GW --> DA["demand-account"]
+    GW --> NT["notification"]
+```
+
+### 🌳 Files we'll touch
 
 ```
 frontend/src/
@@ -171,35 +220,49 @@ frontend/src/
 gateway/  (+ /notifications/** route → notification:8084)
 ```
 
-<a id="build"></a>
+## Sub-step 1 — install the libraries · ~30 min
 
-# C · 🛠️ Let's Build It — Step by Step
-
-## 📦 Your Starting Point
-
-`step-30-start == step-29-end`: the SPA logs in + guards routes; the gateway fronts auth/cif/demand-account.
-
-## Sub-step 1 — install the libraries
+📍 *You are here: Sub-step 1 of 5.*
 
 🎯 `npm install @tanstack/react-query react-hook-form zod @hookform/resolvers` (lockfile pins them). Wrap the app in `<QueryClientProvider>` in `main.tsx`.
 
-## Sub-step 2 — the query/mutation hooks
+✋ **Stopping here?** You have the four libraries installed and the app wrapped in `QueryClientProvider`. Next: Sub-step 2 — the hooks; first action: create `frontend/src/accounts/queries.ts`.
+
+## Sub-step 2 — the query/mutation hooks · ~2 h
+
+📍 *You are here: Sub-step 2 of 5.*
 
 🎯 `accounts/queries.ts`: `useAccount`/`useEntries` (queries keyed by account, **enabled** only with a token); `useTransfer` (mutation; `onSuccess` invalidates `['account']` + `['entries']`). The token comes from `useAuth()`.
 
 🔮 **Predict:** after a successful transfer, what makes the balance on screen update — do we re-fetch manually? <details><summary>Answer</summary>No — the mutation's `onSuccess` **invalidates** the account/entries queries; TanStack refetches the ones currently rendered. Declarative cache coherence.</details>
 
-## Sub-step 3 — AccountPanel (loading / error / data)
+✋ **Stopping here?** You have the query/mutation hooks in `queries.ts` (token-gated via `enabled`, invalidation wired). Optional wip commit: `wip(step-30): query/mutation hooks`. Next: Sub-step 3 — AccountPanel; first action: create `frontend/src/accounts/AccountPanel.tsx`.
+
+## Sub-step 3 — AccountPanel (loading / error / data) · ~1.5 h
+
+📍 *You are here: Sub-step 3 of 5.*
 
 🎯 `AccountPanel` reads both queries and renders the three states. Money is shown as `CURRENCY 0.00`; DEBIT/CREDIT entries listed newest-first.
 
-## Sub-step 4 — the transfer form (RHF + Zod)
+✋ **Stopping here?** You have the panel rendering all three async states from the cached queries. Next: Sub-step 4 — the transfer form; first action: create `frontend/src/accounts/TransferForm.tsx`.
+
+## Sub-step 4 — the transfer form (RHF + Zod) · ~3 h
+
+📍 *You are here: Sub-step 4 of 5.*
 
 🎯 `TransferForm`: a Zod schema (`from`/`to` required, `amount` positive via `z.coerce.number().positive()`); `useForm` with `zodResolver`; field errors as `role="alert"`; submit fires `useTransfer` with `crypto.randomUUID()` as the Idempotency-Key.
 
 ⚠️ **Pitfall:** a number `<input>` gives a *string* — without `z.coerce.number()` your `amount` validates as a string and your positivity check misbehaves. And typing `useForm<z.infer<…>>` explicitly can fight the coerce input/output types; let `useForm` infer from the resolver.
 
-## Sub-step 5 — live updates over SSE
+❓ **Knowledge-check:** the schema validates `amount` — why must it be `z.coerce.number().positive()` rather than plain `z.number().positive()`? <details><summary>Answer</summary>A number `<input>` yields a *string*, so `z.number()` would reject (or misbehave on) every real submission; `z.coerce.number()` converts the string to a number first, then validates positivity — coercion and validation in one place.</details>
+
+✋ **Stopping here?** You have a validated, typed form firing the idempotent mutation. Optional wip commit: `wip(step-30): transfer form`. Next: Sub-step 5 — live SSE; first action: create `frontend/src/notifications/useNotificationStream.ts`.
+
+## Sub-step 5 — live updates over SSE · ~2 h
+
+📍 *You are here: Sub-step 5 of 5.*
+
+🔮 **Predict:** if the notification service restarts mid-session, what does the browser's `EventSource` do? <details><summary>Answer</summary>It reconnects automatically — auto-reconnect is built into SSE (one reason it beats WebSocket for one-way feeds; see Then vs. Now in B).</details>
 
 🎯 `useNotificationStream` opens one `EventSource` to `/notifications/api/notifications/stream`, listens for `transfer` events, and accumulates the latest. `LiveNotifications` renders them with a connection dot. Add the **gateway** `/notifications/**` route so it's the same origin.
 
@@ -209,7 +272,9 @@ gateway/  (+ /notifications/** route → notification:8084)
 
 💾 **Commit:** `feat(frontend): Step 30 TanStack Query + RHF/Zod transfer + SSE live updates; gateway fronts notifications`
 
-## 🎮 Play With It
+✋ **Stopping here?** All five sub-steps are done and committed. Next: 🎮 Play With It — the live run needs the four JVM backends up; first action: the command block below (note the CORS env).
+
+## 🎮 Play With It · ~1.5 h
 
 ```bash
 # Backend (one shell each), from the repo root — note the CORS env for demand-account:
@@ -221,11 +286,35 @@ npm --prefix frontend run dev    # :5173 — sign in as alice/password
 # In the UI: create ACC-A/ACC-B (or via curl, see the contracts), then transfer ACC-A→ACC-B and watch the balance refresh + a live notification arrive.
 ```
 
+🔮 **Predict:** before running the little experiments below — if you double-click Submit (two fast POSTs with the same form values), how many money movements land in the ledger, and why? <details><summary>Answer</summary>One — the fresh Idempotency-Key sent with the submission means the retry/second click is deduplicated server-side (Steps 14/21), so no double-pay.</details>
+
 🧪 **Little experiments:** transfer more than the balance → the form shows the 422 "Insufficient funds" detail. Submit twice fast → the Idempotency-Key means one movement. Open two browser tabs → both get the live SSE notification.
+
+### 🔁 The whole flow you just built
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant TF as TransferForm
+    participant GW as Gateway :8080
+    participant DA as demand-account
+    participant K as Kafka
+    participant NT as notification
+    U->>TF: submit from/to/amount
+    TF->>TF: Zod validates (coerce amount) — invalid never leaves the form
+    TF->>GW: POST /bank/api/v1/transfers (Bearer + fresh Idempotency-Key)
+    GW->>DA: forward
+    DA-->>TF: 200 → onSuccess invalidates ['account'] + ['entries'] → AccountPanel refetches
+    DA->>K: transfer event
+    K->>NT: consume
+    NT-->>U: SSE `transfer` via gateway /notifications/** → LiveNotifications
+```
 
 ## 🏁 The Finished Result
 
 `step-30-end`: a dashboard that reads cached account data, submits validated idempotent transfers (auto-refreshing the view), and shows live SSE notifications. **✅ Definition of Done:** `npm run build`/`lint`/`test` green; gateway routes green; `./mvnw verify` green; `bash steps/step-30/smoke.sh` passes; committed/tagged `step-30-end`.
+
+✋ **Stopping here?** You have the tagged, working step (DoD above). Next: D · Prove — read the Verification Log against your own runs; first action: `bash steps/step-30/smoke.sh`.
 
 ---
 
@@ -294,7 +383,9 @@ account-number selector). JWT still in localStorage (hardened Step 32). One beni
 
 # E · 🎓 Apply
 
-## 🚀 Go Deeper (Optional)
+✋ **Fresh session?** Everything is built, verified, and tagged `step-30-end` — this movement is reading + practice (~1.5 h); first action: the first Go Deeper aside below.
+
+## 🚀 Go Deeper (Optional · +~10 min each)
 
 <details><summary>Why invalidate instead of manually setting the cache?</summary>`invalidateQueries` marks data stale and refetches the truth from the server — simple and always correct. `setQueryData` (optimistic update) is faster (no round-trip) but you must roll back on error and risk drift. For money, refetching the authoritative balance is the safer default; optimistic updates are a Step-31+ refinement.</details>
 
@@ -312,9 +403,11 @@ account-number selector). JWT still in localStorage (hardened Step 32). One beni
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-- **Quick:** add an **optimistic update** to `useTransfer` (decrement the balance immediately, roll back on error) and a test for the rollback.
-- **Quick:** add a `useEntries` "load more" (pagination) — bump the `page` and merge, or use `useInfiniteQuery`.
-- 🎯 **Stretch (reference solution in `solutions/step-30/`):** add a `useQuery` for the auth `/me` and show a global header; add a Zod schema for "open account" with a second form, invalidating the account query on success.
+- **Quick (+~30–45 min):** add an **optimistic update** to `useTransfer` (decrement the balance immediately, roll back on error) and a test for the rollback.
+- **Quick (+~30–45 min):** add a `useEntries` "load more" (pagination) — bump the `page` and merge, or use `useInfiniteQuery`.
+- 🎯 **Stretch (+~1–2 h · reference solution in `solutions/step-30/`):** add a `useQuery` for the auth `/me` and show a global header; add a Zod schema for "open account" with a second form, invalidating the account query on success.
+
+✋ **Stopping here?** Only F · Review remains (~45 min) — it's the retention payoff; first action: skim Troubleshooting, then do the recap + flashcards.
 
 ---
 
@@ -355,7 +448,12 @@ surface as human messages.
 
 **(f) ✅ You can now:** fetch/cache/invalidate server data · build validated typed forms · render loading/error/data · stream live updates with SSE.
 
-**(g) 🃏 Flashcards** appended to `docs/flashcards.md` · 🔁 revisit invalidation + optimistic updates at Step 31, and token storage at Step 32.
+**(g) 🃏 Flashcards** — four to drill now (full Step-30 deck in `docs/flashcards.md`) · 🔁 revisit invalidation + optimistic updates at Step 31, and token storage at Step 32:
+
+- **Q:** Server state vs UI state — why TanStack Query instead of `useEffect`/`useState`? — **A:** Server state is shared, async, and can go stale; Query manages it properly (cache keyed by a query key, dedup, loading/error flags, refetch, invalidation). UI state (form fields, toggles) stays in React state.
+- **Q:** After a mutation, how do you keep the UI consistent? — **A:** In `onSuccess`, call `queryClient.invalidateQueries({ queryKey: [...] })`; TanStack marks matches stale and refetches the ones on screen. (Optionally optimistic-update with `setQueryData` + rollback.)
+- **Q:** Why `z.coerce.number()` for an amount? — **A:** A number `<input>` yields a *string*; coerce converts then validates in one place. Let `useForm` infer types from the resolver to avoid coerce input/output friction.
+- **Q:** SSE vs WebSocket — when each? — **A:** SSE = one-way server→client over plain HTTP with auto-reconnect (notifications/tickers); WebSocket = full-duplex (chat). SSE can't send custom headers, so authed streams need a URL token or a WebSocket.
 
 **(h) ✍️ One-line reflection:** *Which on-screen value would users most notice going stale — and is it invalidated after every mutation that affects it?*
 

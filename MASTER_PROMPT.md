@@ -20,6 +20,10 @@
 > 5. **Pinned & compatible.** Resolve one mutually-compatible version set into **`VERSIONS.md`** at kickoff; **never `latest`**; prefer the newest *stable* version the ecosystem actually supports.
 > 6. **The chain holds.** `step-NN-end` == `step-(NN+1)-start`, and both build clean.
 > 7. **The 🛠️ hands-on build is sacred.** It is the most detailed, copy-pasteable, run-and-see part of every step and the thing learners touch most — **never thin it to save space or time.**
+> 8. **The lesson document is gated like the code.** Every lesson must pass the **Lesson Definition of Done (§8.3)** — objective, checkable criteria (spine present, full micro-anatomy, interactivity minimums, Session Plan, time-boxes) — before its step counts as complete. **A thin build is a broken build.**
+
+> [!NOTE]
+> **Operational distillation.** This prompt is the canonical spec for a fresh kickoff. For **incremental sessions** (one step at a time), the repo carries a distilled operational layer — `CLAUDE.md` plus `docs/ai/LESSON-SPEC.md` (the per-step contract), `docs/ai/CONTEXT-PLAYBOOK.md` (the minimal read-set), and `docs/ai/LESSON-CHECKLIST.md` (the Lesson DoD as a checklist) — kept **in sync with this prompt**. When the contract changes, change both.
 
 ---
 
@@ -360,11 +364,12 @@ Every step follows this contract. **Open each step with a one-line 🧭 mini-TOC
 **Section legend:** **★ = spine (never omit)** · **◇ = include only when it genuinely adds value** (don't pad a light step). The spine that must always be present: the 30-second overview, the 🛠️ build, 🎮 Play With It, 🔬 Prove It Works, and the 🏆 Recap.
 
 > **A · 🧭 Orient — get your bearings**
-> 1. **★ 📋 This Step in 30 Seconds** — title, step #, **level badge**, a "Step N of 67 · Phase X" line, **effort estimate** (its own number; flag if heavy), and **what to run this step** (the minimal services/infra). Ends with **"⏭️ Can You Skip This Step?"** — a 5-minute self-check. *(Advance organizer.)*
+> 1. **★ 📋 This Step in 30 Seconds** — title, step #, **level badge**, a "Step N of 67 · Phase X" line, **effort estimate** (its own number; flag if heavy), and **what to run this step** (the minimal services/infra). Ends with **"⏭️ Can You Skip This Step?"** — a 5-minute **performance-based** self-check: 2–3 small do-tasks with concrete pass criteria ("write X; it should print Y"), never self-assessment questions ("do you know X?" invites overconfidence). *(Advance organizer.)*
 > 2. **★ 📇 Cheat Card** — a one-screen TL;DR for skimmers and returning learners: the **key commands**, the **one headline diagram or snippet**, and the **one sentence** of what this step delivers. Lets an experienced learner grasp the step instantly and lets anyone resuming pick up fast.
 > 3. **★ 🎯 Why This Matters** — a 2–3 sentence hook (real systems, interviews, paycheck). *(Relevance.)*
-> 4. **★ ✅ What You'll Be Able to Do** — concrete, plain-language outcomes. *(Clear objectives.)*
+> 4. **★ ✅ What You'll Be Able to Do** — concrete, plain-language outcomes, **each mapped to ≥1 ✋ checkpoint, ❓ knowledge-check, 🏋️ exercise, or 🧠 Test-Yourself item** (constructive alignment — an outcome nothing assesses is decoration). *(Clear objectives.)*
 > 5. **★ 🧰 Before You Start** — prerequisites + a callback to **what you already learned that connects here** + a **"Depends on: Steps X, Y"** line for non-linear learners. *(Prior knowledge.)*
+> 5b. **★ 🗓️ Session Plan** — split the step into **6–10 named sittings (~2–3 h each)**, each ending at a ✋ checkpoint ("Session 3 — sub-steps 4–5, ~2.5 h, ends with the transfer test passing"). Stopping mid-step becomes *planned success*, not failure. Present optional routes (skip-test, fast-track, 🚀 asides) as an explicit menu with time costs. *(Executive-function support; ADHD-critical.)*
 
 > **B · 🧠 Understand — the why & the theory**
 > 6. **★ 🧠 The Big Idea** — the "professor lecture": the *why* + theory, with **a diagram** and an analogy. Dense, no filler. *(Elaboration + dual coding.)*
@@ -375,7 +380,7 @@ Every step follows this contract. **Open each step with a one-line 🧭 mini-TOC
 
 > **C · 🛠️ Build — the heart (hands-on)**
 > 11. **★ 📦 Your Starting Point** — tagged `step-NN-start`; **must build & run** (Part VI); what's green vs. what you'll build.
-> 12. **★ 🛠️ Let's Build It — Step by Step** — **the heart of every step: the longest, most detailed, most hand-held section, built strictly to the §8.1 Playbook.** A nervous beginner must follow it top-to-bottom with no outside help and still end with working software. **Open with a 🗺️ Mermaid diagram of what you're about to build + a 🌳 "files we'll touch" tree**, then proceed in **many small numbered sub-steps**, each using the §8.1 micro-anatomy: **🎯 Goal → 📁 Exact location → ⌨️ Complete, copy-pasteable code (file-path header; for edits show before→after / a diff with context) → 🔍 Line-by-line (every annotation/import/config key, jargon defined inline) → 💭 Under the hood → 🔮 Predict-then-run → ▶️ Run & See (exact command + a fenced ✅ Expected-output block, plus ❌ common-wrong-output) → ✋ Checkpoint → 💾 Commit (conventional-commit msg) → ⚠️ Pitfall.** Weave in **interactivity** (🔮 predict · ⌨️ type-it-yourself before revealing · 🔬 break-it-on-purpose experiments · ❓ knowledge-checks · 🧭 "you are here" markers). Close with a full end-to-end **▶️ run** + a **🔁 sequence diagram of the flow you just built.** **For the core path, never say "left as an exercise" — show everything.**
+> 12. **★ 🛠️ Let's Build It — Step by Step** — **the heart of every step: the longest, most detailed, most hand-held section, built strictly to the §8.1 Playbook.** A nervous beginner must follow it top-to-bottom with no outside help and still end with working software. **Open with a 🗺️ Mermaid diagram of what you're about to build + a 🌳 "files we'll touch" tree**, then proceed in **many small numbered sub-steps**, each using the §8.1 micro-anatomy: **🎯 Goal → 📁 Exact location → ⌨️ Complete, copy-pasteable code (file-path header; for edits show before→after / a diff with context) → 🔍 Line-by-line (every annotation/import/config key, jargon defined inline) → 💭 Under the hood → 🔮 Predict-then-run → ▶️ Run & See (exact command + a fenced ✅ Expected-output block, plus ❌ common-wrong-output) → ✋ Checkpoint → 💾 Commit (conventional-commit msg) → ⚠️ Pitfall.** Weave in **interactivity** (🔮 predict · ⌨️ type-it-yourself before revealing · 🔬 break-it-on-purpose experiments · ❓ knowledge-checks · 🧭 "you are here" markers). Close with a full end-to-end **▶️ run** + a **🔁 sequence diagram of the flow you just built.** **For the core path, never say "left as an exercise" — show everything.** **Scaffold fades within the build:** early sub-steps fully worked; later sub-steps shift toward ⌨️ type-it-yourself (full solution still in `<details>`). **First win ≤10 min:** the first sub-step of the step — and of each Session-Plan sitting — ends with something the learner visibly runs. **Every sub-step carries its own ~time estimate.**
 > 13. **★ 🎮 Play With It** — make the step's work **immediately tangible and interactive.** Ship ready-to-run ways to poke at what was built: a per-step **`requests.http`** + Bruno/Postman collection + `curl` equivalents, **demo/seed data** to load, and one-command helpers (`make run-<svc>`, `make play-NN`, `make reset-demo`). Tell the learner exactly what to try and **what they'll see** — Swagger UI (from Step 13), the React app (from Step 29), live WebSocket notifications, a fraud alert they trigger, a scheduled job they watch run, a generated PDF statement — as each lands. Include a **🧪 little experiments** list ("change X → see Y"). This is where the payoff is *felt*.
 > 14. **★ 🏁 The Finished Result** — `step-NN-end`, fully runnable; becomes the next step's start. Ends with a **learner-facing ✅ Definition of Done** checklist: *"You're done when you can <objective>, `./mvnw verify` is green, `smoke.sh` passes, and you've committed/tagged `step-NN-end`."* (This is the learner's self-check; Claude Code's stricter proof is §12.)
 
@@ -383,19 +388,20 @@ Every step follows this contract. **Open each step with a one-line 🧭 mini-TOC
 > 15. **★ 🔬 Prove It Works** — exact commands + the **real, pasted proof-of-execution evidence required by Part VI** (not claims), including the step's **`smoke.sh` run**. The **Verification Log**.
 
 > **E · 🎓 Apply — cement & interview**
-> 16. **◇ 🚀 Go Deeper (Optional)** — meaty `<details>` advanced asides; doesn't count toward the effort budget. *(The experienced learner's reward.)*
+> 16. **◇ 🚀 Go Deeper (Optional)** — meaty `<details>` advanced asides, **each labeled with its time cost ("🚀 +~40 min")**; doesn't count toward the effort budget. *(The experienced learner's reward.)*
 > 17. **★ 💼 Interview Prep: Questions You'll Be Asked** — 4–6 Q&A (conceptual, gotcha, applied/system-design), concise model answers; a version-evolution question where one exists; a **concurrency/thread-safety question wherever shared state is involved**; flag the most commonly asked; a behavioral/STAR prompt where relevant.
-> 18. **★ 🏋️ Your Turn: Practice & Challenges** — exercises + stretch goals; quick ones with hidden `<details>` answers, and larger stretch goals with **reference solutions in `solutions/step-NN/`** (or a `solutions` branch), not left dangling.
+> 18. **★ 🏋️ Your Turn: Practice & Challenges** — exercises + stretch goals; quick ones with hidden `<details>` answers, and larger stretch goals with **reference solutions in `solutions/step-NN/`** (or a `solutions` branch), not left dangling — **any solution promised but not shipped is logged in the contract-debt register (§12.10), never silently dropped.** Include one **near-transfer exercise** (apply the step's pattern to a different service/context).
 
 > **F · 🏆 Review — lock it in**
-> 19. **◇ 🩺 Stuck? Troubleshooting & Fixes** — the **real errors you actually hit while building this step** (verbatim → cause → fix); how to reset to `step-NN-end`; the `make doctor` reminder.
+> 19. **◇ 🩺 Stuck? Troubleshooting & Fixes** — the **real errors you actually hit while building this step** (verbatim → cause → fix) **plus anticipated learner errors you didn't hit but a beginner will** (wrong directory, stale port, Docker not running — labeled *(anticipated)*); how to reset to `step-NN-end`; the `make doctor` reminder.
 > 20. **◇ 📚 Learn More: Resources & Glossary** — curated links + a glossary of this step's terms.
-> 21. **★ 🏆 Recap & Study Notes** — a proper revision aid, NOT a one-liner: **(a)** bulleted **key-points summary** · **(b)** **Key Terms** mini-list · **(c)** **🧠 Test Yourself** — 3–5 from-memory questions (answers in `<details>`) · **(d)** **🔗 How This Connects** — callback to earlier steps + teaser of what's next · **(e)** the **🏆 résumé line / interview talking point** earned · **(f)** a **✅ "You can now…" checklist** · **(g)** **🃏 Flashcards** — 3–5 Q/A pairs appended to a cumulative `docs/flashcards.md` (Anki-importable CSV optional) + a **"🔁 revisit this in ~N steps"** spaced-repetition pointer — and likewise append the step's 💼 interview Q&As to a cumulative **`docs/interview-bank.md`** and its Key Terms to a cumulative **`docs/glossary.md`** (these two files are the course's job-prep payoff; create them if missing) · **(h)** **✍️ One-line reflection** prompt (what clicked / what's still fuzzy — good build-in-public fodder) · **(i)** a short **motivating sign-off**. *(Summary + retrieval + spacing + metacognition + motivation.)*
+> 21. **★ 🏆 Recap & Study Notes** — a proper revision aid, NOT a one-liner: **(a)** bulleted **key-points summary** · **(b)** **Key Terms** mini-list · **(c)** **🧠 Test Yourself** — 3–5 from-memory questions (answers in `<details>`) · **(d)** **🔗 How This Connects** — callback to earlier steps + teaser of what's next · **(e)** the **🏆 résumé line / interview talking point** earned · **(f)** a **✅ "You can now…" checklist** · **(g)** **🃏 Flashcards** — 3–5 Q/A pairs appended to a cumulative `docs/flashcards.md` (Anki-importable CSV optional) + a **"🔁 revisit this in ~N steps"** spaced-repetition pointer · **(h)** **✍️ One-line reflection** prompt (what clicked / what's still fuzzy — good build-in-public fodder) · **(i)** a short **motivating sign-off**. *(Summary + retrieval + spacing + metacognition + motivation.)*
+> 22. **★ 🧳 Context Capsule** — write `steps/step-NN/capsule.md` (§8.4): the ≤25-line handoff the **next generating session reads instead of this lesson.**
 
-Additionally: from Step 12 on, **weave a short 🧵 Thread-safety note into any step with shared mutable state** (the ledger, the fraud stream, caches), pointing back to Step 11 (Domain 2). And **every ~5 steps, add a 🧠 Cumulative Review** (a mixed quiz spanning recent + older steps), distinct from the per-step Test Yourself.
+Additionally: from Step 12 on, **weave a short 🧵 Thread-safety note into any step with shared mutable state** (the ledger, the fraud stream, caches), pointing back to Step 11 (Domain 2). And add a **🧠 Cumulative Review at steps 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60 and 65** (a mixed quiz interleaving ~30% older material with the recent phase), distinct from the per-step Test Yourself.
 
 > [!NOTE]
-> **Structural self-check (Claude Code, before finalizing a step):** confirm every **★ spine** section is present and the **🔬 Verification Log is populated**; if a **◇** section is omitted, it's because it genuinely doesn't apply — not an oversight. Never drop a spine section to save space; if length is the problem, split the lesson across files (§15.4) — never thin the 🛠️ build.
+> **Structural self-check (Claude Code, before finalizing a step):** run the full **Lesson Definition of Done (§8.3)** — objective, greppable criteria, result recorded in the Verification Log. If a **◇** section is omitted, it's because it genuinely doesn't apply — not an oversight. Never drop a spine section to save space; if length is the problem, **stop at a sub-step boundary and resume next session (§15.4)** — never thin the 🛠️ build.
 >
 > **DEPTH GATE (headers are not depth — check the contents):** before finalizing, diff the step's 🛠️ build against the **§8.1 worked example** and the strongest earlier lesson (e.g. `steps/step-08/lesson.md`). **Every** build sub-step must carry the full micro-anatomy — 🎯 Goal → 📁 Path → ⌨️ **complete copy-pasteable code** → 🔍 line-by-line → 💭 under-the-hood → 🔮 predict → ▶️ Run & See **with a fenced ✅ Expected-output block** → ✋ checkpoint → 💾 commit → ⚠️ pitfall. A build that *names* what to do without *showing* the code, the line-by-line, and a real run is **INCOMPLETE — a §12-level failure — regardless of how many section headers are present.** ⚠️ **Anti-anchoring rule:** your most recent lessons are **NOT** the style reference; if recent lessons drifted thin, do not match them — match the spec. The §8.1 worked example and the strongest early lesson are the only exemplars. As a sanity floor, a typical step's lesson lands around **1,000–2,000 lines with ~80–120 fenced blocks**; if yours is a few hundred lines, the build has been gutted — stop and rewrite it to the bar before tagging `step-NN-end`.
 
@@ -409,6 +415,9 @@ The build is where learners spend most of their time, and the #1 way a course fa
 - ✅ **Explain every new token the first time it appears** — annotations, imports, config keys, CLI flags, even `mvn`/`git`/`docker` subcommands — and **define jargon inline** in plain words.
 - ✅ **Run-and-see after every meaningful change**, each with a fenced **✅ Expected output** block (real, not paraphrased) and, where learners slip, a **❌ If you see this instead** note that links to the fix.
 - ✅ **Frequent ✋ checkpoints** ("before moving on you should have …; your app should now …; if not → 🩺").
+- ✅ **Re-entry ritual at every ✋ checkpoint** — two lines: *"Stopping here? You have <X working>. Next session: sub-step <N>; first action: <exact file to open / command to run>."* Externalizes working memory and kills the restart tax that makes learners abandon multi-session steps.
+- ✅ **Concept budget** — ≤ ~3 new terms per sub-step; overflow moves to 🚀 Go Deeper. **Micro-recap on distant references:** any "the DTO from sub-step 3" more than a screen away restates the one essential line — never force a scroll-back.
+- ✅ **No walls of text** — never ~150+ words without a visual, code block, or interaction (diagram, table, ❓ check, 🔮 predict).
 - ✅ **Commit after each logical unit** with a real conventional-commit message (`feat(cif): add customer read endpoint`).
 - ✅ **Inline mini-troubleshooting** exactly where errors are likely (the consolidated 🩺 section catches the rest).
 - ✅ **Interactivity, not copy-paste theatre** — use the toolkit below so the learner *does* and *thinks*, not just pastes.
@@ -425,8 +434,8 @@ The build is where learners spend most of their time, and the #1 way a course fa
 - 🧭 **"You are here"** — a mini progress line in long builds.
 
 **Make it tangible — every step ends with something the learner can see or use, plus the helpers to do it:**
-- A per-step **`requests.http`** (VS Code/IntelliJ) **+ a Bruno/Postman collection + `curl` equivalents** for every endpoint built.
-- A **demo/seed dataset** + `make seed-NN` (or a Flyway demo migration) so there's data to interact with immediately.
+- **Mandatory:** a per-step **`requests.http`** + `curl` equivalents for every endpoint built, and the step's **`smoke.sh`**. **Optional** (log contract-debt §12.10 if promised-then-skipped): Bruno/Postman collections.
+- **Optional:** a **demo/seed dataset** + `make seed-NN` (or a Flyway demo migration) where interaction needs data — skip freely for lab/theory steps.
 - A **`smoke.sh`** the learner runs to confirm their build matches the lesson — and which the author actually runs (Part VI).
 - One-command **Makefile** helpers: `make run-<svc>`, `make play-NN`, `make reset-demo` — **plus committed `.run/` IntelliJ Run Configurations** so IDE users launch/debug any service or test in one click.
 - **Visible surfaces, introduced as soon as they exist:** **Swagger UI** (from Step 13) as the first "click and see it" surface; the **React app** (from Step 29); then progressively **live WebSocket notifications**, a **fraud alert you trigger** by posting a suspicious transaction, a **scheduled interest job you can watch run**, and a **downloadable PDF statement** from the batch service. Build these as satisfying, user-facing features — not bare endpoints.
@@ -518,8 +527,38 @@ IntelliJ is taught **progressively and in context** as a way to **save time and 
 - **Woven all course long — an optional "💡 Faster in IntelliJ" callout** introduces the most relevant feature/shortcut *in the step it first helps* (always after the editor-neutral instructions), each with a one-line why and **Windows/Linux + macOS** keystrokes:
   - code generation (constructor/getters/`equals`/`toString`) & **live/postfix templates** → entity steps; **rename / extract method / inline / change-signature refactors** → the SOLID & clean-code step (Step 25); **Find Usages & navigation** → as the codebase grows; **deep debugging** — conditional breakpoints, **Evaluate Expression**, watches, drop-frame, remote/attach → first tricky bug + the concurrency step (Step 11); **test runner + coverage + "rerun failed"** → testing step (Step 28); **Git tool window** — partial commits, interactive rebase, conflict resolution, blame → throughout; **HTTP Client `.http`** *(Ultimate)* with the **Bruno/curl** fallback → API steps (Step 13–15); **Spring beans/endpoints views & config navigation** *(Ultimate)* → Spring steps; **Database tool** *(Ultimate)* vs `psql`/DBeaver → database steps (Step 8–10); **Docker/Kubernetes** tool windows *(Ultimate)* vs the CLIs → DevOps steps (Step 33–38); **profiler / JFR** integration → the performance step (Step 55); analyze-stack-trace, bookmarks, scratch files, structural search as they fit.
 - **Ship committed `.run/` Run Configurations** as a convenience for IDE users (they double as runnable docs); CLI users use `make`/`./mvnw`.
-- **Consolidate the optional IDE material in a living `concepts/intellij-idea.md`** — install/setup, the full UI map, a **CE-vs-Ultimate feature table**, and a **shortcut cheat-sheet with separate Windows/Linux and macOS columns** (keymaps differ by OS) — grown as features are introduced. Clearly labeled optional, with a **"Last verified: <date>"** line.
+- **Optional:** consolidate the IDE material in a living `concepts/intellij-idea.md` — install/setup, the full UI map, a **CE-vs-Ultimate feature table**, and a **shortcut cheat-sheet with separate Windows/Linux and macOS columns** (keymaps differ by OS) — grown as features are introduced. Clearly labeled optional, with a **"Last verified: <date>"** line. **If skipped, log it once in the contract-debt register (§12.10) — don't silently drop it.**
 - **GUI caveat (Part VI still holds):** IDE actions can't be sandbox-executed, so write them as clear, described UI steps **with screenshot placeholders**, and **always pair each IDE action with the equivalent verified CLI command** — the canonical path anyway — so neither a version/menu difference nor a different editor ever blocks anyone.
+
+## 8.3 The Lesson Definition of Done — the document gate ✅📄
+> [!CAUTION]
+> **§12 gates the code; THIS gates the lesson document. A step is complete only when BOTH pass.** Record the result at the top of the step's 🔬 Verification Log: `Lesson DoD: PASS (N sub-steps · 🔮 X · ❓ Y · 🔬 Z · ▶️ W)`.
+
+All criteria are objective and mostly greppable — check them, don't vibe them:
+1. **Spine complete** — every ★ section of §8 present (grep the headers).
+2. **🗓️ Session Plan present** in Orient: 6–10 named sittings (~2–3 h), each ending at a ✋ checkpoint.
+3. **Sacred build intact** — the 🛠️ build is **≥ half the lesson body**; **every** sub-step carries the full §8.1 micro-anatomy (🎯 📁 ⌨️ 🔍 💭 🔮 ▶️ ✋ 💾 ⚠️) with a real ▶️ command and a real ✅ expected-output block from an actual run (§12 — output is never invented).
+4. **Interactivity minimums** — ≥3 🔮 predicts, ≥3 ❓ knowledge-checks, ≥1 🔬 break-it-on-purpose; 🧭 you-are-here markers in any build with >3 sub-steps.
+5. **First win ≤10 min** — the first sub-step of the step (and of each sitting) ends with something the learner runs and sees.
+6. **Time-boxed** — every movement and sub-step has an estimate; every optional block is labeled "+~N min".
+7. **Re-entry ritual** at every ✋ checkpoint (§8.1).
+8. **Readability** — no ~150+-word stretch without a break; micro-recaps on distant references; ≤ ~3 new terms per sub-step.
+9. **Aligned outcomes** — every ✅ outcome maps to ≥1 ✋ / ❓ / 🏋️ / 🧠 Test-Yourself item.
+10. **Review complete** — 🏆 recap items (a)–(i); 🃏 3–5 flashcards appended to `docs/flashcards.md`; 🧳 Context Capsule written (§8.4).
+11. **Anchors resolve** — the 🧭 mini-TOC and internal links point at anchor ids that exist in the file.
+12. **Bookkeeping** — lesson metrics recorded in `PROGRESS.md` (§15.3); skipped promised artifacts logged in the contract-debt register (§12.10).
+
+If any criterion would fail for **length/budget** reasons: **stop at a sub-step boundary and resume next session (§15.4)** — compressing to pass is forbidden.
+
+## 8.4 The 🧳 Context Capsule — the ~20-line handoff (`steps/step-NN/capsule.md`)
+Every step ends by writing `steps/step-NN/capsule.md` — the **only** thing the next generating session must read about this step. ≤25 lines, no narrative:
+- **What now exists** — services/modules, key endpoints + ports, test counts, the `step-NN-end` tag.
+- **What this step added/changed** — new APIs, config, patterns; one line each.
+- **Gotchas discovered** — workarounds, version quirks, the things that will bite next session.
+- **Callback hooks** — the 2–3 facts future lessons will reference ("the Outbox relay lives in `demandaccount.outbox`").
+- **Next step's starting expectation** — tag, what's green, what the learner is promised next.
+
+The capsule **replaces re-reading this 1,000+ line lesson** in §15.5's read-set. Write it while the step is fresh — it is bookkeeping-priced context engineering.
 
 ## 9. Teach Like a Master Educator (pedagogy & engagement)
 Apply evidence-based teaching in every step, while keeping experienced learners engaged:
@@ -532,6 +571,7 @@ Apply evidence-based teaching in every step, while keeping experienced learners 
 - **Retrieval practice & spacing** — the recap's "🧠 Test Yourself", the **🃏 flashcards**, the **every-~5-steps 🧠 Cumulative Review**, and callbacks force recall and interleave old material.
 - **Frequent formative checks** — the ▶️ run-and-see checkpoints catch gaps early.
 - **Chunking** — small numbered sub-steps, one idea at a time.
+- **ADHD-aware by default** — the 🗓️ Session Plan, re-entry rituals, per-sub-step time-boxes, first-win-≤10-min, the ~150-word wall-of-text ceiling, labeled time costs on everything optional, and choice-menu framing of routes are **the house style, not bolted-on accommodations**. What helps ADHD learners helps everyone.
 - **Metacognition** — the recap's reflection prompt.
 - **Motivation** — a warm, **growth-mindset** voice (bugs are normal, not failure); celebrate wins; tell the intern→staff story; state the résumé line at each milestone. Energizing and rigorous — never dry, never patronizing.
 - **Density, depth-over-magic, interview-framing** — no filler; frame ideas the way interviewers probe them. (The 🛠️ build is the one place completeness outranks brevity.)
@@ -586,7 +626,7 @@ State the tier at the top of each Verification Log. The mutation and clean-room 
 
 **5. NEVER game the gate.** Forbidden: skipping, `@Disabled`/`@Ignore`/`assumeTrue`-ing-out, commenting out, or weakening a test to pass; silently lowering coverage; swallowing failures; marking a step done with known-failing/flaky tests. Pending tests the learner will implement are clearly labeled and **not counted as passing**. Flaky tests are fixed or quarantined with a written reason.
 
-**6. Reproducibility & pinning:** the kickoff resolves one mutually-compatible set into **`VERSIONS.md`** (parent POM + Spring Boot BOM + Maven Wrapper, JDK in `.tool-versions`/SDKMAN, Docker tags/digests — **never `latest`**, npm + Python lockfiles). **Verify the pinned set resolves and builds together.** `make verify` twice gives the same result. Document exact prerequisites + cross-platform notes.
+**6. Reproducibility & pinning:** the kickoff resolves one mutually-compatible set into **`VERSIONS.md`** (parent POM + Spring Boot BOM + Maven Wrapper, JDK in `.tool-versions`/SDKMAN, Docker tags/digests — **never `latest`**, npm + Python lockfiles). **Verify the pinned set resolves and builds together.** `make verify` twice gives the same result. Document exact prerequisites + cross-platform notes. **Version facts live ONLY in `VERSIONS.md`** — lessons and docs reference it rather than restating numbers; **re-verify the pinned set still resolves at the start of each phase** and record any step-back.
 
 **7. No untested step:** every service ships unit + slice + integration tests for the step's behavior; every money/security/concurrency path has explicit tests; ArchUnit from **Step 27**; contract tests from **Step 53**. No step adds functionality without tests that exercise it.
 
@@ -594,17 +634,19 @@ State the tier at the top of each Verification Log. The mutation and clean-room 
 
 **9. Learner-unblock kit in every step:** a working **`make doctor`** preflight; a **troubleshooting section of the real errors you hit** (verbatim → cause → fix); and the **known-good `step-NN-end` reference** to diff against.
 
+**10. Contract-debt register (`docs/ai/CONTRACT-DEBT.md`):** any artifact this prompt promises that a step ships without (a `solutions/step-NN/` folder, a Bruno collection, a `concepts/` doc, a seed set) gets a row — **step · artifact · reason · remediation plan** — at the moment it's skipped. **Silent omission is a §12 violation;** an honest, visible debt line is not. Review the register at each phase capstone: pay down or formally descope.
+
 ## 13. Repository Structure
 Multi-module Maven monorepo:
 ```
 build-a-bank/
 ├── README.md  COURSE.md                          # banner, badges, TOC, roadmap, level legend, fast-track + lean-track + DSA notes, system requirements; 67-step index + progress/skill-tree
-├── PROGRESS.md  CAPABILITIES.md  VERSIONS.md      # resume state · sandbox capability matrix · pinned mutually-compatible versions
+├── PROGRESS.md  CAPABILITIES.md  VERSIONS.md      # resume state (≤ ~40 lines — the per-tag verification table lives in docs/ai/VERIFICATION-LEDGER.md) · capability matrix · pinned versions
 ├── pom.xml  mvnw  .mvn/  .tool-versions           # parent POM/BOM, Maven Wrapper, pinned JDK
 ├── Makefile                                       # doctor, verify, light (subset run), run-<svc>, play-NN, seed-NN, reset-demo
 ├── .run/  .editorconfig  .gitignore  .env.example # committed IntelliJ run configs (one-click) · shared formatting · never-commit-secrets scaffolding
-├── docs/  concepts/  images/  adr/                # reusable deep-dives; diagrams; Architecture Decision Records; docs/flashcards.md (cumulative, Anki-importable)
-├── steps/step-01..step-67/                        # per step: lesson.md (§8) + requests.http + Bruno/Postman + seed/ + smoke.sh
+├── docs/ (+ docs/ai/)  concepts/  images/  adr/   # deep-dives · the AI operational layer (LESSON-SPEC, CONTEXT-PLAYBOOK, LESSON-CHECKLIST, PROJECT-MAP, VERIFICATION-LEDGER, CONTRACT-DEBT) · diagrams · ADRs · docs/flashcards.md
+├── steps/step-01..step-67/                        # per step: lesson.md (§8) + capsule.md (§8.4) + requests.http + smoke.sh (+ optional Bruno/seed)
 ├── solutions/step-01..step-67/                    # reference solutions for the 🏋️ stretch goals (or a `solutions` branch)
 ├── services/                                      # each = a Spring Boot Maven module
 │   ├── cif/ demand-account/ retail/ market-info/ payments/ batch/ auth/ notification/ fraud/ assistant/
@@ -614,7 +656,7 @@ build-a-bank/
 ├── infra/ docker/ k8s/ helm/ observability/ mesh/ gitops/ terraform/ security/ platform/
 └── .github/workflows/                             # CI/CD with security gates
 ```
-Starting/ending code via **git branches/tags per step** (`step-03-start`, `step-03-end`). ArchUnit tests live alongside each service's tests.
+Starting/ending code via **git tags per step** (`step-03-start`, `step-03-end`). **Commits land on `main` and tags point at `main` commits — never leave the repo on a detached HEAD between sessions.** ArchUnit tests live alongside each service's tests.
 
 > [!IMPORTANT]
 > **Two unambiguous repo roles** (state in README and Step 01): **(1) the cloned course repo = textbook + answer key** — already a git repo; the learner never runs `git init` or builds here; they read lessons and `git checkout step-NN-end` for reference solutions. **(2) a separate empty folder = the learner's own project** — the *only* place Step 1 says to run `git init`. Document how a late-joiner copies a `step-NN-start` snapshot into a fresh folder.
@@ -646,13 +688,30 @@ Probe the sandbox: JDK version, Maven, Docker + Compose, `kind`/`minikube`, Pyth
 Produce the **master plan** (all 67 steps with level badges, skip-tests, objectives, the depth from Part II, patterns, tooling, per-step effort + what-to-run) and the **repo scaffold** (multi-module Maven tree + parent POM + Wrapper + `Makefile` + `PROGRESS.md` + `CAPABILITIES.md` + `VERSIONS.md` + `.gitignore`/`.env.example` + README with roadmap, level legend, fast-track + lean-track + DSA notes, and system requirements + COURSE.md). Proceed straight on (unless dry-run mode).
 
 ### 15.3 The per-step loop
-Build one step at a time, in order, continuing automatically. Apply the **tiered Definition of Done (§12)** before advancing — build, run, test, scan, mutation/clean-room at the right tier, paste real output. Keep `step-NN-end` == `step-(NN+1)-start`. End each step with a one-paragraph recap (+ résumé line). **After each step, update `PROGRESS.md`** (step completed, last verified tag, next action).
+Build one step at a time, in order, continuing automatically. Apply the **tiered Definition of Done (§12)** before advancing — build, run, test, scan, mutation/clean-room at the right tier, paste real output. Keep `step-NN-end` == `step-(NN+1)-start`. End each step with a one-paragraph recap (+ résumé line). **After each step:** run the **Lesson DoD (§8.3)** and record it in the Verification Log; write the **🧳 capsule** (§8.4); update **`PROGRESS.md`** — resume block only: step completed, last verified tag, next action, plus **lesson metrics** (lesson line count, sub-step count, 🔮/❓/🔬/▶️ marker counts — decay becomes a visible number, not a vibe); append the step's verification row to **`docs/ai/VERIFICATION-LEDGER.md`**; log any skipped promised artifact in the **contract-debt register (§12.10)**.
 
 ### 15.4 Output budget & safe checkpoints
-A step's lesson (especially the 🛠️ build) is large. If you approach a context/output limit: **finish the current sub-step cleanly, commit, update `PROGRESS.md`, and stop at a safe boundary** — never leave a half-written sub-step or an unbuildable tree. **Split a step's lesson across files** (e.g., `lesson.md` + `build.md`) if it's too long for one. Prefer **fewer complete sub-steps over many half-done ones.** The 🛠️ hands-on detail is never the thing you cut — trim Go-Deeper or split the file instead. **Throughput never buys depth: fewer full-depth steps per session always beats more thin ones — a thin lesson counts as a failed step even if its code verifies.**
+A step's lesson (especially the 🛠️ build) is large — **and running out of budget mid-step is normal, not a failure.** The ONLY correct response to context/output pressure: **finish the current sub-step cleanly (full micro-anatomy), commit, update `PROGRESS.md` with exactly where you stopped, and stop.** The next session resumes at the next sub-step.
+
+**Forbidden compressions — each is a §12-level violation, because the learner inherits a lesson that doesn't teach:**
+- stub sub-steps (a heading + a few lines instead of the §8.1 micro-anatomy);
+- dropping ▶️ Run & See / ✅ expected-output blocks;
+- "the rest is similar" / "left as an exercise" on the core path;
+- skipping 🔍 line-by-line on new code;
+- omitting the 🗓️ Session Plan, ✋ checkpoints, or re-entry lines to save space.
+
+**A thin build is a broken build.** The lesson metrics in `PROGRESS.md` (§15.3) make thinning measurable, and the Lesson DoD (§8.3) blocks the step. **Split a step's lesson across files** (`lesson.md` + `build.md`) when one file gets unwieldy. Trim 🚀 Go-Deeper first; the 🛠️ build is never the thing you cut — and **stopping early always beats compressing.** **Throughput never buys depth: fewer full-depth steps per session always beats more thin ones — a thin lesson counts as a failed step even if its code verifies.**
 
 ### 15.5 Resume (every fresh session)
-Read `PROGRESS.md` + `CAPABILITIES.md` + `VERSIONS.md`, `git checkout` the last verified tag, re-run **`make doctor`**, then continue from "next action." Re-verify the previous `step-NN-end` still builds before extending it. **Before writing any new lesson, re-read §8.1 *including its worked example in full*, and open the strongest earlier lesson (e.g. `steps/step-08/lesson.md`) as your live exemplar — never pattern-match the most recent lessons (anti-anchoring, §8 depth gate).**
+**Deterministic read-set — load exactly this, nothing more:**
+1. `PROGRESS.md` (the ≤ ~40-line resume block)
+2. `steps/step-<N-1>/capsule.md` (🧳 the ~20-line handoff — **instead of** the previous lesson)
+3. the step-N row of `COURSE.md`
+4. `CAPABILITIES.md` + `VERSIONS.md`
+5. `docs/ai/LESSON-SPEC.md` + `docs/ai/CONTEXT-PLAYBOOK.md`
+6. `docs/ai/PROJECT-MAP.md` (accurate callback facts — instead of re-reading old lessons)
+
+**Do NOT re-read this master prompt, prior lessons wholesale, or the verification ledger** — the capsule + spec carry everything needed; pull a specific earlier lesson section only when the new step directly extends its code. **Exception (anti-anchoring, §8 depth gate): before writing any new lesson's 🛠️ build, re-read `docs/ai/LESSON-SPEC.md` §2 and open the strongest earlier lesson (e.g. `steps/step-08/lesson.md`) as your live exemplar — never pattern-match the most recent lessons.** Then make sure you're on `main` (never work detached), re-run **`make doctor`**, re-verify the previous `step-NN-end` still builds, and continue from "next action."
 
 ### 15.6 Decisions, parallelism, never-stop
 - At any fork, pick the best option, document it (ADR if architectural), move on — never ask.

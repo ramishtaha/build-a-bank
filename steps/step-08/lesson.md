@@ -16,12 +16,12 @@
 
 A one-line map of where we're going. Click to jump.
 
-1. **[A · 🧭 Orient](#orient)** — what the CIF service *is*, why a database-backed microservice matters, the cheat card, and whether you can skip.
-2. **[B · 🧠 Understand](#understand)** — the persistence mental model (entity ↔ row, the persistence context / 1st-level cache), why an entity is a class and not a record, Spring Data derived queries, Flyway-owns-the-schema with `ddl-auto=validate`, OSIV off, Bean Validation, DTOs vs entities — no magic; plus the security lens, the Boot-4 / Testcontainers-2 version story, and two patterns (Repository, Database-per-Service).
-3. **[C · 🛠️ Build](#build)** — the heart: the module pom (hitting the Flyway + Testcontainers module deltas) → the `Customer` entity → the Flyway `V1` migration → the repository (derived queries) → the `@Transactional` service → the DTOs + Bean Validation → the controller → `application.yml` → the `@ServiceConnection` Testcontainers config + the `@DataJpaTest` slice (we hit and fix the *missing table* failure) → the `@WebMvcTest` controller test → the full `@SpringBootTest` integration test → and finally **run it for real with Compose** (we hit and fix the port-5432 conflict). Then 🎮 Play With It and the 🏁 finished result.
-4. **[D · 🔬 Prove](#prove)** — the Verification Log (🔴 Full tier): the real, pasted `verify` (6 tests) with the **Testcontainers random-port + Flyway** proof, the live POST→GET over HTTP, and the **mutation sanity-check**.
-5. **[E · 🎓 Apply](#apply)** — go-deeper asides, interview prep (incl. a version-evolution question), and your-turn exercises.
-6. **[F · 🏆 Review](#review)** — troubleshooting (the three real failures), resources & glossary, and the recap/study notes.
+1. **[A · 🧭 Orient](#orient)** *(~1h)* — what the CIF service *is*, why a database-backed microservice matters, the cheat card, and whether you can skip.
+2. **[B · 🧠 Understand](#understand)** *(~1.5h)* — the persistence mental model (entity ↔ row, the persistence context / 1st-level cache), why an entity is a class and not a record, Spring Data derived queries, Flyway-owns-the-schema with `ddl-auto=validate`, OSIV off, Bean Validation, DTOs vs entities — no magic; plus the security lens, the Boot-4 / Testcontainers-2 version story, and two patterns (Repository, Database-per-Service).
+3. **[C · 🛠️ Build](#build)** *(~15h — see the Session Plan below for the cut into sittings)* — the heart: the module pom (hitting the Flyway + Testcontainers module deltas) → the `Customer` entity → the Flyway `V1` migration → the repository (derived queries) → the `@Transactional` service → the DTOs + Bean Validation → the controller → `application.yml` → the `@ServiceConnection` Testcontainers config + the `@DataJpaTest` slice (we hit and fix the *missing table* failure) → the `@WebMvcTest` controller test → the full `@SpringBootTest` integration test → and finally **run it for real with Compose** (we hit and fix the port-5432 conflict). Then 🎮 Play With It and the 🏁 finished result.
+4. **[D · 🔬 Prove](#prove)** *(~45 min)* — the Verification Log (🔴 Full tier): the real, pasted `verify` (6 tests) with the **Testcontainers random-port + Flyway** proof, the live POST→GET over HTTP, and the **mutation sanity-check**.
+5. **[E · 🎓 Apply](#apply)** *(~1h)* — go-deeper asides, interview prep (incl. a version-evolution question), and your-turn exercises.
+6. **[F · 🏆 Review](#review)** *(~45 min)* — troubleshooting (the three real failures), resources & glossary, and the recap/study notes.
 
 ---
 
@@ -127,6 +127,23 @@ Every real backend you will ever build talks to a database, and *how* it does so
 - **Step 7** — `@Transactional` is applied by a **proxy**; we use it on the service here and go deep on transactions in Step 12.
 
 > **Depends on:** Steps 5, 6, 7 (Spring) + Docker (Step 1).
+
+## 🗓️ Session Plan (~20h → 8 sittings)
+
+Twenty focused hours is a marathon, not a sitting. Here's the cut into ~2–3h sessions — each ends at a real ✋ checkpoint you can commit and walk away from:
+
+| Sitting | Covers | ~Time | Ends at |
+|---|---|---|---|
+| **S1 — Orient + Understand** | Movements A + B: skip-test, cheat card, Big Idea, patterns, Under the Hood, Then-vs-Now | ~2.5h | end of B (nothing typed yet) |
+| **S2 — Module, entity, schema** | Sub-steps 1–3: pom + `CifApplication` (~1h), `Customer` + `KycStatus` (~1h), Flyway `V1` (~30 min) | ~2.5h | sub-step 3 ✋ — V1 migration committed |
+| **S3 — Repo, service, DTOs** | Sub-steps 4–6: repository (~45 min), `@Transactional` service (~1h), DTOs + validation (~45 min) | ~2.5h | sub-step 6 ✋ — records at the edge, committed |
+| **S4 — Controller + config** | Sub-steps 7–8: `CustomerController` (~1h), `application.yml` (~1h) | ~2h | sub-step 8 ✋ — whole main source set compiles |
+| **S5 — Testcontainers day** | Sub-step 9: `ContainersConfig` + the `@DataJpaTest` slice, incl. the engineered missing-table failure | ~3h | sub-step 9 ✋ — 2 tests green on real Postgres |
+| **S6 — Web slice + e2e** | Sub-steps 10–11: `@WebMvcTest` (~1h), full `@SpringBootTest` (~1.5h) | ~2.5h | sub-step 11 ✋ — 6/6 green (the DoD core) |
+| **S7 — Run it for real** | Sub-step 12 (Compose + the port-5432 fix, ~2h) + 🎮 Play With It + 🏁 | ~2.5h | sub-step 12 ✋ — tagged `step-08-end` |
+| **S8 — Prove + Apply + Review** | Movements D + E + F: Verification Log, interview prep, exercises, recap | ~2.5h | end of lesson |
+
+**Optional routes:** the ⏭️ skip-test above (5 min) can shrink the whole step to a ~4h skim for experienced Spring-Data devs; the four Go-Deeper asides (+~5 min each), the IntelliJ tip (+~2 min), and the Play-With-It experiments (+~5 min each) are detours you can bank for a later sitting.
 
 ---
 
@@ -300,7 +317,7 @@ Also touched (one-line registration): the parent `pom.xml` gets `<module>service
 
 ---
 
-### Sub-step 1 of 12 — The module pom + the application class 🧭 *(you are here: **module** → entity → schema → repo → service → DTOs → controller → config → tests → run)*
+### Sub-step 1 of 12 — The module pom + the application class (~1h) 🧭 *(you are here: **module** → entity → schema → repo → service → DTOs → controller → config → tests → run)*
 
 🎯 **Goal:** create the `services/cif` Maven module with exactly the dependencies a JPA + Flyway + Testcontainers service needs — and hit the **Boot-4 / Testcontainers-2 module deltas** head-on so they never surprise you. Then add the Spring Boot entry-point class so the module is runnable.
 
@@ -484,6 +501,8 @@ public class CifApplication {
 
 ✋ **Checkpoint:** `services/cif` compiles and is registered in the parent `<modules>`. The full `verify` won't pass until we have config + a DB + tests — that's the next eleven sub-steps.
 
+🔄 **Stopping here?** You have a compiling, registered `services/cif` module (pom + `CifApplication`). Next: sub-step 2 (the entity); first action: create `services/cif/src/main/java/com/buildabank/cif/domain/KycStatus.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -495,7 +514,7 @@ git commit -m "feat(cif): scaffold CIF module (JPA + Flyway + Testcontainers dep
 
 ---
 
-### Sub-step 2 of 12 — The `Customer` entity + `KycStatus` enum 🧭 *(module ✅ → **entity** → schema → repo → …)*
+### Sub-step 2 of 12 — The `Customer` entity + `KycStatus` enum (~1h) 🧭 *(module ✅ → **entity** → schema → repo → …)*
 
 🎯 **Goal:** map the customer to a table with JPA — and learn *why an entity is a mutable class, not a record*. First the tiny enum, then the entity.
 
@@ -649,6 +668,8 @@ public class Customer {
 
 ✋ **Checkpoint:** `domain/KycStatus.java` and `domain/Customer.java` compile (`./mvnw -pl services/cif -DskipTests compile`).
 
+🔄 **Stopping here?** You have the mapped entity + enum compiling — but no schema yet. Next: sub-step 3 (the Flyway V1 migration); first action: create `services/cif/src/main/resources/db/migration/V1__create_customer.sql`.
+
 💾 **Commit:**
 
 ```bash
@@ -658,11 +679,11 @@ git commit -m "feat(cif): add Customer JPA entity + KycStatus enum"
 
 ⚠️ **Pitfall:** making `Customer` a `record` because "records are nicer." Hibernate will reject it. Records belong on the **DTOs** (sub-step 6), not the entity.
 
-> 💡 **Faster in IntelliJ (optional):** generate the constructor and getters with `Alt+Insert` (Windows/Linux) / `⌘N` (macOS) → *Constructor* / *Getter*. The CLI path is just: type them (or copy the block above). Either way the result is identical.
+> 💡 **Faster in IntelliJ (optional, +~2 min):** generate the constructor and getters with `Alt+Insert` (Windows/Linux) / `⌘N` (macOS) → *Constructor* / *Getter*. The CLI path is just: type them (or copy the block above). Either way the result is identical.
 
 ---
 
-### Sub-step 3 of 12 — The Flyway `V1` migration (schema ownership) 🧭 *(module ✅ → entity ✅ → **schema** → repo → …)*
+### Sub-step 3 of 12 — The Flyway `V1` migration (schema ownership) (~30 min) 🧭 *(module ✅ → entity ✅ → **schema** → repo → …)*
 
 🎯 **Goal:** write the SQL that *creates* the `customer` table. **This file — not the entity — is the source of truth for the schema.** Flyway runs it on startup; Hibernate only validates against it.
 
@@ -706,6 +727,8 @@ create index idx_customer_email on customer (email);
 
 ✋ **Checkpoint:** the file exists at exactly `src/main/resources/db/migration/V1__create_customer.sql` (double underscore!). We can't run it yet — we need the datasource config (sub-step 8) and a DB.
 
+🔄 **Stopping here?** (End of sitting S2.) You have entity + committed V1 migration — the schema's source of truth exists. Next: sub-step 4 (the repository); first action: create `services/cif/src/main/java/com/buildabank/cif/domain/CustomerRepository.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -717,7 +740,7 @@ git commit -m "feat(cif): add Flyway V1 migration for customer table"
 
 ---
 
-### Sub-step 4 of 12 — The repository (derived queries) 🧭 *(… schema ✅ → **repo** → service → …)*
+### Sub-step 4 of 12 — The repository (derived queries) (~45 min) 🧭 *(… schema ✅ → **repo** → service → …)*
 
 🎯 **Goal:** declare the repository interface. We write *no* implementation — Spring Data generates it from the method names.
 
@@ -758,6 +781,8 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
 ✋ **Checkpoint:** `CustomerRepository` compiles. (It can't be exercised until there's a DB — that's the tests.)
 
+🔄 **Stopping here?** You have entity + schema + repository interface, all compiling. Next: sub-step 5 (the `@Transactional` service); first action: create `services/cif/src/main/java/com/buildabank/cif/service/CustomerService.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -769,7 +794,7 @@ git commit -m "feat(cif): add CustomerRepository with derived queries"
 
 ---
 
-### Sub-step 5 of 12 — The service (`@Transactional`) 🧭 *(… repo ✅ → **service** → DTOs → …)*
+### Sub-step 5 of 12 — The service (`@Transactional`) (~1h) 🧭 *(… repo ✅ → **service** → DTOs → …)*
 
 🎯 **Goal:** the application service that creates and reads customers, with transaction boundaries. This is where business rules live (generate a customer number, start KYC `PENDING`).
 
@@ -838,7 +863,11 @@ public class CustomerService {
 
 🔬 **Break-it (later):** in the [Prove](#prove) section's mutation check we'll see what teeth the tests have. For now, note: if you remove `@Transactional` from `create`, the `save` still works (Spring Data wraps `save` in its own transaction), but you lose the *boundary* control you'll rely on in Step 12's multi-step money moves.
 
+❓ **Knowledge-check:** why mark the finders `@Transactional(readOnly = true)` instead of plain `@Transactional`? <details><summary>answer</summary>It's a hint that lets Hibernate skip dirty-checking/flush at the end (nothing should change) and lets the JDBC driver/DB optimize for reads — cheaper, and it guards against accidental writes.</details>
+
 ✋ **Checkpoint:** `CustomerService` compiles. Three logical layers exist now: repository → service.
+
+🔄 **Stopping here?** You have repository → service wired and compiling (business rules: `CIF-…` number, KYC `PENDING`). Next: sub-step 6 (DTOs + Bean Validation); first action: create `services/cif/src/main/java/com/buildabank/cif/web/CreateCustomerRequest.java`.
 
 💾 **Commit:**
 
@@ -851,7 +880,7 @@ git commit -m "feat(cif): add transactional CustomerService (create + finders)"
 
 ---
 
-### Sub-step 6 of 12 — The DTOs + Bean Validation 🧭 *(… service ✅ → **DTOs** → controller → …)*
+### Sub-step 6 of 12 — The DTOs + Bean Validation (~45 min) 🧭 *(… service ✅ → **DTOs** → controller → …)*
 
 🎯 **Goal:** define the **API shapes** — separate from the entity — and make the request body **self-validating**. This is where `record` shines.
 
@@ -940,6 +969,8 @@ public record CustomerResponse(
 
 ✋ **Checkpoint:** both DTOs compile. Note we now have **records at the edge, a class in the middle** — the entity-vs-DTO split.
 
+🔄 **Stopping here?** (End of sitting S3.) You have everything below the web layer: entity, schema, repo, service, DTOs. Next: sub-step 7 (the controller); first action: create `services/cif/src/main/java/com/buildabank/cif/web/CustomerController.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -951,11 +982,13 @@ git commit -m "feat(cif): add request/response DTOs with Bean Validation"
 
 ---
 
-### Sub-step 7 of 12 — The controller (POST + two GETs) 🧭 *(… DTOs ✅ → **controller** → config → …)*
+### Sub-step 7 of 12 — The controller (POST + two GETs) (~1h) 🧭 *(… DTOs ✅ → **controller** → config → …)*
 
 🎯 **Goal:** expose the REST API — create a customer (`201` + `Location`), fetch by id (`200`/`404`), fetch by customer number (`200`/`404`).
 
 📁 **Location:** new file → `services/cif/src/main/java/com/buildabank/cif/web/CustomerController.java`
+
+✍️ **Type-it-yourself (scaffold fade):** once you've typed `create` and `byId` from the block below, **write `byNumber` from memory before comparing** — it's the same `Optional` chain as `byId`, just calling `findByCustomerNumber` under `/by-number/{customerNumber}`.
 
 ⌨️ **Code:**
 
@@ -1033,6 +1066,8 @@ public class CustomerController {
 
 ✋ **Checkpoint:** the whole *main* source set compiles: `./mvnw -pl services/cif -DskipTests compile` → `BUILD SUCCESS`. We still can't *run* it — no datasource config yet. That's next.
 
+🔄 **Stopping here?** You have the full API surface (POST + two GETs) compiling. Next: sub-step 8 (config); first action: create `services/cif/src/main/resources/application.yml`.
+
 💾 **Commit:**
 
 ```bash
@@ -1044,7 +1079,7 @@ git commit -m "feat(cif): add CustomerController (POST 201 + GET by id/number, 4
 
 ---
 
-### Sub-step 8 of 12 — `application.yml` (validate + OSIV off + env datasource) 🧭 *(… controller ✅ → **config** → tests → run)*
+### Sub-step 8 of 12 — `application.yml` (validate + OSIV off + env datasource) (~1h) 🧭 *(… controller ✅ → **config** → tests → run)*
 
 🎯 **Goal:** wire the datasource (env-driven), tell Hibernate to **validate** (not create) the schema, turn **OSIV off**, enable Flyway, set the port, and expose `/actuator/flyway`.
 
@@ -1104,7 +1139,11 @@ logging:
 
 🔮 **Predict:** with `ddl-auto: validate` and a DB where Flyway *hasn't* created the table, what happens at startup? <details><summary>answer</summary>Startup fails: Hibernate finds no `customer` table → `SchemaManagementException: missing table [customer]`. (Exactly the failure we engineer-and-fix in sub-step 9.)</details>
 
+❓ **Knowledge-check:** in `${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/cif}`, what does Spring resolve *first* — the env var or the default? <details><summary>answer</summary>The environment (env var / `-D` system property) first; the text after the `:` is only the fallback when nothing is set. That's why the same YAML works locally (defaults) and in any deployed environment (overrides) with zero code changes.</details>
+
 ✋ **Checkpoint:** all main code + config in place. The app is *theoretically* runnable — it just needs a real Postgres, which the tests provide via Testcontainers (next) and Compose provides for the live run (sub-step 12).
+
+🔄 **Stopping here?** (End of sitting S4.) You have the complete main source set (entity → controller → config) compiling; nothing runs yet *by design*. Next: sub-step 9 (Testcontainers); first action: `docker info` to confirm Docker is up, then create `services/cif/src/test/java/com/buildabank/cif/ContainersConfig.java`.
 
 💾 **Commit:**
 
@@ -1117,11 +1156,13 @@ git commit -m "feat(cif): app config — Flyway-owned schema, ddl validate, OSIV
 
 ---
 
-### Sub-step 9 of 12 — Testcontainers config + the `@DataJpaTest` slice (the missing-table fix) 🧭 *(… config ✅ → **tests** → run)*
+### Sub-step 9 of 12 — Testcontainers config + the `@DataJpaTest` slice (the missing-table fix) (~3h) 🧭 *(… config ✅ → **tests** → run)*
 
 🎯 **Goal:** spin up a **real Postgres** for tests and write the first slice test — and, crucially, **hit the missing-table failure on purpose and fix it**, so you understand *why* `@DataJpaTest` needs Flyway imported.
 
-📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/ContainersConfig.java`
+> 🧠 **Pace yourself — this is the densest sub-step of the lesson** (~7 new annotations). It splits naturally in two: **9a** — the container config (3 new tokens: `@TestConfiguration`, `@ServiceConnection`, the non-generic `PostgreSQLContainer`); **9b** — the slice test (4 more: `@DataJpaTest`, `@Import`, `@ImportAutoConfiguration(FlywayAutoConfiguration…)`, `replace = NONE`) plus the engineered failure. Take a breather between the two.
+
+📁 **Location (Part 9a — the container config):** new file → `services/cif/src/test/java/com/buildabank/cif/ContainersConfig.java`
 
 ⌨️ **Code:**
 
@@ -1158,7 +1199,7 @@ public class ContainersConfig {
 - `@Bean @ServiceConnection PostgreSQLContainer postgresContainer()` — declares the container as a bean and **`@ServiceConnection`** tells Boot to derive the DataSource (URL/user/password/port) **from this container automatically**. No JDBC URL in any test config — Boot reads the container's *random* host port at runtime. This is the modern Boot way (vs the old `@DynamicPropertySource` boilerplate).
 - `new PostgreSQLContainer(DockerImageName.parse("postgres:17-alpine"))` — **note: no `<>`**. In **Testcontainers 2.0** `PostgreSQLContainer` is **non-generic** and lives at `org.testcontainers.postgresql.PostgreSQLContainer`. The image tag is pinned (`postgres:17-alpine`), never `latest`.
 
-📁 **Now the slice test** → `services/cif/src/test/java/com/buildabank/cif/domain/CustomerRepositoryTest.java`
+📁 **Now the slice test (Part 9b)** → `services/cif/src/test/java/com/buildabank/cif/domain/CustomerRepositoryTest.java`
 
 ```java
 // services/cif/src/test/java/com/buildabank/cif/domain/CustomerRepositoryTest.java
@@ -1272,6 +1313,8 @@ INFO o.f.core.internal.command.DbMigrate : Successfully applied 1 migration to s
 
 ✋ **Checkpoint:** `CustomerRepositoryTest` is green (2 tests) on a real Postgres, and you've *seen* the missing-table failure and its fix.
 
+🔄 **Stopping here?** (End of sitting S5 — the hardest one is behind you.) You have 2 green tests on a real Testcontainers Postgres. Next: sub-step 10 (the fast, DB-less web slice); first action: create `services/cif/src/test/java/com/buildabank/cif/web/CustomerControllerTest.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -1283,11 +1326,13 @@ git commit -m "test(cif): @DataJpaTest repository slice on real Postgres (Testco
 
 ---
 
-### Sub-step 10 of 12 — The `@WebMvcTest` controller slice 🧭 *(… repo test ✅ → **web test** → e2e test → run)*
+### Sub-step 10 of 12 — The `@WebMvcTest` controller slice (~1h) 🧭 *(… repo test ✅ → **web test** → e2e test → run)*
 
 🎯 **Goal:** test the web layer in isolation — fast, no DB — with the service **mocked**. Prove `201`, `400` (validation), and `404`.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/web/CustomerControllerTest.java`
+
+✍️ **Type-it-yourself (scaffold fade):** `missingCustomerReturns404` is the third MockMvc test of the same shape in this file — try writing it yourself first (stub `findById(99L)` → empty `Optional`, GET `/api/customers/99`, expect `404`) and only then compare with the block below.
 
 ⌨️ **Code:**
 
@@ -1394,6 +1439,8 @@ class CustomerControllerTest {
 
 ✋ **Checkpoint:** the web slice is green (3 tests) with no database in sight — proving the controller's status-code contract in isolation.
 
+🔄 **Stopping here?** You have 5 green tests (2 repo + 3 web). Next: sub-step 11 (the full e2e); first action: create `services/cif/src/test/java/com/buildabank/cif/CifApplicationIntegrationTest.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -1405,11 +1452,13 @@ git commit -m "test(cif): @WebMvcTest controller slice (201/400/404, @MockitoBea
 
 ---
 
-### Sub-step 11 of 12 — The full `@SpringBootTest` integration test 🧭 *(… web test ✅ → **e2e test** → run)*
+### Sub-step 11 of 12 — The full `@SpringBootTest` integration test (~1.5h) 🧭 *(… web test ✅ → **e2e test** → run)*
 
 🎯 **Goal:** the honest "it really works" proof — boot the **whole** app on a **real Postgres**, POST a customer over the actual HTTP stack, then GET it back.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/CifApplicationIntegrationTest.java`
+
+✍️ **Type-it-yourself (scaffold fade):** the GET half of this test is sub-step 7's `byNumber` endpoint exercised from the outside — after typing the POST block, try writing the `get("/api/customers/by-number/" + number)` assertions (200 + email + firstName) yourself before checking below.
 
 ⌨️ **Code:**
 
@@ -1501,6 +1550,8 @@ INFO o.f.core.internal.command.DbMigrate : Successfully applied 1 migration to s
 
 ✋ **Checkpoint:** `./mvnw -pl services/cif -am verify` is **green with 6 tests**, with the Testcontainers random-port JDBC URL and Flyway lines visible. **This is the Definition-of-Done core.**
 
+🔄 **Stopping here?** (End of sitting S6.) You have the DoD core: 6/6 green on real Postgres. Next: sub-step 12 (the live run); first action: `docker info`, then create `services/cif/compose.yaml`.
+
 💾 **Commit:**
 
 ```bash
@@ -1512,7 +1563,7 @@ git commit -m "test(cif): full @SpringBootTest POST->GET integration on real Pos
 
 ---
 
-### Sub-step 12 of 12 — Run it for real with Compose (the port-5432 fix) 🧭 *(… e2e test ✅ → **run for real**)*
+### Sub-step 12 of 12 — Run it for real with Compose (the port-5432 fix) (~2h) 🧭 *(… e2e test ✅ → **run for real**)*
 
 🎯 **Goal:** start a real Postgres with Docker Compose and run CIF as a live server — then exercise it over HTTP. And **hit the classic port-5432 conflict and fix it.**
 
@@ -1563,7 +1614,7 @@ docker ps                                  # confirm cif-postgres is "healthy"
 ./mvnw -pl services/cif spring-boot:run    # starts CIF on :8081
 ```
 
-🔬 **The port-5432 conflict (a real failure you may hit):** if a Postgres is **already** listening on host `5432` (a previously installed local Postgres, or another project's container), CIF connects to *that* DB — with different credentials — and you get:
+🔬 **The port-5432 conflict (a real failure you may hit):** if a Postgres is **already** listening on host `5432` (a previously installed local Postgres, or another project's container), the *first* symptom may be `docker compose up` itself failing because host port 5432 is already allocated — check `docker compose ps` to see whether `cif-postgres` actually started. And if the container never started (or a native Postgres answers on `5432`) and you run the app anyway, CIF connects to *that* DB — with different credentials — and you get:
 
 ❌ **Expected FAILURE:**
 
@@ -1627,6 +1678,8 @@ GET /api/customers/99999 -> HTTP 404 Not Found
 
 ✋ **Checkpoint:** CIF runs live on `:8081`, a POST returns `201` + `Location`, the GET round-trips the JSON, bad input is `400`, a missing id is `404`, and `/actuator/flyway` shows V1 applied. Tear down with `docker compose -f services/cif/compose.yaml down -v` when done.
 
+🔄 **Stopping here?** (End of sitting S7.) You have the whole build done and tagged `step-08-end`. Next: [D · 🔬 Prove](#prove); first action: run `bash steps/step-08/smoke.sh` and compare against the Verification Log.
+
 💾 **Commit:**
 
 ```bash
@@ -1681,7 +1734,7 @@ Make it tangible. With the DB up (`docker compose -f services/cif/compose.yaml u
 
   Then `GET /api/customers/by-number/CIF-DEMO001` returns Ada.
 
-🧪 **Little experiments (change X → see Y):**
+🧪 **Little experiments (change X → see Y — +~5 min each; revert after each):**
 
 - Change a finder name in `CustomerRepository` to a typo (`findByCustmerNumber`) → app **fails at startup** with a clear "no property" error (derived-query parsing is at boot). Revert.
 - POST the *same* email twice → the second insert violates the DB `unique` constraint (and you'd add an `existsByEmail` guard for a friendly `409` — a stretch exercise below).
@@ -1787,7 +1840,7 @@ For a Full-tier step you'd verify from a fresh `git clone` with only the pinned 
 
 # E · 🎓 Apply
 
-## 🚀 Go Deeper (Optional)
+## 🚀 Go Deeper (Optional, +~5 min each)
 
 <details>
 <summary>🔍 Why not just <code>ddl-auto=update</code> in dev and Flyway in prod?</summary>
@@ -1842,7 +1895,7 @@ Hibernate needs to instantiate the entity with a **no-arg constructor** and set 
 <details>
 <summary><strong>Q5 (applied). A customer creation returns 400 sometimes and 201 other times for the "same" payload. How do you debug?</strong></summary>
 
-A `400` is Bean Validation rejecting the body (blank name, bad email, future/absent DOB, or over-length) — check which constraint fired (with `ProblemDetail` from Step 13 the body lists the field errors). A `201` means validation passed. If the *same* literal payload flips, suspect a non-deterministic field (a future date relative to "now" for `@Past`, or whitespace-only that `@NotBlank` rejects). The fix is to read the validation error body; the controller never ran for the 400s.
+A `400` is Bean Validation rejecting the body (blank name, bad email, future DOB, or over-length) — note a *missing* DOB passes: `@Past`, like every constraint except `@NotNull`/`@NotBlank`/`@NotEmpty`, treats `null` as valid, and the column is nullable (you'd add `@NotNull` to make it mandatory). Check which constraint fired (with `ProblemDetail` from Step 13 the body lists the field errors). A `201` means validation passed. If the *same* literal payload flips, suspect a non-deterministic field (a future date relative to "now" for `@Past`, or whitespace-only that `@NotBlank` rejects). The fix is to read the validation error body; the controller never ran for the 400s.
 </details>
 
 <details>
@@ -1894,7 +1947,7 @@ The three real failures we hit building this step (verbatim → cause → fix):
 > ```
 > FATAL: password authentication failed for user "bank"
 > ```
-> **Cause:** a **local Postgres was already listening on host port 5432**, so CIF connected to *that* DB (different credentials) instead of the Compose container.
+> **Cause:** a **local Postgres was already listening on host port 5432** — so either `docker compose up` failed to bind the port at all (check `docker compose ps`), or CIF connected to *that* DB (different credentials) instead of the Compose container.
 > **Fix:** remap the host port in `compose.yaml` to e.g. `"5433:5432"`, and run with `SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/cif`. (Or stop the conflicting local Postgres.)
 
 **Other quick ones:**

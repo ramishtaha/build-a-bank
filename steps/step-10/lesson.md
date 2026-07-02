@@ -11,14 +11,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | the engine up close: planner, indexes, MVCC, isolation, partitioning, pools |
-| **C** | [🛠️ Build](#build) | six raw-JDBC labs on a real Postgres — plans, anomalies, write skew, the pool, partitions, online DDL |
-| **D** | [🔬 Prove](#prove) | the Verification Log — 21 tests green, every lab's real output, the §12.3 mutation check |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1h |
+| **B** | [🧠 Understand](#understand) | the engine up close: planner, indexes, MVCC, isolation, partitioning, pools | ~2.5h |
+| **C** | [🛠️ Build](#build) | six raw-JDBC labs on a real Postgres — plans, anomalies, write skew, the pool, partitions, online DDL | ~12h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — 21 tests green, every lab's real output, the §12.3 mutation check | ~1.5h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~2h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~1h |
 
 ---
 
@@ -120,6 +120,22 @@ Two sentences from real incident reviews: *"The query got slow as the table grew
 
 > **Depends on: Steps 8, 9** (and conceptually 5–7 for the Spring/JPA fundamentals you're now looking underneath).
 
+## 🗓️ Session Plan (~20 h ≈ 7 sittings)
+
+You don't do this step in one sitting. Each sitting below ends at a real commit or section boundary, so you can walk away without losing state:
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| **S1** | A · Orient (skip-test, cheat card) + B · Understand | ~2.5h | end of B — you can say which isolation level stops which anomaly, from the table |
+| **S2** | C · Sub-steps 0–1 — `DbLab` harness + `QueryPlanLabTest` | ~3h | 💾 commit *"prove seq→index→index-only scans"* |
+| **S3** | C · Sub-step 2 — `MvccIsolationTest` (dirty / non-repeatable / phantom) | ~2.5h | 💾 commit *"reproduce dirty/non-repeatable/phantom reads"* |
+| **S4** | C · Sub-step 3 — `WriteSkewTest` (the step's §12.3 mutation point) | ~2.5h | 💾 commit *"prove write skew … (40001)"* |
+| **S5** | C · Sub-steps 4–5 — `ConnectionPoolTest` + `PartitioningLabTest` | ~3h | 💾 commit *"prove range-partition pruning"* |
+| **S6** | C · Sub-step 6 — `OnlineSchemaChangeTest` + `queries.sql` by hand in psql + The Finished Result | ~2.5h | `git tag step-10-end` |
+| **S7** | D · Prove (verify, `smoke.sh`, mutation check) + E · Apply + F · Review | ~3h | flashcards + one-line reflection |
+
+*Optional routes:* pass the ⏭️ skip-test and the whole step compresses to a **~5h skim** (S1 + S7); each 🚀 Go Deeper aside costs **+~10 min**; every 🔬 Break-it detour is **~30s**.
+
 ---
 
 <a id="understand"></a>
@@ -196,7 +212,23 @@ flowchart TB
 
 **Write skew — the subtle one.** Two transactions read an overlapping set, each makes a decision based on what it read, and each writes a **different** row. No write-write conflict occurs, so snapshot isolation (REPEATABLE READ) lets both commit — but *together* they violate an invariant that neither violated alone. Example (the lab): two linked accounts must keep a combined balance ≥ 0; both start at 100; two concurrent withdrawals of 150 each read the sum (200), each pass the check, each debit a different account → final sum −100. **SERIALIZABLE** prevents it: Postgres's **Serializable Snapshot Isolation (SSI)** tracks read/write dependencies between live transactions and, when it detects a dangerous cycle, **aborts** one with `ERROR: could not serialize access… (SQLSTATE 40001)`. The application's job is to **catch 40001 and retry the whole transaction.**
 
+```mermaid
+sequenceDiagram
+    participant T1
+    participant PG as Postgres (REPEATABLE READ)
+    participant T2
+    T1->>PG: read sum(balance) → 200 ✅ "200 ≥ 150, safe"
+    T2->>PG: read sum(balance) → 200 ✅ "200 ≥ 150, safe"
+    T1->>PG: UPDATE A: 100 → −50 · commit ✅
+    T2->>PG: UPDATE B: 100 → −50 · commit ✅ (different row → no conflict)
+    Note over T1,T2: combined balance = −100 💥 invariant broken — by two individually correct transactions
+```
+
+*Alt-text: the write-skew interleaving. T1 and T2 each read the combined balance (200) from their own snapshot and decide a 150 withdrawal is safe. T1 debits account A (100 → −50) and commits; T2 debits account B (100 → −50) and commits — different rows, so no write-write conflict. Together they leave the combined balance at −100, breaking the ≥ 0 invariant that neither transaction broke alone.*
+
 **Connection pools (HikariCP).** The pool holds up to `maximumPoolSize` physical connections. `getConnection()` borrows one; `close()` *returns it to the pool* (it does not actually close the socket). If all are in use, a borrower **waits** up to `connectionTimeout` and then throws `SQLTransientConnectionException("… request timed out")`. This is why pool size is a capacity decision: with `maximumPoolSize = 2`, the *third* concurrent caller waits and may time out — exactly the lab. Hikari exposes live gauges (`getActiveConnections`, `getIdleConnections`, `getThreadsAwaitingConnection`).
+
+> ❓ **Pool size 2, three concurrent borrowers — what happens to the third, and after how long?** <details><summary>answer</summary>It waits *inside* `getConnection()` for up to `connectionTimeout` (500 ms in our lab), then throws `SQLTransientConnectionException("… request timed out")`. It only succeeds if one of the two holders returns a connection during that wait.</details>
 
 **Partitioning.** A large table can be **declaratively partitioned** (e.g. `PARTITION BY RANGE (created_at)`) into child tables per month. The planner does **partition pruning**: a query restricted to one month touches only that partition. Wins: smaller indexes per partition, fast bulk-delete by `DROP TABLE partition` (vs a giant `DELETE`), and parallelism. Cost: more objects to manage, and the partition key must suit your queries.
 
@@ -253,7 +285,7 @@ Confirm the starting point builds:
 
 ## 🛠️ Let's Build It — Step by Step
 
-We build **one shared lab harness** then **six labs**, running between each. Here's the whole step at a glance:
+We build **one shared lab harness** then **six labs** — seven sub-steps in all, numbered 0–6 — running between each. Here's the whole step at a glance:
 
 ```mermaid
 flowchart TB
@@ -283,7 +315,7 @@ steps/step-10/
 
 ---
 
-### Sub-step 0 of 6 — The `DbLab` harness 🧭 *(you are here: **harness** → plans → MVCC → write skew → pool → partitions → online DDL)*
+### Sub-step 0 (1 of 7, ~1h) — The `DbLab` harness 🧭 *(you are here: **harness** → plans → MVCC → write skew → pool → partitions → online DDL)*
 
 🎯 **Goal:** one place that starts a real Postgres *once* and hands every lab the raw-JDBC tools it needs — `openTx(isolation)`, `openAuto()`, `explain(...)`, `exec(...)`, `scalar(...)`. We use **raw JDBC on purpose**: this step is about the engine, and Hibernate would hide the very mechanics (transactions, isolation, the pool) we want to see.
 
@@ -378,11 +410,13 @@ git add services/cif/src/test/java/com/buildabank/cif/dblab/DbLab.java
 git commit -m "test(cif): add DbLab harness — singleton Testcontainers Postgres + raw-JDBC helpers (step 10)"
 ```
 
+*🛑 Stopping here? You have the `DbLab` harness committed (it compiles; nothing runs yet). Next: Sub-step 1 (`QueryPlanLabTest`); first action: create `services/cif/src/test/java/com/buildabank/cif/dblab/QueryPlanLabTest.java`.*
+
 ⚠️ **Pitfall:** opening connections with `DriverManager` means *you* own their lifecycle — always use try-with-resources (`try (Connection c = …)`) so they close even on failure. A leaked connection in a real pool is a classic outage.
 
 ---
 
-### Sub-step 1 of 6 — `QueryPlanLabTest`: watch the plan flip 🧭 *(harness ✅ → **plans** → MVCC → write skew → pool → partitions → online DDL)*
+### Sub-step 1 (2 of 7, ~2h) — `QueryPlanLabTest`: watch the plan flip 🧭 *(harness ✅ → **plans** → MVCC → write skew → pool → partitions → online DDL)*
 
 🎯 **Goal:** seed 20,000 transactions, then use `EXPLAIN (ANALYZE)` to watch the planner go **Seq Scan → (Bitmap) Index Scan → Index Only Scan** as we add a plain index and then a covering index.
 
@@ -500,11 +534,13 @@ git add services/cif/src/test/java/com/buildabank/cif/dblab/QueryPlanLabTest.jav
 git commit -m "test(cif): prove seq→index→index-only scans with EXPLAIN ANALYZE (step 10)"
 ```
 
+*🛑 Stopping here? You have the harness plus the query-plan lab green (Seq → Bitmap Index → Index Only) and committed. Next: Sub-step 2 (MVCC anomalies); first action: create `MvccIsolationTest.java` in the same `dblab` folder.*
+
 ⚠️ **Pitfall:** `EXPLAIN ANALYZE` **executes** the statement. Harmless for `SELECT`; for `UPDATE`/`DELETE` it really changes data — wrap those in a rolled-back transaction or use plain `EXPLAIN`.
 
 ---
 
-### Sub-step 2 of 6 — `MvccIsolationTest`: dirty / non-repeatable / phantom 🧭 *(harness ✅ → plans ✅ → **MVCC** → write skew → pool → partitions → online DDL)*
+### Sub-step 2 (3 of 7, ~2.5h) — `MvccIsolationTest`: dirty / non-repeatable / phantom 🧭 *(harness ✅ → plans ✅ → **MVCC** → write skew → pool → partitions → online DDL)*
 
 🎯 **Goal:** interleave two real transactions to reproduce the read anomalies and *see* MVCC snapshots — proving Postgres has **no** dirty reads, shows **non-repeatable** reads at READ COMMITTED, and gives a **stable snapshot** (no non-repeatable, no phantom) at REPEATABLE READ.
 
@@ -526,6 +562,14 @@ import java.sql.Connection;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/**
+ * <strong>MVCC &amp; the SQL isolation anomalies</strong>, demonstrated by interleaving two real
+ * transactions on Postgres. Each test resets a tiny {@code acct} table, so they are independent.
+ *
+ * <p>Postgres uses <em>Multi-Version Concurrency Control</em>: a writer never blocks a reader because each
+ * transaction reads from a consistent <em>snapshot</em>. The level you pick decides how wide that snapshot
+ * is — and therefore which anomalies you can still see.
+ */
 class MvccIsolationTest extends DbLab {
 
     @BeforeEach
@@ -537,63 +581,103 @@ class MvccIsolationTest extends DbLab {
         }
     }
 
+    /**
+     * <strong>Dirty read — impossible in Postgres.</strong> Even when we explicitly ask for READ
+     * UNCOMMITTED, Postgres silently upgrades it to READ COMMITTED, so a reader can never see another
+     * transaction's <em>uncommitted</em> write. We prove it: T2 writes-but-does-not-commit, T1 still reads
+     * the old value.
+     */
     @Test
     void dirtyReadIsImpossibleInPostgres() throws Exception {
         try (Connection t1 = openTx(TRANSACTION_READ_UNCOMMITTED);
              Connection t2 = openTx(TRANSACTION_READ_COMMITTED)) {
+
             exec(t2, "update acct set balance = 999 where id = 1");   // NOT committed
+
             long seenByT1 = scalar(t1, "select balance from acct where id = 1");
+            System.out.println("[dirty-read] T1 (asked for READ UNCOMMITTED) sees balance = " + seenByT1);
+
             assertThat(seenByT1).isEqualTo(100);   // the old, committed value — no dirty read
             t1.rollback();
             t2.rollback();
         }
     }
 
+    /**
+     * <strong>Non-repeatable read — visible at READ COMMITTED.</strong> T1 reads a row twice; between the
+     * reads T2 commits an update. At READ COMMITTED each statement gets a <em>fresh</em> snapshot, so the
+     * second read sees the new value — the same query, two answers.
+     */
     @Test
     void nonRepeatableReadHappensAtReadCommitted() throws Exception {
         try (Connection t1 = openTx(TRANSACTION_READ_COMMITTED)) {
             long first = scalar(t1, "select balance from acct where id = 1");
+
             try (Connection t2 = openTx(TRANSACTION_READ_COMMITTED)) {
                 exec(t2, "update acct set balance = 200 where id = 1");
                 t2.commit();
             }
+
             long second = scalar(t1, "select balance from acct where id = 1");
+            System.out.println("[non-repeatable @RC] first=" + first + " second=" + second);
+
             assertThat(first).isEqualTo(100);
             assertThat(second).isEqualTo(200);   // changed under T1's feet
             t1.rollback();
         }
     }
 
+    /**
+     * <strong>Repeatable Read prevents it.</strong> Same interleaving, but T1 runs at REPEATABLE READ, which
+     * pins one snapshot for the whole transaction — so both reads return the original value, even though T2
+     * committed in between.
+     */
     @Test
     void repeatableReadGivesAStableSnapshot() throws Exception {
         try (Connection t1 = openTx(TRANSACTION_REPEATABLE_READ)) {
             long first = scalar(t1, "select balance from acct where id = 1");   // takes the snapshot
+
             try (Connection t2 = openTx(TRANSACTION_READ_COMMITTED)) {
                 exec(t2, "update acct set balance = 200 where id = 1");
                 t2.commit();
             }
+
             long second = scalar(t1, "select balance from acct where id = 1");
+            System.out.println("[repeatable-read] first=" + first + " second=" + second);
+
             assertThat(first).isEqualTo(100);
             assertThat(second).isEqualTo(100);   // T2's commit is invisible to T1's frozen snapshot
             t1.rollback();
         }
     }
 
+    /**
+     * <strong>Phantom rows.</strong> T1 counts rows matching a predicate; T2 inserts a new matching row and
+     * commits. At READ COMMITTED the re-count grows (a phantom appears); at REPEATABLE READ the snapshot
+     * hides it. (Postgres's snapshot model prevents phantoms at RR — stricter than the SQL standard
+     * requires.)
+     */
     @Test
     void phantomAppearsAtReadCommittedButNotAtRepeatableRead() throws Exception {
+        // READ COMMITTED — phantom appears
         try (Connection t1 = openTx(TRANSACTION_READ_COMMITTED)) {
             long before = scalar(t1, "select count(*) from acct where balance >= 100");
             insertCommitted(3, 100);
             long after = scalar(t1, "select count(*) from acct where balance >= 100");
+            System.out.println("[phantom @RC] before=" + before + " after=" + after);
             assertThat(before).isEqualTo(2);
             assertThat(after).isEqualTo(3);   // phantom row appeared
             t1.rollback();
         }
-        resetTable();
+
+        resetTableQuietly();
+
+        // REPEATABLE READ — no phantom
         try (Connection t1 = openTx(TRANSACTION_REPEATABLE_READ)) {
             long before = scalar(t1, "select count(*) from acct where balance >= 100");
             insertCommitted(4, 100);
             long after = scalar(t1, "select count(*) from acct where balance >= 100");
+            System.out.println("[phantom @RR] before=" + before + " after=" + after);
             assertThat(before).isEqualTo(2);
             assertThat(after).isEqualTo(2);   // snapshot hides the new row
             t1.rollback();
@@ -605,6 +689,10 @@ class MvccIsolationTest extends DbLab {
             exec(t2, "insert into acct values (" + id + ", " + balance + ")");
             t2.commit();
         }
+    }
+
+    private void resetTableQuietly() throws Exception {
+        resetTable();
     }
 }
 ```
@@ -644,53 +732,126 @@ git add services/cif/src/test/java/com/buildabank/cif/dblab/MvccIsolationTest.ja
 git commit -m "test(cif): reproduce dirty/non-repeatable/phantom reads + MVCC snapshots (step 10)"
 ```
 
+*🛑 Stopping here? You have the harness, the plans lab, and all four anomaly tests green and committed. Next: Sub-step 3 (write skew — the step's centerpiece); first action: create `WriteSkewTest.java`, or re-run `./mvnw -pl services/cif test -Dtest=MvccIsolationTest` first to confirm you're still green.*
+
 ⚠️ **Pitfall:** if you don't `commit()`/`rollback()` and close each connection, the next test can hang on a lock or see leftover rows. Try-with-resources + explicit `rollback()` keep the labs deterministic.
 
 ---
 
-### Sub-step 3 of 6 — `WriteSkewTest`: the anomaly that beats REPEATABLE READ 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → **write skew** → pool → partitions → online DDL)*
+### Sub-step 3 (4 of 7, ~2.5h) — `WriteSkewTest`: the anomaly that beats REPEATABLE READ 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → **write skew** → pool → partitions → online DDL)*
 
 🎯 **Goal:** reproduce **write skew** (two linked accounts, combined balance must stay ≥ 0) at REPEATABLE READ — the invariant breaks — then show **SERIALIZABLE** rejects the second commit with `SQLSTATE 40001`. This is the step's **critical concurrency path** (and the §12.3 mutation point).
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/dblab/WriteSkewTest.java`
 
-⌨️ **Code:** *(the two test methods; full file in the repo)*
+⌨️ **Code:** *(complete file)*
 
 ```java
-// services/cif/src/test/java/com/buildabank/cif/dblab/WriteSkewTest.java  (excerpt)
-@Test
-void repeatableReadAllowsWriteSkew_invariantViolated() throws Exception {
-    try (Connection t1 = openTx(TRANSACTION_REPEATABLE_READ);
-         Connection t2 = openTx(TRANSACTION_REPEATABLE_READ)) {
-        // Both read the combined balance from their own snapshot: each sees 200, each passes the check.
-        assertThat(scalar(t1, "select sum(balance) from linked_account")).isEqualTo(200);
-        assertThat(scalar(t2, "select sum(balance) from linked_account")).isEqualTo(200);
-        // Different rows → no write-write conflict → both commit.
-        exec(t1, "update linked_account set balance = balance - 150 where name = 'A'");
-        t1.commit();
-        exec(t2, "update linked_account set balance = balance - 150 where name = 'B'");
-        t2.commit();
-    }
-    assertThat(combinedBalance()).isEqualTo(-100);   // the bug: invariant (>= 0) silently broken
-}
+// services/cif/src/test/java/com/buildabank/cif/dblab/WriteSkewTest.java
+package com.buildabank.cif.dblab;
 
-@Test
-void serializableRejectsTheWriteSkew() throws Exception {
-    try (Connection t1 = openTx(TRANSACTION_SERIALIZABLE);
-         Connection t2 = openTx(TRANSACTION_SERIALIZABLE)) {
-        assertThat(scalar(t1, "select sum(balance) from linked_account")).isEqualTo(200);
-        assertThat(scalar(t2, "select sum(balance) from linked_account")).isEqualTo(200);
-        exec(t1, "update linked_account set balance = balance - 150 where name = 'A'");
-        t1.commit();   // the first writer wins
-        // T2's read of A now conflicts with T1's write of A (and vice-versa for B): SSI aborts T2.
-        assertThatThrownBy(() -> {
+import static java.sql.Connection.TRANSACTION_REPEATABLE_READ;
+import static java.sql.Connection.TRANSACTION_SERIALIZABLE;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+/**
+ * <strong>Write skew</strong> — the subtle anomaly that <em>survives</em> REPEATABLE READ and is the reason
+ * SERIALIZABLE exists.
+ *
+ * <p>Scenario (a banking invariant): a customer has two linked accounts, A and B, with a shared-overdraft
+ * rule — <em>their combined balance must never go below zero</em>. Both start at 100 (sum 200). Two
+ * withdrawals of 150 run concurrently; each reads the sum (200), each decides "200 ≥ 150, fine", and each
+ * debits a <em>different</em> account. Individually legal; together they leave the sum at −100.
+ *
+ * <p>Because each transaction writes a <em>different row</em>, there is no write-write conflict, so snapshot
+ * isolation (Postgres REPEATABLE READ) lets both commit. Only SERIALIZABLE — via Postgres's
+ * Serializable Snapshot Isolation (SSI), which tracks the read/write dependencies between the two — detects
+ * the dangerous cycle and aborts one with SQLState {@code 40001}.
+ *
+ * <p>This is the <strong>§12.3 mutation point</strong> for the step: the only difference between the two
+ * tests below is the isolation level. Weaken {@link #serializableRejectsTheWriteSkew()} from SERIALIZABLE to
+ * REPEATABLE READ and its "conflict expected" assertion fails — proving the test really depends on the fix.
+ */
+class WriteSkewTest extends DbLab {
+
+    @BeforeEach
+    void reset() throws Exception {
+        try (Connection c = openAuto()) {
+            exec(c, "drop table if exists linked_account");
+            exec(c, "create table linked_account (name text primary key, balance numeric not null)");
+            exec(c, "insert into linked_account values ('A', 100), ('B', 100)");
+        }
+    }
+
+    private long combinedBalance() throws Exception {
+        try (Connection c = openAuto()) {
+            return scalar(c, "select coalesce(sum(balance), 0) from linked_account");
+        }
+    }
+
+    /** REPEATABLE READ does NOT stop write skew: both withdrawals commit and the invariant is violated. */
+    @Test
+    void repeatableReadAllowsWriteSkew_invariantViolated() throws Exception {
+        try (Connection t1 = openTx(TRANSACTION_REPEATABLE_READ);
+             Connection t2 = openTx(TRANSACTION_REPEATABLE_READ)) {
+
+            // Both read the combined balance from their own snapshot: each sees 200, each passes the check.
+            long sumSeenByT1 = scalar(t1, "select sum(balance) from linked_account");
+            long sumSeenByT2 = scalar(t2, "select sum(balance) from linked_account");
+            assertThat(sumSeenByT1).isEqualTo(200);
+            assertThat(sumSeenByT2).isEqualTo(200);
+
+            // Different rows → no write-write conflict → both commit.
+            exec(t1, "update linked_account set balance = balance - 150 where name = 'A'");
+            t1.commit();
             exec(t2, "update linked_account set balance = balance - 150 where name = 'B'");
             t2.commit();
-        }).isInstanceOf(SQLException.class)
-          .satisfies(e -> assertThat(((SQLException) e).getSQLState()).isEqualTo("40001"));
-        t2.rollback();
+        }
+
+        long finalSum = combinedBalance();
+        System.out.println("[write-skew @REPEATABLE READ] final combined balance = " + finalSum);
+        assertThat(finalSum).isEqualTo(-100);   // the bug: invariant (>= 0) silently broken
     }
-    assertThat(combinedBalance()).isGreaterThanOrEqualTo(0);   // invariant held: only T1's debit applied
+
+    /** SERIALIZABLE detects the read/write dependency cycle and aborts the second commit with 40001. */
+    @Test
+    void serializableRejectsTheWriteSkew() throws Exception {
+        try (Connection t1 = openTx(TRANSACTION_SERIALIZABLE);
+             Connection t2 = openTx(TRANSACTION_SERIALIZABLE)) {
+
+            long sumSeenByT1 = scalar(t1, "select sum(balance) from linked_account");
+            long sumSeenByT2 = scalar(t2, "select sum(balance) from linked_account");
+            assertThat(sumSeenByT1).isEqualTo(200);
+            assertThat(sumSeenByT2).isEqualTo(200);
+
+            exec(t1, "update linked_account set balance = balance - 150 where name = 'A'");
+            t1.commit();   // the first writer wins
+
+            // T2's read of A now conflicts with T1's write of A (and vice-versa for B): SSI aborts T2.
+            assertThatThrownBy(() -> {
+                exec(t2, "update linked_account set balance = balance - 150 where name = 'B'");
+                t2.commit();
+            }).isInstanceOf(SQLException.class)
+              .satisfies(e -> assertThat(((SQLException) e).getSQLState())
+                      .as("Postgres serialization_failure SQLState")
+                      .isEqualTo("40001"));
+
+            System.out.println("[write-skew @SERIALIZABLE] second commit rejected with SQLState 40001 — "
+                    + "the application would retry the transaction");
+            t2.rollback();
+        }
+
+        long finalSum = combinedBalance();
+        System.out.println("[write-skew @SERIALIZABLE] final combined balance = " + finalSum);
+        assertThat(finalSum).isGreaterThanOrEqualTo(0);   // invariant held: only T1's debit applied (= 50)
+    }
 }
 ```
 
@@ -724,48 +885,91 @@ git add services/cif/src/test/java/com/buildabank/cif/dblab/WriteSkewTest.java
 git commit -m "test(cif): prove write skew at REPEATABLE READ + SERIALIZABLE rejection (40001) (step 10)"
 ```
 
+*🛑 Stopping here? You have write skew proven both ways (−100 at REPEATABLE READ, 40001 at SERIALIZABLE) and committed. Next: Sub-step 4 (the connection pool); first action: create `ConnectionPoolTest.java`.*
+
 ⚠️ **Pitfall:** after a `40001`, the connection's transaction is **aborted** — you must `rollback()` before reusing it, then retry the *whole* logical operation from the start (not just the failed statement).
+
+> ❓ **Both write-skew transactions wrote *different* rows — so why does SERIALIZABLE abort one when REPEATABLE READ happily commits both?** <details><summary>answer</summary>REPEATABLE READ only detects *write-write* conflicts on the same row, and there are none here. SERIALIZABLE (SSI) additionally tracks *read/write* dependencies: T1 read the row T2 wrote and vice-versa — a dangerous cycle — so Postgres aborts one with SQLSTATE `40001`, and the app must retry the whole transaction.</details>
 
 ---
 
-### Sub-step 4 of 6 — `ConnectionPoolTest`: run the pool dry 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → **pool** → partitions → online DDL)*
+### Sub-step 4 (5 of 7, ~1.5h) — `ConnectionPoolTest`: run the pool dry 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → **pool** → partitions → online DDL)*
 
 🎯 **Goal:** build a HikariCP pool of size **2** with a **500 ms** borrow timeout, hold both connections, and watch the third borrow wait then fail — the exact shape of a production pool-exhaustion incident — then recover when a connection is returned.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/dblab/ConnectionPoolTest.java`
 
-⌨️ **Code:** *(core of the file)*
+⌨️ **Code:** *(complete file)*
 
 ```java
-// services/cif/src/test/java/com/buildabank/cif/dblab/ConnectionPoolTest.java  (excerpt)
-HikariConfig cfg = new HikariConfig();
-cfg.setJdbcUrl(POSTGRES.getJdbcUrl());
-cfg.setUsername(POSTGRES.getUsername());
-cfg.setPassword(POSTGRES.getPassword());
-cfg.setMaximumPoolSize(2);          // only TWO connections may exist at once
-cfg.setConnectionTimeout(500);      // a borrower waits at most 500 ms, then gives up
-cfg.setPoolName("lab-pool");
+// services/cif/src/test/java/com/buildabank/cif/dblab/ConnectionPoolTest.java
+package com.buildabank.cif.dblab;
 
-try (HikariDataSource pool = new HikariDataSource(cfg)) {
-    HikariPoolMXBean mx = pool.getHikariPoolMXBean();
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-    Connection a = pool.getConnection();
-    Connection b = pool.getConnection();          // pool now saturated
-    assertThat(mx.getActiveConnections()).isEqualTo(2);
-    assertThat(mx.getIdleConnections()).isZero();
+import java.sql.Connection;
+import java.sql.SQLTransientConnectionException;
 
-    long startNanos = System.nanoTime();
-    assertThatThrownBy(pool::getConnection)        // the THIRD borrow
-            .isInstanceOf(SQLTransientConnectionException.class)
-            .hasMessageContaining("request timed out");
-    long waitedMs = (System.nanoTime() - startNanos) / 1_000_000;
-    assertThat(waitedMs).isGreaterThanOrEqualTo(450);   // it really waited for the timeout
+import org.junit.jupiter.api.Test;
 
-    a.close();                                     // return one → next borrow succeeds
-    try (Connection c = pool.getConnection()) {
-        assertThat(c.isValid(1)).isTrue();
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.HikariPoolMXBean;
+
+/**
+ * <strong>HikariCP connection-pool internals.</strong> Opening a real database connection is expensive
+ * (TCP + TLS + Postgres backend fork + auth), so production apps keep a small fixed <em>pool</em> of live
+ * connections and lend them out. The pool is a turnstile: borrow → use → return. This lab builds a pool of
+ * size <strong>2</strong> with a <strong>500&nbsp;ms</strong> borrow timeout and watches what happens when a
+ * third caller asks for a connection while both are in use — the exact shape of a production "pool
+ * exhaustion" incident.
+ */
+class ConnectionPoolTest extends DbLab {
+
+    @Test
+    void poolSaturationTimesOut_thenRecoversWhenAConnectionIsReturned() throws Exception {
+        HikariConfig cfg = new HikariConfig();
+        cfg.setJdbcUrl(POSTGRES.getJdbcUrl());
+        cfg.setUsername(POSTGRES.getUsername());
+        cfg.setPassword(POSTGRES.getPassword());
+        cfg.setMaximumPoolSize(2);          // only TWO connections may exist at once
+        cfg.setConnectionTimeout(500);      // a borrower waits at most 500 ms, then gives up
+        cfg.setPoolName("lab-pool");
+
+        try (HikariDataSource pool = new HikariDataSource(cfg)) {
+            HikariPoolMXBean mx = pool.getHikariPoolMXBean();
+
+            // Borrow both connections and HOLD them (simulating two slow requests).
+            Connection a = pool.getConnection();
+            Connection b = pool.getConnection();
+
+            System.out.println("[pool] after borrowing 2 → active=" + mx.getActiveConnections()
+                    + " idle=" + mx.getIdleConnections() + " total=" + mx.getTotalConnections());
+            assertThat(mx.getActiveConnections()).isEqualTo(2);
+            assertThat(mx.getIdleConnections()).isZero();
+
+            // A third borrow finds the pool saturated: it waits ~500 ms, then throws.
+            long startNanos = System.nanoTime();
+            assertThatThrownBy(pool::getConnection)
+                    .isInstanceOf(SQLTransientConnectionException.class)
+                    .hasMessageContaining("request timed out");
+            long waitedMs = (System.nanoTime() - startNanos) / 1_000_000;
+            // threadsAwaiting now reads 0: the borrower waited ~500 ms inside getConnection(), then gave up.
+            System.out.println("[pool] 3rd borrow blocked ~" + waitedMs + " ms then timed out "
+                    + "(threadsAwaiting now=" + mx.getThreadsAwaitingConnection() + ")");
+            assertThat(waitedMs).isGreaterThanOrEqualTo(450);   // it really waited for the timeout
+
+            // Return one connection → the next borrow succeeds immediately.
+            a.close();
+            try (Connection c = pool.getConnection()) {
+                assertThat(c.isValid(1)).isTrue();
+                System.out.println("[pool] after returning 1 → a fresh borrow succeeded; active="
+                        + mx.getActiveConnections());
+            }
+            b.close();
+        }
     }
-    b.close();
 }
 ```
 
@@ -800,36 +1004,84 @@ git add services/cif/src/test/java/com/buildabank/cif/dblab/ConnectionPoolTest.j
 git commit -m "test(cif): demonstrate HikariCP pool exhaustion + recovery (step 10)"
 ```
 
+*🛑 Stopping here? You have pool exhaustion + recovery green and committed. Next: Sub-step 5 (partitioning); first action: create `PartitioningLabTest.java`.*
+
 ⚠️ **Pitfall:** sizing the pool *bigger* is not always better — every connection is a backend process on the database. The famous HikariCP guidance is that a **small** pool often out-throughputs a large one. Size to the database's real concurrency, not to your request rate.
 
 ---
 
-### Sub-step 5 of 6 — `PartitioningLabTest`: prune to one partition 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → **partitions** → online DDL)*
+### Sub-step 5 (6 of 7, ~1.5h) — `PartitioningLabTest`: prune to one partition 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → **partitions** → online DDL)*
 
 🎯 **Goal:** range-partition a transactions table by month and prove that a one-month query touches **only** that month's partition (partition pruning).
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/dblab/PartitioningLabTest.java`
 
-⌨️ **Code:** *(seed + the test; full file in the repo)*
+⌨️ **Code:** *(complete file)*
 
 ```java
-// PartitioningLabTest.java  (excerpt)
-exec(c, """
-        create table txn_part (
-            id bigint generated by default as identity, account_id bigint not null,
-            amount numeric(19,4) not null, created_at date not null
-        ) partition by range (created_at)""");
-exec(c, "create table txn_2026_01 partition of txn_part for values from ('2026-01-01') to ('2026-02-01')");
-exec(c, "create table txn_2026_02 partition of txn_part for values from ('2026-02-01') to ('2026-03-01')");
-exec(c, "create table txn_2026_03 partition of txn_part for values from ('2026-03-01') to ('2026-04-01')");
-// … insert ~900 rows across the three months, then ANALYZE …
+// services/cif/src/test/java/com/buildabank/cif/dblab/PartitioningLabTest.java
+package com.buildabank.cif.dblab;
 
-String plan = explain(c, """
-        select count(*) from txn_part
-        where created_at >= date '2026-02-01' and created_at < date '2026-03-01'""", true);
-assertThat(plan).contains("txn_2026_02");          // the matching partition is scanned
-assertThat(plan).doesNotContain("txn_2026_01");     // the others are pruned away
-assertThat(plan).doesNotContain("txn_2026_03");
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.sql.Connection;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+/**
+ * <strong>Declarative range partitioning &amp; partition pruning.</strong> A huge transactions table is
+ * split into monthly child tables; a query restricted to one month should touch <em>only</em> that month's
+ * partition. We prove it by reading the plan: the other partitions never appear.
+ *
+ * <p>Why a bank cares: an EOD/statement query over "last month" scans one small partition instead of years
+ * of history, and dropping old data becomes an instant {@code DROP TABLE partition} instead of a giant,
+ * lock-heavy {@code DELETE}.
+ */
+class PartitioningLabTest extends DbLab {
+
+    @BeforeAll
+    static void seed() throws Exception {
+        try (Connection c = openAuto()) {
+            exec(c, "drop table if exists txn_part cascade");
+            exec(c, """
+                    create table txn_part (
+                        id         bigint generated by default as identity,
+                        account_id bigint         not null,
+                        amount     numeric(19, 4) not null,
+                        created_at date           not null
+                    ) partition by range (created_at)""");
+            exec(c, "create table txn_2026_01 partition of txn_part "
+                    + "for values from ('2026-01-01') to ('2026-02-01')");
+            exec(c, "create table txn_2026_02 partition of txn_part "
+                    + "for values from ('2026-02-01') to ('2026-03-01')");
+            exec(c, "create table txn_2026_03 partition of txn_part "
+                    + "for values from ('2026-03-01') to ('2026-04-01')");
+            // ~900 rows spread across the three months (day = Jan 1 + 0..88).
+            exec(c, """
+                    insert into txn_part (account_id, amount, created_at)
+                    select g,
+                           (random() * 100)::numeric(19, 4),
+                           date '2026-01-01' + (g % 89)
+                    from generate_series(1, 900) as g""");
+            exec(c, "analyze txn_part");
+        }
+    }
+
+    @Test
+    void queryForOneMonthPrunesToASinglePartition() throws Exception {
+        try (Connection c = openAuto()) {
+            String plan = explain(c, """
+                    select count(*) from txn_part
+                    where created_at >= date '2026-02-01' and created_at < date '2026-03-01'""", true);
+            System.out.println("\n=== PARTITION PRUNING — expect only txn_2026_02 scanned ===\n" + plan);
+
+            assertThat(plan).contains("txn_2026_02");          // the matching partition is scanned
+            assertThat(plan).doesNotContain("txn_2026_01");     // the others are pruned away
+            assertThat(plan).doesNotContain("txn_2026_03");
+        }
+    }
+}
 ```
 
 🔍 **Line-by-line:**
@@ -863,42 +1115,85 @@ git add services/cif/src/test/java/com/buildabank/cif/dblab/PartitioningLabTest.
 git commit -m "test(cif): prove range-partition pruning to a single partition (step 10)"
 ```
 
+*🛑 Stopping here? You have partition pruning proven and committed. Next: Sub-step 6 (online DDL — the last lab); first action: create `OnlineSchemaChangeTest.java`.*
+
 ⚠️ **Pitfall:** pruning only works if the `WHERE` filters on the **partition key**. A query that filters on `account_id` alone scans *every* partition — choose the partition key to match your dominant query.
 
 ---
 
-### Sub-step 6 of 6 — `OnlineSchemaChangeTest`: zero-downtime DDL 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → partitions ✅ → **online DDL**)*
+### Sub-step 6 (7 of 7, ~1h) — `OnlineSchemaChangeTest`: zero-downtime DDL 🧭 *(harness ✅ → plans ✅ → MVCC ✅ → write skew ✅ → pool ✅ → partitions ✅ → **online DDL**)*
 
 🎯 **Goal:** prove the two primitives behind zero-downtime migrations — `CREATE INDEX CONCURRENTLY` (and its can't-run-in-a-transaction rule) and the metadata-only constant-default column add.
 
 📁 **Location:** new file → `services/cif/src/test/java/com/buildabank/cif/dblab/OnlineSchemaChangeTest.java`
 
-⌨️ **Code:** *(the two tests; full file in the repo)*
+⌨️ **Code:** *(complete file)*
 
 ```java
-// OnlineSchemaChangeTest.java  (excerpt)
-@Test
-void createIndexConcurrentlyCannotRunInsideATransaction() throws Exception {
-    try (Connection tx = openTx(TRANSACTION_READ_COMMITTED)) {   // autocommit OFF → "in a transaction"
-        exec(tx, "drop table if exists osc");
-        exec(tx, "create table osc (id int)");
-        assertThatThrownBy(() -> exec(tx, "create index concurrently idx_osc on osc (id)"))
-                .isInstanceOf(SQLException.class)
-                .satisfies(e -> assertThat(((SQLException) e).getSQLState()).isEqualTo("25001"));
-        tx.rollback();
-    }
-}
+// services/cif/src/test/java/com/buildabank/cif/dblab/OnlineSchemaChangeTest.java
+package com.buildabank.cif.dblab;
 
-@Test
-void createIndexConcurrentlyAndFastDefaultWorkInAutocommit() throws Exception {
-    try (Connection c = openAuto()) {                            // autocommit ON → each statement is its own txn
-        exec(c, "drop table if exists osc2");
-        exec(c, "create table osc2 (id int)");
-        exec(c, "insert into osc2 select generate_series(1, 1000)");
-        exec(c, "create index concurrently idx_osc2 on osc2 (id)");           // builds online
-        assertThat(scalar(c, "select count(*) from pg_indexes where indexname = 'idx_osc2'")).isEqualTo(1);
-        exec(c, "alter table osc2 add column status text not null default 'NEW'");   // metadata-only (PG 11+)
-        assertThat(scalar(c, "select count(*) from osc2 where status = 'NEW'")).isEqualTo(1000);
+import static java.sql.Connection.TRANSACTION_READ_COMMITTED;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * <strong>Zero-downtime (online) schema change.</strong> The two executable nuggets behind the
+ * expand-contract pattern you'll use for real in Step 12:
+ *
+ * <ul>
+ *   <li>{@code CREATE INDEX CONCURRENTLY} builds an index <em>without</em> a long table-blocking lock — but
+ *       it cannot run inside a transaction block (so Flyway must run it outside one). We prove both the
+ *       failure-in-a-transaction and the success-in-autocommit.</li>
+ *   <li>Adding a column with a <em>constant</em> default is metadata-only since Postgres 11 — instant even on
+ *       a large table, no full rewrite, no exclusive lock held for the whole scan.</li>
+ * </ul>
+ */
+class OnlineSchemaChangeTest extends DbLab {
+
+    @Test
+    void createIndexConcurrentlyCannotRunInsideATransaction() throws Exception {
+        try (Connection tx = openTx(TRANSACTION_READ_COMMITTED)) {   // autocommit OFF → we are "in a transaction"
+            exec(tx, "drop table if exists osc");
+            exec(tx, "create table osc (id int)");
+
+            // CREATE INDEX CONCURRENTLY manages its own commits, so it refuses to run inside an open txn.
+            assertThatThrownBy(() -> exec(tx, "create index concurrently idx_osc on osc (id)"))
+                    .isInstanceOf(SQLException.class)
+                    .satisfies(e -> assertThat(((SQLException) e).getSQLState())
+                            .as("active_sql_transaction")
+                            .isEqualTo("25001"));
+
+            System.out.println("[online-ddl] CREATE INDEX CONCURRENTLY in a txn → SQLState 25001 (as expected)");
+            tx.rollback();
+        }
+    }
+
+    @Test
+    void createIndexConcurrentlyAndFastDefaultWorkInAutocommit() throws Exception {
+        try (Connection c = openAuto()) {                            // autocommit ON → each statement is its own txn
+            exec(c, "drop table if exists osc2");
+            exec(c, "create table osc2 (id int)");
+            exec(c, "insert into osc2 select generate_series(1, 1000)");
+
+            // Builds online — readers and writers are NOT blocked for the duration (unlike a plain CREATE INDEX).
+            exec(c, "create index concurrently idx_osc2 on osc2 (id)");
+            long indexes = scalar(c, "select count(*) from pg_indexes where indexname = 'idx_osc2'");
+            assertThat(indexes).isEqualTo(1);
+            System.out.println("[online-ddl] CREATE INDEX CONCURRENTLY in autocommit → index built online");
+
+            // Adding a column with a CONSTANT default is metadata-only since PG 11 (no table rewrite).
+            // All 1,000 existing rows logically get 'NEW' without scanning/rewriting the heap.
+            exec(c, "alter table osc2 add column status text not null default 'NEW'");
+            long withStatus = scalar(c, "select count(*) from osc2 where status = 'NEW'");
+            assertThat(withStatus).isEqualTo(1000);
+            System.out.println("[online-ddl] ADD COLUMN ... DEFAULT 'NEW' → 1000 rows backfilled (metadata-only)");
+        }
     }
 }
 ```
@@ -931,6 +1226,8 @@ git add services/cif/src/test/java/com/buildabank/cif/dblab/OnlineSchemaChangeTe
 git commit -m "test(cif): prove CREATE INDEX CONCURRENTLY rule + fast default add (step 10)"
 ```
 
+*🛑 Stopping here? You have all six labs green — CIF is at 21 tests. Next: The Finished Result (tag it!) + D · Prove; first action: run `./mvnw -pl services/cif -am verify` and compare against the Verification Log.*
+
 ⚠️ **Pitfall:** `CREATE INDEX CONCURRENTLY` can **fail and leave an INVALID index** behind; you must `DROP` it and retry. Real migrations check `pg_index.indisvalid` afterward.
 
 ---
@@ -959,7 +1256,11 @@ sequenceDiagram
 
 ## 🏁 The Finished Result
 
-You're at **`step-10-end`** (== `step-11-start`). CIF now has **21** tests (the 10 from Steps 8–9 + 11 new lab tests), all green on a real Postgres, plus a `queries.sql` you can run by hand.
+You're at **`step-10-end`** (== `step-11-start`). CIF now has **21** tests (the 10 from Steps 8–9 + 11 new lab tests), all green on a real Postgres, plus a `queries.sql` you can run by hand. Tag it (the Definition of Done below checks for this):
+
+```bash
+git tag step-10-end   # step-11-start is this same commit
+```
 
 ### ✅ Definition of Done (your self-check)
 
@@ -1086,19 +1387,19 @@ Fresh `git clone` of the repo at `step-10-end` into a clean directory, then `mak
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① The planner's cost model — why it sometimes ignores your index</summary>
+<summary>① The planner's cost model — why it sometimes ignores your index (+~10 min)</summary>
 
 Postgres estimates each plan's cost from `pg_statistic` (refreshed by `ANALYZE`) and constants like `random_page_cost` (default 4.0) vs `seq_page_cost` (1.0). If a predicate matches *most* of the table, a Seq Scan's sequential I/O genuinely beats thousands of random index lookups — so the planner *correctly* ignores the index. On SSDs, lowering `random_page_cost` (e.g. to 1.1) tells the planner random I/O is cheap, often flipping more queries to index scans. Always validate with `EXPLAIN ANALYZE` on representative data, and watch the **estimated-vs-actual rows** gap — that's your stale-stats smell.
 </details>
 
 <details>
-<summary>② `SELECT … FOR UPDATE` vs SERIALIZABLE — two ways to stop write skew</summary>
+<summary>② `SELECT … FOR UPDATE` vs SERIALIZABLE — two ways to stop write skew (+~10 min)</summary>
 
 You saw SERIALIZABLE catch write skew with `40001`. The alternative is **pessimistic**: `SELECT … FOR UPDATE` locks the rows you read so the second transaction *blocks* until the first commits, then sees the new state and re-evaluates. Trade-off: SERIALIZABLE has no read locks (great throughput) but needs **retry** logic; `FOR UPDATE` needs no retry but holds locks (less concurrency, deadlock risk). For the linked-account rule you'd `SELECT … FOR UPDATE` *both* rows in a deterministic order. You'll choose between these for the ledger in **Step 12** — and `@Version` (Step 9) is the third, lock-free option for single-row lost updates.
 </details>
 
 <details>
-<summary>③ Reading `BUFFERS` like a pro</summary>
+<summary>③ Reading `BUFFERS` like a pro (+~10 min)</summary>
 
 `Buffers: shared hit=148` means 148 8 KB pages came from Postgres's cache; `read=` means from disk (or OS cache). A query with huge `read=` numbers is I/O-bound; a covering index that drops `Heap Fetches` to 0 often slashes `read=`. `BUFFERS` is the most underused part of `EXPLAIN` — it turns "it feels slow" into "it touched N pages."
 </details>
@@ -1171,6 +1472,7 @@ You saw SERIALIZABLE catch write skew with `40001`. The alternative is **pessimi
 3. Two transfers each read a shared limit and debit different accounts; the limit is breached. Name the anomaly and two fixes. <details><summary>answer</summary>Write skew. Fixes: SERIALIZABLE + retry on 40001, or `SELECT … FOR UPDATE` on the read rows.</details>
 4. What does `close()` do to a *pooled* connection? <details><summary>answer</summary>Returns it to the pool for reuse — it does not close the socket.</details>
 5. Why can't `CREATE INDEX CONCURRENTLY` run in a transaction? <details><summary>answer</summary>It commits internally between build phases, incompatible with an enclosing transaction (`SQLSTATE 25001`).</details>
+6. You write to the primary and immediately read from a replica — your write isn't there. Name the phenomenon, why it happens, and the SQL to measure it. <details><summary>answer</summary>A read-your-writes violation caused by **replication lag**: streaming replication is asynchronous by default, so the replica replays WAL behind the primary. Measure it with `pg_stat_replication` on the primary (e.g. `sent_lsn - replay_lsn`) and `now() - pg_last_xact_replay_timestamp()` on the replica.</details>
 
 **(d) 🔗 How this connects**
 - **Back to Step 9:** `@Version` is the application-level lost-update guard; here you saw the engine-level snapshots and serialization failures beneath it.

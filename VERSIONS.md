@@ -45,12 +45,13 @@
 
 ## ⚠️ Flagged step-backs / watch-items (honesty per the compatibility caveat)
 
-1. **Spring AI** — only **2.0.0-RC1** exists on the **Boot-4** line today (1.1.7 GA targets the Boot-3 line).
+1. **Spring AI** — as of the 2026-06-09 pin, only **2.0.0-RC1** exists on the **Boot-4** line (1.1.7 GA targets the Boot-3 line).
    Phase I (Step 46+) is months of learner-effort away. **Action:** re-pin to Spring AI **2.0.0 GA** when Phase I is
    reached; if still RC, document the step-back and pin the newest RC, or run the Python FastAPI sidecar path instead.
-2. **ErrorProne / NullAway** — historically lag new JDKs and may not yet support **JDK 25** bytecode.
-   **Action:** at Step 28 (code-quality), verify support; if absent, keep **Spotless + Checkstyle** (which work on 25)
-   and document ErrorProne/NullAway as "enable when JDK-25 support ships." Never block the build on an unsupported tool.
+2. **ErrorProne / NullAway** — ✅ **RESOLVED at Step 28**: verified working on **JDK 25** (2.49.0 / 0.13.6 — see the
+   Error Prone / NullAway row above; the historical "lags new JDKs" outcome did NOT occur). Kept as the off-by-default
+   `-Perrorprone` profile at `:WARN` (needs javac `--add-exports/--add-opens`); Spotless + Checkstyle remain the
+   always-on gates bound to `verify`.
 3a. **Spring Boot 4 modularization (Step 8 findings):** test slices moved to per-tech modules — `@DataJpaTest`∈`spring-boot-data-jpa-test`, `@WebMvcTest`/`@AutoConfigureMockMvc`∈`spring-boot-webmvc-test`, `@AutoConfigureTestDatabase`∈`spring-boot-jdbc-test`; **Flyway** needs the Boot integration module `spring-boot-flyway` (the `flyway-core` library alone gives no `FlywayAutoConfiguration`), and `@DataJpaTest` excludes Flyway (use `@ImportAutoConfiguration(FlywayAutoConfiguration.class)`); `@MockBean`→`@MockitoBean`.
 3. **`TestRestTemplate` REMOVED in Spring Boot 4** (along with `org.springframework.boot.test.web.client`).
    Replacements: **`RestTestClient`** and **`MockMvcTester`** (Spring Framework 7, `org.springframework.test.web.servlet.client`).

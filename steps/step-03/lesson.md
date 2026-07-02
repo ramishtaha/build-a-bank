@@ -13,12 +13,12 @@
 
 A one-line map of where we're going. Click to jump.
 
-1. **[A · 🧭 Orient](#orient)** — what "the web" really is, why a backend engineer must know it cold, and whether you can skip.
-2. **[B · 🧠 Understand](#understand)** — the TCP/IP layered model, DNS, ports, the TCP & TLS handshakes, HTTP anatomy, HTTP/1→2→3, HTTPS, and the load-balancer pattern.
-3. **[C · 🛠️ Build](#build)** — the heart: build the `net` package — `UrlAnatomy` → `HttpClientDemo` → `RawHttpDemo` → the loopback tests — and watch HTTP on the wire with `curl -v`.
-4. **[D · 🔬 Prove](#prove)** — the Verification Log with the real, pasted `verify`, demo, `curl`, and `nslookup` output.
-5. **[E · 🎓 Apply](#apply)** — go-deeper, interview prep, and your-turn exercises.
-6. **[F · 🏆 Review](#review)** — troubleshooting (the real bug I hit), resources & glossary, and the recap/study notes.
+1. **[A · 🧭 Orient](#orient)** *(~1h)* — what "the web" really is, why a backend engineer must know it cold, and whether you can skip.
+2. **[B · 🧠 Understand](#understand)** *(~4h)* — the TCP/IP layered model, DNS, ports, the TCP & TLS handshakes, HTTP anatomy, HTTP/1→2→3, HTTPS, and the load-balancer pattern.
+3. **[C · 🛠️ Build](#build)** *(~5–6h)* — the heart: build the `net` package — `UrlAnatomy` → `HttpClientDemo` → `RawHttpDemo` → the loopback tests — and watch HTTP on the wire with `curl -v`.
+4. **[D · 🔬 Prove](#prove)** *(~30 min)* — the Verification Log with the real, pasted `verify`, demo, `curl`, and `nslookup` output.
+5. **[E · 🎓 Apply](#apply)** *(~2–3h)* — go-deeper, interview prep, and your-turn exercises.
+6. **[F · 🏆 Review](#review)** *(~1.5h)* — troubleshooting (the real bug I hit), resources & glossary, and the recap/study notes.
 
 ---
 
@@ -83,7 +83,7 @@ sequenceDiagram
     participant D as DNS resolver
     participant S as Server (IP:port)
     U->>D: Resolve host → IP? (DNS)
-    D-->>U: 93.184.x.x / 2606:...
+    D-->>U: an IPv4/IPv6 address (yours will differ)
     U->>S: TCP 3-way handshake (SYN / SYN-ACK / ACK)
     Note over U,S: if HTTPS → TLS handshake (ClientHello, cert, key exchange, ALPN)
     U->>S: HTTP request (method path version + headers + body)
@@ -123,6 +123,22 @@ Every service you build for the rest of this course — every REST endpoint, gat
 - In **Step 2** you met **records** — `UrlAnatomy` is a record, and `try`-with-resources (which you'll use to close the socket) is the same construct you saw managing resources there.
 
 > **Depends on:** Steps 1, 2.
+
+## 🗓️ Session Plan
+
+≈15–20h ≠ one sitting. Here's the step cut into **7 sittings of ~1.5–2.5h**, each ending at a real save point — stop at any row's end and nothing is left half-broken:
+
+| # | Sitting | Covers | ~Time | Ends at (save point) |
+|---|---|---|---|---|
+| S1 | Get oriented + the layers | A · Orient, then B · The Big Idea + the mailroom analogy | ~2h | the "end-to-end story" heading (reading only — nothing to save) |
+| S2 | The journey of a request | The end-to-end story, HTTP request/response anatomy, 🌱 Under the Hood, 🛡️ Security Lens | ~2.5h | the 🕰️ Then vs. Now heading |
+| S3 | Versions, patterns, first code | 🕰️ Then vs. Now, 🧩 Pattern Spotlight, Build sub-steps 1–2 | ~2.5h | sub-step 2's commit (`HttpClientDemo` round trip works) |
+| S4 | Raw socket + parser test | Sub-steps 3–4 | ~2.5h | sub-step 4's commit (`UrlAnatomyTest` green) |
+| S5 | The end-to-end proof | Sub-steps 5–6, then 🎮 Play With It | ~2.5h | the **`step-03-end`** commit & tag |
+| S6 | Prove + Apply | D · Verification Log (compare against your own runs), E · Go Deeper + Interview Prep + Your Turn | ~2h | end of E · Apply |
+| S7 | Review + lock it in | F · Troubleshooting, glossary, recap, flashcards | ~1.5h | step complete → Step 4 |
+
+**Optional routes:** experienced devs can take the ⏭️ 5-minute self-check above and skip-test the whole step in **under an hour**; the three 🚀 Go Deeper folds are **+~10 min each** and the stretch exercises **~30 min–2h** (labeled inline) — all safely deferrable to a later pass.
 
 ---
 
@@ -166,7 +182,7 @@ So a single web request is: **HTTP** (the letter) inside **TCP** (the reliable c
 
 This is *the* interview question. Here's the whole journey for `https://example.com/`:
 
-1. **DNS resolution.** `example.com` is a name; the network needs an **IP address**. Your machine asks a **DNS resolver** "what's the IP for `example.com`?" and gets back something like `93.184.x.x` (IPv4) and/or `2606:...` (IPv6). (You'll see this for real with `nslookup` in the build.)
+1. **DNS resolution.** `example.com` is a name; the network needs an **IP address**. Your machine asks a **DNS resolver** "what's the IP for `example.com`?" and gets back an IPv4 and/or IPv6 address — on this machine `nslookup` returned `2606:4700:...` (see the Verification Log); yours may differ, because example.com has changed hosts over the years. One more reason to *observe* IPs, never memorize them. (You'll see this for real with `nslookup` in the build.)
 2. **TCP connection.** Your client opens a TCP connection to that IP on **port 443** (the default for HTTPS) via the **3-way handshake** (SYN → SYN-ACK → ACK — diagram below).
 3. **TLS handshake** *(because it's HTTPS)*. Client and server negotiate encryption: `ClientHello` → `ServerHello` + **certificate** → key exchange → **ALPN** picks the HTTP version. After this, everything is encrypted.
 4. **HTTP request.** The client sends `GET / HTTP/1.1` (or HTTP/2 frames) with headers like `Host:` and `Accept:`.
@@ -354,7 +370,7 @@ Five new files, in order: parse a URL → talk HTTP the easy way → talk HTTP t
 
 ---
 
-### Sub-step 1 of 6 — Parse a URL into its anatomy 🧭 *(you are here: **URL parsing** → client → raw socket → tests → play → wrap-up)*
+### Sub-step 1 of 6 (~30–40 min) — Parse a URL into its anatomy 🧭 *(you are here: **URL parsing** → client → raw socket → tests → play → wrap-up)*
 
 🎯 **Goal:** turn a URL string into its components — scheme, host, port, path, query — exactly like the first thing a browser does. This is the "DNS/TCP needs an IP and a port" idea made tangible: a URL *tells the client where to connect*.
 
@@ -420,6 +436,8 @@ public record UrlAnatomy(String scheme, String host, int port, String path, Stri
 
 ✋ **Checkpoint:** the file exists at the exact path above and `test-compile` is clean. If not → 🩺.
 
+> 🔖 **Stopping here?** You have `UrlAnatomy` compiling clean — run the 💾 commit below first. Next: sub-step 2 (the JDK `HttpClient`); first action: create `playground/java-basics/src/main/java/com/buildabank/basics/net/HttpClientDemo.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -431,7 +449,7 @@ git commit -m "feat(playground): add UrlAnatomy — parse a URL into scheme/host
 
 ---
 
-### Sub-step 2 of 6 — Speak HTTP the easy way: the JDK `HttpClient` 🧭 *(URL parsing ✅ → **client** → raw socket → tests → play → wrap-up)*
+### Sub-step 2 of 6 (~45 min) — Speak HTTP the easy way: the JDK `HttpClient` 🧭 *(URL parsing ✅ → **client** → raw socket → tests → play → wrap-up)*
 
 🎯 **Goal:** send a real HTTP `GET` and read back the status, headers, and body — using `java.net.http.HttpClient` (the modern, built-in client). This is the "client half of the web."
 
@@ -523,9 +541,13 @@ Body         : {"message":"Welcome to Build-a-Bank 🏦","timestamp":"2026-06-09
 
 Predicted right? Embedded Tomcat over plain `http` speaks **HTTP/1.1**, and the endpoint returns **200** with a JSON body (the 🏦 emoji is part of the real greeting).
 
+❓ **Knowledge-check:** the output says `HTTP version : HTTP_1_1` — did that value come from the request you built, or from the exchange itself? Why does "negotiated" matter? <details><summary>answer</summary>From the exchange: `response.version()` reports the version the client and server actually **negotiated**, not the one you asked for. Tomcat over plain `http` speaks HTTP/1.1, so that's what came back — the same code against an HTTPS server that offers `h2` via ALPN would report `HTTP_2`. "Negotiated" matters because version facts must be *observed*, never assumed — the step's recurring lesson.</details>
+
 ❌ **If you see `java.net.ConnectException: Connection refused`:** the `hello-service` isn't running (or is on a different port). Start it with `make run-hello` and wait for the `Started HelloApplication` log line. See 🩺.
 
 ✋ **Checkpoint:** you see `Status : 200` and a JSON body. If not → 🩺.
+
+> 🔖 **Stopping here?** You have `UrlAnatomy` + a working JDK-client round trip — run the 💾 commit below, then Ctrl-C terminal 1. Next: sub-step 3 (the raw socket); first action: `make run-hello` in terminal 1, then create `playground/java-basics/src/main/java/com/buildabank/basics/net/RawHttpDemo.java`.
 
 💾 **Commit:**
 
@@ -538,13 +560,13 @@ git commit -m "feat(playground): add HttpClientDemo — java.net.http request/re
 
 ---
 
-### Sub-step 3 of 6 — Speak HTTP the *raw* way: a TCP socket 🧭 *(URL parsing ✅ → client ✅ → **raw socket** → tests → play → wrap-up)*
+### Sub-step 3 of 6 (~45–60 min) — Speak HTTP the *raw* way: a TCP socket 🧭 *(URL parsing ✅ → client ✅ → **raw socket** → tests → play → wrap-up)*
 
 🎯 **Goal:** prove HTTP is "just text over TCP" by opening a raw socket and **typing the HTTP request by hand**, then printing the exact bytes the server sends back. This is the single most demystifying thing in the step.
 
 📁 **Location:** new file → `playground/java-basics/src/main/java/com/buildabank/basics/net/RawHttpDemo.java`
 
-⌨️ **Code:**
+⌨️ **Code** *(one piece is deliberately left for you to type — this is the "byte-by-byte" moment the step promised)*:
 
 ```java
 // playground/java-basics/src/main/java/com/buildabank/basics/net/RawHttpDemo.java
@@ -570,11 +592,12 @@ public final class RawHttpDemo {
     public static String fetch(String host, int port, String path) throws IOException {
         try (Socket socket = new Socket(host, port)) {
             OutputStream out = socket.getOutputStream();
-            String request = "GET " + path + " HTTP/1.1\r\n"
-                    + "Host: " + host + "\r\n"
-                    + "Accept: application/json\r\n"
-                    + "Connection: close\r\n"
-                    + "\r\n";
+            String request = /* ⌨️ TYPE THE HTTP REQUEST YOURSELF (it won't compile until you do):
+                                four lines, EACH ending in "\r\n" — the request line
+                                ("GET " + path + " HTTP/1.1"), then Host: <host>, then
+                                Accept: application/json, then Connection: close —
+                                followed by one final "\r\n" (the blank line that ends the
+                                headers). Check yourself against the fold below the code. */;
             out.write(request.getBytes(StandardCharsets.US_ASCII));
             out.flush();
             // Read everything until the server closes the connection.
@@ -591,6 +614,18 @@ public final class RawHttpDemo {
     }
 }
 ```
+
+<details>
+<summary>✅ Check your request string (the exact four lines + blank line)</summary>
+
+```java
+            String request = "GET " + path + " HTTP/1.1\r\n"
+                    + "Host: " + host + "\r\n"
+                    + "Accept: application/json\r\n"
+                    + "Connection: close\r\n"
+                    + "\r\n";
+```
+</details>
 
 🔍 **Line-by-line:**
 
@@ -649,6 +684,8 @@ java -cp playground/java-basics/target/classes com.buildabank.basics.net.RawHttp
 
 ✋ **Checkpoint:** you've seen the raw status line + headers + body, *and* watched both a transport-layer failure (refused) and an application-layer failure (404). If not → 🩺.
 
+> 🔖 **Stopping here?** You have all three `net` classes working against the live service — run the 💾 commit below first; you can stop the hello-service. Next: sub-step 4 (parser test — no running service needed); first action: create `playground/java-basics/src/test/java/com/buildabank/basics/net/UrlAnatomyTest.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -660,13 +697,13 @@ git commit -m "feat(playground): add RawHttpDemo — speak HTTP/1.1 over a raw T
 
 ---
 
-### Sub-step 4 of 6 — Test the URL parser 🧭 *(URL parsing ✅ → client ✅ → raw socket ✅ → **parser test** → loopback test → wrap-up)*
+### Sub-step 4 of 6 (~30 min) — Test the URL parser 🧭 *(URL parsing ✅ → client ✅ → raw socket ✅ → **parser test** → loopback test → wrap-up)*
 
 🎯 **Goal:** lock in `UrlAnatomy`'s behavior with assertions — including the default-port and root-path rules — so a future refactor can't silently break it.
 
 📁 **Location:** new file → `playground/java-basics/src/test/java/com/buildabank/basics/net/UrlAnatomyTest.java`
 
-⌨️ **Code:**
+⌨️ **Code** *(the first test is worked for you; you write the second — it asserts exactly your sub-step 1 predictions)*:
 
 ```java
 // playground/java-basics/src/test/java/com/buildabank/basics/net/UrlAnatomyTest.java
@@ -691,12 +728,27 @@ class UrlAnatomyTest {
 
     @Test
     void usesExplicitPortAndHttpDefault() {
+        // ⌨️ YOUR TURN — three assertThat lines, one per rule you predicted in sub-step 1:
+        //   1) an explicit port wins:  http://localhost:8080/api/hello → port() is 8080
+        //   2) no port on http ⇒ 80:   http://localhost/api/hello      → port() is 80
+        //   3) no path ⇒ "/":          http://localhost                → path() is "/"
+        // Solution in the fold below the code if you get stuck.
+    }
+}
+```
+
+<details>
+<summary>✅ Solution — <code>usesExplicitPortAndHttpDefault</code></summary>
+
+```java
+    @Test
+    void usesExplicitPortAndHttpDefault() {
         assertThat(UrlAnatomy.of("http://localhost:8080/api/hello").port()).isEqualTo(8080);
         assertThat(UrlAnatomy.of("http://localhost/api/hello").port()).isEqualTo(80);
         assertThat(UrlAnatomy.of("http://localhost").path()).isEqualTo("/");
     }
-}
 ```
+</details>
 
 🔍 **Line-by-line:**
 
@@ -723,6 +775,8 @@ class UrlAnatomyTest {
 
 ✋ **Checkpoint:** `Tests run: 2, Failures: 0`. If a port assertion fails, re-check the `-1` default-port logic in `UrlAnatomy`. If not → 🩺.
 
+> 🔖 **Stopping here?** You have the parser locked in by two green tests — run the 💾 commit below first. Next: sub-step 5 (the loopback round trip — no running service needed); first action: create `playground/java-basics/src/test/java/com/buildabank/basics/net/LoopbackHttpTest.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -734,7 +788,7 @@ git commit -m "test(playground): cover UrlAnatomy default ports and root-path no
 
 ---
 
-### Sub-step 5 of 6 — The end-to-end proof: a loopback HTTP round trip 🧭 *(URL parsing ✅ → client ✅ → raw socket ✅ → parser test ✅ → **loopback test** → wrap-up)*
+### Sub-step 5 of 6 (~45–60 min) — The end-to-end proof: a loopback HTTP round trip 🧭 *(URL parsing ✅ → client ✅ → raw socket ✅ → parser test ✅ → **loopback test** → wrap-up)*
 
 🎯 **Goal:** prove both HTTP demos actually work — *against a real HTTP server* — without Docker or any external host. We spin up the JDK's built-in `HttpServer` on an **ephemeral port** inside the test, then exercise `HttpClientDemo` and `RawHttpDemo` against it. A deterministic, self-contained end-to-end round trip.
 
@@ -834,7 +888,11 @@ class LoopbackHttpTest {
 [INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0 -- in com.buildabank.basics.net.LoopbackHttpTest
 ```
 
+❓ **Knowledge-check:** why does the test create the server with port `0` and then read the port back with `getAddress().getPort()`, instead of hard-coding, say, `18080`? <details><summary>answer</summary>Port `0` tells the OS to pick any **free ephemeral port**, so the test can never fail with "address already in use" (another process — or a parallel test run — might be squatting on any hard-coded port). The test then reads back the port the OS actually chose so both clients know where to connect. It's the same reliability trick Testcontainers uses in Step 8.</details>
+
 ✋ **Checkpoint:** `Tests run: 2, Failures: 0` for the loopback test. If you instead see `AssertionError ... LoopbackHttpTest.rawSocketSeesTheStatusLineAndBody`, you almost certainly asserted the header case exactly — go read 🩺 *now*; it's the marquee bug of this step.
+
+> 🔖 **Stopping here?** You have all five files and both loopback tests green — run the 💾 commit below first. Next: sub-step 6 (run the whole lab + tag); first action: `./mvnw -pl playground/java-basics -am verify`.
 
 💾 **Commit:**
 
@@ -847,7 +905,7 @@ git commit -m "test(playground): end-to-end loopback HTTP round trip for HttpCli
 
 ---
 
-### Sub-step 6 of 6 — Run the whole lab green 🧭 *(URL parsing ✅ → client ✅ → raw socket ✅ → parser test ✅ → loopback test ✅ → **wrap-up**)*
+### Sub-step 6 of 6 (~20 min) — Run the whole lab green 🧭 *(URL parsing ✅ → client ✅ → raw socket ✅ → parser test ✅ → loopback test ✅ → **wrap-up**)*
 
 🎯 **Goal:** build and test the entire `playground/java-basics` module (the `net` package plus everything from Step 2) in one command — the gate for `step-03-end`.
 
@@ -869,6 +927,8 @@ git commit -m "test(playground): end-to-end loopback HTTP round trip for HttpCli
 ```
 
 ✋ **Checkpoint:** `BUILD SUCCESS`, `Failures: 0`, and you can see both `net` test classes in the run. That's `step-03-end`.
+
+> 🔖 **Stopping here?** Run the 💾 commit & tag below first — then you are at `step-03-end` with the whole lab green. Next: 🎮 Play With It; first action: `make run-hello` in terminal 1.
 
 💾 **Commit & tag:**
 
@@ -934,7 +994,7 @@ curl -v https://example.com
 
 (All four of these are captured verbatim in the [Verification Log](#prove) so you know exactly what to expect.)
 
-### 🧪 Little experiments — change X → see Y
+### 🧪 Little experiments — change X → see Y *(~2 min each)*
 
 - **Change the path → 404.** `java -cp playground/java-basics/target/classes com.buildabank.basics.net.HttpClientDemo http://localhost:8080/api/nope` → `Status : 404`. (TCP still connected; HTTP said "not found.")
 - **Point at a closed port → connection refused.** `... RawHttpDemo localhost 9999 /api/hello` → `java.net.ConnectException: Connection refused`. (No server, no handshake — a *transport*-layer failure.)
@@ -1061,7 +1121,7 @@ runs `./mvnw -B -q -pl playground/java-basics -am verify` and asserts the two de
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>Why does HTTP/2 need ALPN, and what's "head-of-line blocking" at two layers?</summary>
+<summary>Why does HTTP/2 need ALPN, and what's "head-of-line blocking" at two layers? (+~10 min)</summary>
 
 **ALPN (Application-Layer Protocol Negotiation)** is a TLS extension: during the `ClientHello`/`ServerHello` the client offers a list of protocols (`h2`, `http/1.1`) and the server picks one — *before* any HTTP flows. This lets a server speak HTTP/2 or HTTP/1.1 on the same port 443 without an extra round trip. (You saw `ALPN: curl offers http/1.1` in the Verification Log.)
 
@@ -1073,7 +1133,7 @@ That two-layer story is a great senior-level interview answer.
 </details>
 
 <details>
-<summary>What's actually in the TLS 1.3 handshake (the ClientHello/ServerHello/cert/key-exchange flow)?</summary>
+<summary>What's actually in the TLS 1.3 handshake (the ClientHello/ServerHello/cert/key-exchange flow)? (+~10 min)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -1093,7 +1153,7 @@ The four jobs of the handshake: **(1) agree** on TLS version + cipher; **(2) aut
 </details>
 
 <details>
-<summary>Why is UDP good for DNS and video but bad for a bank transfer?</summary>
+<summary>Why is UDP good for DNS and video but bad for a bank transfer? (+~10 min)</summary>
 
 UDP is **connectionless and unreliable** — no handshake, no ordering, no retransmission — which makes it **fast and low-overhead**. That's perfect for **DNS** (one small query/response; if it's lost, just ask again) and **live video/voice** (a dropped frame is better than a stalled stream). A **bank transfer** needs every byte, exactly once, in order, with no loss — that's **TCP's** job. Interestingly, **HTTP/3/QUIC** runs over UDP but *re-adds* reliability and ordering in user space — getting UDP's flexibility without TCP's HOL blocking.
 </details>
@@ -1146,9 +1206,9 @@ Header **names** are **case-insensitive** (RFC 9110) — `Content-Type`, `conten
 
 **Stretch (reference solutions in `solutions/step-03/`):**
 
-- **`StatusCodeExplainer`** — write a tiny class that maps an `int` status code to its family + a one-line meaning (`200 → "2xx Success: OK"`, `404 → "4xx Client error: Not Found"`), with a JUnit test covering one code per family. Run `HttpClientDemo` against `/api/hello` and `/api/nope` and feed both codes through it.
-- **`HeadersDemo`** — extend `HttpClientDemo` to print **all** response headers (`response.headers().map()` → iterate). Add an assertion in a new test that proves the header-name lookup is case-insensitive by querying the same header in three different cases.
-- **(Harder) `ContentLengthAwareRawHttp`** — make `RawHttpDemo` work **without** `Connection: close`: parse the response, read the `Content-Length` header, and read exactly that many body bytes. This is the core of what a real HTTP client does for you.
+- **`StatusCodeExplainer`** *(~30 min)* — write a tiny class that maps an `int` status code to its family + a one-line meaning (`200 → "2xx Success: OK"`, `404 → "4xx Client error: Not Found"`), with a JUnit test covering one code per family. Run `HttpClientDemo` against `/api/hello` and `/api/nope` and feed both codes through it.
+- **`HeadersDemo`** *(~30 min)* — extend `HttpClientDemo` to print **all** response headers (`response.headers().map()` → iterate). Add an assertion in a new test that proves the header-name lookup is case-insensitive by querying the same header in three different cases.
+- **(Harder) `ContentLengthAwareRawHttp`** *(~1–2h)* — make `RawHttpDemo` work **without** `Connection: close`: parse the response, read the `Content-Length` header, and read exactly that many body bytes. This is the core of what a real HTTP client does for you.
 
 > Reference solutions live in `solutions/step-03/` (or `git checkout step-03-end` for the lab itself).
 

@@ -11,14 +11,14 @@
 
 ## 🧭 The Six Movements of This Step
 
-A one-line map of where we're going. Click to jump.
+A one-line map of where we're going. Click to jump. Times assume the focused ~20h pace — the 🗓️ Session Plan (end of Orient) splits them into sittings.
 
-1. **[A · 🧭 Orient](#orient)** — what AOP *is*, why it matters, the cheat card, and whether you can skip.
-2. **[B · 🧠 Understand](#understand)** — the AOP vocabulary (aspect/pointcut/advice/join point), how Spring AOP really works via runtime **proxies** (CGLIB vs JDK dynamic), the famous **self-invocation pitfall** — no magic; plus the security lens, the proxy/decorator pattern, the Boot-4 version story, and a thread-safety note.
-3. **[C · 🛠️ Build](#build)** — the heart: add the web + AspectJ-weaver deps → write `@Audited` + `AuditCounter` + `AuditAspect` → build the vertical slice (`Account` → store → service → controller) → add `ProxyInspectorRunner` and *see* the CGLIB proxy → curl the slice and watch the aspect log → write the MockMvc slice test → write the self-invocation counter test and **see it prove the pitfall**. Then 🎮 Play With It and the 🏁 finished result.
-4. **[D · 🔬 Prove](#prove)** — the Verification Log: the real, pasted `verify` (16 spring-lab tests), the proxy inspection, the slice over HTTP, the audit log lines, and the self-invocation counter proof.
-5. **[E · 🎓 Apply](#apply)** — go-deeper asides, interview prep, and your-turn exercises.
-6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, the recap/study notes, the **🎓 Phase A Capstone**, and the **Phase-A-complete** wrap.
+1. **[A · 🧭 Orient](#orient)** — what AOP *is*, why it matters, the cheat card, and whether you can skip. *(~30 min)*
+2. **[B · 🧠 Understand](#understand)** — the AOP vocabulary (aspect/pointcut/advice/join point), how Spring AOP really works via runtime **proxies** (CGLIB vs JDK dynamic), the famous **self-invocation pitfall** — no magic; plus the security lens, the proxy/decorator pattern, the Boot-4 version story, and a thread-safety note. *(~2h)*
+3. **[C · 🛠️ Build](#build)** — the heart: add the web + AspectJ-weaver deps → write `@Audited` + `AuditCounter` + `AuditAspect` → build the vertical slice (`Account` → store → service → controller) → add `ProxyInspectorRunner` and *see* the CGLIB proxy → curl the slice and watch the aspect log → write the MockMvc slice test → write the self-invocation counter test and **see it prove the pitfall**. Then 🎮 Play With It and the 🏁 finished result. *(~9–10h)*
+4. **[D · 🔬 Prove](#prove)** — the Verification Log: the real, pasted `verify` (16 spring-lab tests), the proxy inspection, the slice over HTTP, the audit log lines, and the self-invocation counter proof. *(~30 min)*
+5. **[E · 🎓 Apply](#apply)** — go-deeper asides, interview prep, and your-turn exercises. *(~2h)*
+6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, the recap/study notes, the **🎓 Phase A Capstone**, and the **Phase-A-complete** wrap. *(~2–3h incl. the capstone challenge)*
 
 ---
 
@@ -119,6 +119,23 @@ java -version     # → openjdk 25.0.x  (JDK 25 LTS, pinned in VERSIONS.md)
 ./mvnw -version   # → Apache Maven 3.9.12
 ```
 
+## 🗓️ Session Plan (~20h → 8 sittings)
+
+Don't run this step as one marathon. Each sitting below ends at a real save point — a commit or a green checkpoint — so you can stop clean and re-enter fast. Every ✋ Checkpoint in the build also carries a 🛑 *Stopping here?* line telling you exactly what you have and what to open next.
+
+| Sitting | Covers | ~Time | Ends at (save point) |
+|---|---|---|---|
+| S1 | A · Orient + B · Understand (read-only, no code) | ~2.5h | you can redraw the proxy/self-invocation diagram from memory |
+| S2 | Sub-steps 1–2 — deps + the `aop` package | ~2.5h | commit: aspect compiles, `test-compile` green |
+| S3 | Sub-step 3 — the vertical slice (Part A data half, Part B web half) | ~2h | commit: slice compiles |
+| S4 | Sub-steps 4–5 — proxy proof + curl the slice | ~1.5h | `$$SpringCGLIB$$` seen; `200`/`404` + `AUDIT` lines |
+| S5 | Sub-steps 6–7 — MockMvc test + self-invocation proof | ~3h | commit: all 16 spring-lab tests green |
+| S6 | 🎮 Play With It + 🏁 Finished Result + D · Prove (`smoke.sh`) | ~2h | `smoke.sh` PASSED |
+| S7 | E · Apply — Go Deeper, interview prep, Your Turn quick items | ~2h | quick answers checked |
+| S8 | F · Review + 🎓 Phase A Capstone challenge | ~2.5h | capstone POST done; tag `step-07-end` |
+
+**Optional routes:** the ⏭️ skip-test (5 min) compresses the whole step to a ~3h skim for experienced Spring devs; the three 🚀 Go Deeper asides (+~10 min each), the 🎮 experiments (~5 min each, ~25 min for all five), and the 🏅 capstone POST challenge (+~60–90 min) are all skippable without affecting `step-07-end`.
+
 ---
 
 <a id="understand"></a>
@@ -206,6 +223,8 @@ sequenceDiagram
 
 This is *exactly* why `@Transactional` and `@PreAuthorize` "don't work" on self-calls: they're implemented as advice on the same proxy. An internal call skips the transaction/authorization boundary. (Fixes: call through the injected proxy of self, split the method into another bean, or use `AopContext.currentProxy()` / full AspectJ weaving — covered in Step 12 for transactions.)
 
+❓ **Knowledge-check:** why does a `this.method()` call from inside the bean bypass the `@Around` advice, even though the identical call from another bean is advised? <details><summary>answer</summary>Because the advice lives on the **proxy**, not on the target. Other beans are injected with the proxy, so their calls pass through it and get advised — but inside the real object, `this` is the raw target, so the call goes straight to the target method and never re-enters the proxy.</details>
+
 ## 🛡️ Security Lens: What Could Go Wrong
 
 Aspects are *the* mechanism for applying cross-cutting **security**: `@PreAuthorize`/`@PostAuthorize` (method security), `@Transactional` (data-integrity boundary), and audit trails are all proxy-based advice. So this step's pitfall is a real **security/correctness bug**, not a curiosity:
@@ -225,7 +244,7 @@ Two of these are **real findings we hit while building this very step on Spring 
 | **Proxy default** | Pre-Boot-2.0, Spring AOP preferred **JDK dynamic proxies** when the bean had an interface. | **CGLIB by default since Boot 2.0** (`proxyTargetClass=true`) — even with an interface present. | You can flip back with `spring.aop.proxy-target-class=false`, but the default avoids "injected-the-class-got-an-interface-proxy" surprises. We *prove* CGLIB at runtime in this step. |
 
 > [!NOTE]
-> **Verify, don't guess.** Both Boot-4 findings above were discovered by *the build failing*, not by assuming the old coordinates still worked. That's the §12 mindset in miniature: the version set is real, pinned in `VERSIONS.md`, and proven to build together.
+> **Verify, don't guess.** Both Boot-4 findings above were discovered by *the build failing*, not by assuming the old coordinates still worked. That's the course's verify-don't-guess discipline in miniature — prove claims by running them: the version set is real, pinned in `VERSIONS.md`, and proven to build together.
 
 ## 🧵 Thread-safety note
 
@@ -297,7 +316,7 @@ playground/spring-lab/
 
 ---
 
-### Sub-step 1 of 7 — Add the web + AspectJ-weaver dependencies 🧭 *(you are here: **deps** → aspect → slice → proxy proof → curl → MockMvc test → self-invocation proof)*
+### Sub-step 1 of 7 — Add the web + AspectJ-weaver dependencies 🧭 *(you are here: **deps** → aspect → slice → proxy proof → curl → MockMvc test → self-invocation proof)* *(⏱ ~45 min)*
 
 🎯 **Goal:** make `spring-lab` a web app (so the capstone slice can serve HTTP) **and** enable `@AspectJ` AOP. On Boot 4 the obvious starter is gone — we'll *hit that error on purpose* so you recognize it.
 
@@ -326,7 +345,46 @@ First, **predict the failure.** A Boot-2/3 tutorial would tell you to add `sprin
 
 That's the BOM telling you it manages no version for that artifact — because **Boot 4 removed it** (only `4.0.0-Mx` milestones exist, no GA). **Delete that block.** Now add the *correct* dependencies — the real, on-disk `pom.xml` `<dependencies>` section, which is the version you keep:
 
-⌨️ **Code:**
+⌨️ **Code** — a *diff* of the `<dependencies>` section, so you can see exactly which three entries are new (your existing entries stay untouched):
+
+```diff
+ <!-- playground/spring-lab/pom.xml  (the <dependencies> section) -->
+ <dependencies>
+     <!-- spring-boot-starter (core): the IoC container + auto-configuration + logging. -->
+     <dependency>
+         <groupId>org.springframework.boot</groupId>
+         <artifactId>spring-boot-starter</artifactId>
+     </dependency>
++    <!-- Step 7: web (the capstone vertical slice). -->
++    <dependency>
++        <groupId>org.springframework.boot</groupId>
++        <artifactId>spring-boot-starter-web</artifactId>
++    </dependency>
++    <!-- AOP: Spring Boot 4 REMOVED spring-boot-starter-aop. spring-aop is already on the classpath
++         (via spring-context); adding the AspectJ weaver lets Boot's AopAutoConfiguration enable
++         @AspectJ annotation proxying (@Aspect/@Around). Version is managed by the Spring Boot BOM. -->
++    <dependency>
++        <groupId>org.aspectj</groupId>
++        <artifactId>aspectjweaver</artifactId>
++    </dependency>
+
+     <dependency>
+         <groupId>org.springframework.boot</groupId>
+         <artifactId>spring-boot-starter-test</artifactId>
+         <scope>test</scope>
+     </dependency>
++    <!-- Spring Boot 4 split web-MVC test support (MockMvc, @AutoConfigureMockMvc, @WebMvcTest) into its
++         own module; it is no longer pulled transitively by spring-boot-starter-test. Add it explicitly. -->
++    <dependency>
++        <groupId>org.springframework.boot</groupId>
++        <artifactId>spring-boot-webmvc-test</artifactId>
++        <scope>test</scope>
++    </dependency>
+ </dependencies>
+```
+
+<details>
+<summary><b>The full final <code>&lt;dependencies&gt;</code> section, for verification</b></summary>
 
 ```xml
 <!-- playground/spring-lab/pom.xml  (the <dependencies> section) -->
@@ -363,6 +421,7 @@ That's the BOM telling you it manages no version for that artifact — because *
     </dependency>
 </dependencies>
 ```
+</details>
 
 🔍 **Line-by-line:**
 - **`spring-boot-starter-web`** — pulls in Spring MVC + an embedded Tomcat (the bank's pinned **Tomcat 11.0.21**) + Jackson. This is what turns the previously non-web lab into a server that can answer `GET /api/accounts/1`. No version: the **Boot BOM** pins it (Step 6's lesson).
@@ -394,11 +453,13 @@ git add playground/spring-lab/pom.xml
 git commit -m "build(spring-lab): add web + aspectjweaver (Boot 4 dropped starter-aop) + webmvc-test"
 ```
 
+🛑 **Stopping here?** You have the three new deps committed and `validate` green. Next: sub-step 2 (the aspect); first action: create `playground/spring-lab/src/main/java/com/buildabank/springlab/aop/Audited.java`.
+
 ⚠️ **Pitfall:** don't try to pin `<version>` on `aspectjweaver` yourself — the BOM manages it, and hard-coding a version risks a clash with the one Spring expects. Leave it BOM-managed.
 
 ---
 
-### Sub-step 2 of 7 — Write the aspect: `@Audited` + `AuditCounter` + `AuditAspect` 🧭 *(deps ✅ → **aspect** → slice → proxy proof → curl → MockMvc test → self-invocation proof)*
+### Sub-step 2 of 7 — Write the aspect: `@Audited` + `AuditCounter` + `AuditAspect` 🧭 *(deps ✅ → **aspect** → slice → proxy proof → curl → MockMvc test → self-invocation proof)* *(⏱ ~90 min)*
 
 🎯 **Goal:** create the cross-cutting concern *once*: a marker annotation, a thread-safe interception counter (so we can later *prove* the pitfall), and the `@Around` advice that logs and times every `@Audited` call.
 
@@ -558,6 +619,8 @@ public class AuditAspect {
 [INFO] BUILD SUCCESS
 ```
 
+❌ **If you see** `cannot find symbol: class Aspect` (or `@Around`/`ProceedingJoinPoint` won't resolve): the `org.aspectj:aspectjweaver` dependency is missing — re-do sub-step 1. See 🩺.
+
 ✋ **Checkpoint:** three files exist under `aop/`; the module compiles. No behavior yet (nothing is `@Audited`). If `@Aspect`/`@Around` don't resolve → the `aspectjweaver` dep is missing (🩺).
 
 💾 **Commit:**
@@ -567,15 +630,21 @@ git add playground/spring-lab/src/main/java/com/buildabank/springlab/aop
 git commit -m "feat(spring-lab): add @Audited + AuditCounter + AuditAspect (around-advice audit log)"
 ```
 
+🛑 **Stopping here?** You have the whole `aop` package (annotation, counter, aspect) compiling and committed — idle until something is `@Audited`. Next: sub-step 3 (the slice); first action: create `playground/spring-lab/src/main/java/com/buildabank/springlab/account/Account.java`.
+
 ⚠️ **Pitfall:** forgetting `@Component` on the aspect → it compiles but **never runs** (Spring doesn't know about it). `@Aspect` declares *what* it is; `@Component` makes it a *bean*.
 
 ---
 
-### Sub-step 3 of 7 — Build the vertical slice: `Account` → store → service → controller 🧭 *(deps ✅ → aspect ✅ → **slice** → proxy proof → curl → MockMvc test → self-invocation proof)*
+### Sub-step 3 of 7 — Build the vertical slice: `Account` → store → service → controller 🧭 *(deps ✅ → aspect ✅ → **slice** → proxy proof → curl → MockMvc test → self-invocation proof)* *(⏱ ~2h)*
 
 🎯 **Goal:** the Phase-A capstone in miniature — one endpoint → service → in-memory store — with the audit aspect threaded through the service. We build it store-first so each piece compiles against the one below it.
 
 📁 **Location:** new files under `playground/spring-lab/src/main/java/com/buildabank/springlab/account/`
+
+This is your first-ever Spring **web** code in the course, and four files is a big gulp — so we take it in **two halves with a compile check between them**: **Part A (the data half)** = `Account` + `InMemoryAccountStore`; **Part B (the web half)** = `AccountService` + `AccountController`.
+
+**— Part A · the data half: `Account` + `InMemoryAccountStore` —**
 
 ⌨️ **Code (a) — the money record:**
 
@@ -636,6 +705,18 @@ public class InMemoryAccountStore {
 - `@Repository` — a `@Component` stereotype meaning "data-access object." (In Step 8 the real persistence-exception translation it enables matters; here it's the right *intent* marker.)
 - `ConcurrentMap`/`ConcurrentHashMap` — thread-safe map (the web server hits it from many threads). The constructor **seeds two demo accounts** so there's data to fetch immediately — `new BigDecimal("1250.00")` uses the **String** constructor (the safe one; `new BigDecimal(1250.00)` from a `double` would carry float noise).
 - `findById` returns `Optional<Account>` — models "maybe absent" (Step 2), so the controller can map empty → `404`.
+
+▶️ **Run & See (Part A):** compile now, before touching the web half — two plain classes, no web code yet:
+
+```bash
+./mvnw -pl playground/spring-lab -am compile
+```
+
+You should see `BUILD SUCCESS` (the same check you'll repeat after Part B).
+
+✋ **Mini-checkpoint (Part A):** `Account` + `InMemoryAccountStore` compile — the data half is done. New tokens so far: `@Repository`, `ConcurrentHashMap`/`ConcurrentMap`, the `BigDecimal` String constructor. 🛑 **Stopping here?** You have the data half compiling (commit it with the sub-step's 💾 command below if you like). Next: Part B (the web half); first action: create `AccountService.java` in the same package.
+
+**— Part B · the web half: `AccountService` + `AccountController` —**
 
 ⌨️ **Code (c) — the service (carries `@Audited` and the self-invocation demo):**
 
@@ -738,7 +819,7 @@ public class AccountController {
 - `@RequestMapping("/api/accounts")` — base path for the class.
 - **constructor injection** of `AccountService` — and *this is the key wiring*: the controller receives the **proxy** of `AccountService`, so its `findById`/`findAll` calls go *through* the proxy and **are audited**. (Contrast the internal self-call in `summaryFor`.)
 - `@GetMapping` (no path) → `GET /api/accounts` → list all. `@GetMapping("/{id}")` → `GET /api/accounts/{id}`; `@PathVariable String id` binds the URL segment.
-- The `Optional` chain: found → `200 OK` + body; empty → `404 Not Found`, no body. (Same idiom as the §8.1 gold-standard example.)
+- The `Optional` chain: found → `200 OK` + body; empty → `404 Not Found`, no body. (The same Optional-to-404 idiom used by controllers throughout this course.)
 
 💭 **Under the hood:** a request hits embedded Tomcat → Spring's `DispatcherServlet` matches the URL to `byId` → binds `{id}` → calls the **proxied** `AccountService` (advice fires) → the real method hits the store → a Jackson `HttpMessageConverter` serializes the `Account` record to JSON. (Full lifecycle: Step 13.)
 
@@ -756,6 +837,8 @@ public class AccountController {
 [INFO] BUILD SUCCESS
 ```
 
+❌ **If you see** `package org.springframework.web.bind.annotation does not exist`: the `spring-boot-starter-web` dependency is missing — re-check sub-step 1 (🩺).
+
 ✋ **Checkpoint:** four files under `account/`; the module compiles. We'll run it over HTTP in sub-step 5. If imports don't resolve → check `spring-boot-starter-web` is present (🩺).
 
 💾 **Commit:**
@@ -765,11 +848,13 @@ git add playground/spring-lab/src/main/java/com/buildabank/springlab/account
 git commit -m "feat(spring-lab): add Phase-A capstone slice (Account -> store -> @Audited service -> controller)"
 ```
 
+🛑 **Stopping here?** You have the full slice compiling and committed — written but never yet run. Next: sub-step 4 (see the proxy); first action: create `playground/spring-lab/src/main/java/com/buildabank/springlab/ProxyInspectorRunner.java`.
+
 ⚠️ **Pitfall:** returning the entity directly with no `Optional` handling makes "missing" ambiguous; always map empty → `404`. And never use `double` for `balance` — `BigDecimal` only.
 
 ---
 
-### Sub-step 4 of 7 — Prove it's a CGLIB proxy with `ProxyInspectorRunner` 🧭 *(deps ✅ → aspect ✅ → slice ✅ → **proxy proof** → curl → MockMvc test → self-invocation proof)*
+### Sub-step 4 of 7 — Prove it's a CGLIB proxy with `ProxyInspectorRunner` 🧭 *(deps ✅ → aspect ✅ → slice ✅ → **proxy proof** → curl → MockMvc test → self-invocation proof)* *(⏱ ~45 min)*
 
 🎯 **Goal:** *see* the proxy. We add a tiny `CommandLineRunner` that prints `AccountService`'s real runtime class and asks Spring's `AopUtils` whether it's an AOP/CGLIB proxy — turning "Spring wraps it in a proxy" from a claim into something on your screen.
 
@@ -847,11 +932,13 @@ git add playground/spring-lab/src/main/java/com/buildabank/springlab/ProxyInspec
 git commit -m "feat(spring-lab): add ProxyInspectorRunner to prove AccountService is a CGLIB proxy"
 ```
 
+🛑 **Stopping here instead of continuing to sub-step 5?** Ctrl-C the app — you have the CGLIB proxy proven and `ProxyInspectorRunner` committed. Next: sub-step 5 (curl the slice); first action: `./mvnw -pl playground/spring-lab spring-boot:run` (start the app again).
+
 ⚠️ **Pitfall:** if you later add an *interface* to `AccountService` and set `spring.aop.proxy-target-class=false`, you'd get a JDK proxy and this would print `false` for `isCglibProxy`. The Boot default keeps it CGLIB.
 
 ---
 
-### Sub-step 5 of 7 — Curl the slice and watch the aspect log 🧭 *(deps ✅ → aspect ✅ → slice ✅ → proxy proof ✅ → **curl** → MockMvc test → self-invocation proof)*
+### Sub-step 5 of 7 — Curl the slice and watch the aspect log 🧭 *(deps ✅ → aspect ✅ → slice ✅ → proxy proof ✅ → **curl** → MockMvc test → self-invocation proof)* *(⏱ ~45 min)*
 
 🎯 **Goal:** hit the capstone slice over real HTTP, see the `200`/`404`, and watch the `AuditAspect` fire in the app log — the satisfying "it's alive" moment.
 
@@ -881,6 +968,8 @@ AUDIT ▶ AccountService.findById(..) called
 AUDIT ✔ AccountService.findById(..) returned in 947 µs
 ```
 
+💭 **Under the hood:** `curl` opens a real TCP socket to the embedded Tomcat on `:8080`; a Tomcat worker thread carries the request through Spring's `DispatcherServlet` pipeline into the **proxied** `AccountService` (that's where the advice fires), and Jackson writes the JSON back down the socket. This is exactly the path MockMvc will simulate *in-process* — no socket — in sub-step 6.
+
 🔬 **Break-it (the headline experiment, 60s):** with the app still running, hit the **summary** path that triggers the self-invocation. There's no direct endpoint for it, so do it from a quick test or just reason it through now and *verify it with the counter test* in sub-step 7. The point to internalize: a call to `summaryFor` logs **one** `AUDIT` pair (for `summaryFor` itself) — the inner `findById` produces **no** `AUDIT` line, because `this.findById(...)` never went through the proxy. The missing inner audit *is* the pitfall.
 
 ❓ **Knowledge-check:** the list endpoint `GET /api/accounts` — how many `AUDIT` pairs? <details><summary>answer</summary>One pair — `findAll` is a single audited external call. The two accounts in the body don't add audit lines; auditing is per *method call*, not per row.</details>
@@ -889,11 +978,13 @@ AUDIT ✔ AccountService.findById(..) returned in 947 µs
 
 💾 **Commit:** (nothing to commit — this was a runtime check; the slice was committed in sub-step 3.)
 
+🛑 **Stopping here?** You have the slice proven over real HTTP (`200`/`404` + `AUDIT` lines seen), app stopped, nothing uncommitted. Next: sub-step 6 (the MockMvc test); first action: create `playground/spring-lab/src/test/java/com/buildabank/springlab/account/AccountControllerTest.java`.
+
 ⚠️ **Pitfall:** wrong port. `spring-boot:run` uses `8080` by default; the smoke script uses `8082` to avoid clashes. If you get "connection refused," the app isn't up yet (watch for `Tomcat started on port 8080`) or you're hitting the wrong port.
 
 ---
 
-### Sub-step 6 of 7 — Write the MockMvc slice test (and hit finding #2) 🧭 *(deps ✅ → aspect ✅ → slice ✅ → proxy proof ✅ → curl ✅ → **MockMvc test** → self-invocation proof)*
+### Sub-step 6 of 7 — Write the MockMvc slice test (and hit finding #2) 🧭 *(deps ✅ → aspect ✅ → slice ✅ → proxy proof ✅ → curl ✅ → **MockMvc test** → self-invocation proof)* *(⏱ ~90 min)*
 
 🎯 **Goal:** lock the slice's behavior into an automated test that drives it through the web layer without a real socket — and meet the second Boot-4 surprise (`@AutoConfigureMockMvc` moved packages).
 
@@ -991,17 +1082,52 @@ git add playground/spring-lab/src/test/java/com/buildabank/springlab/account/Acc
 git commit -m "test(spring-lab): MockMvc slice test for capstone (Boot 4: @AutoConfigureMockMvc moved package)"
 ```
 
+🛑 **Stopping here?** You have the MockMvc slice test (3 green) committed — only the keystone proof remains. Next: sub-step 7 (the self-invocation proof); first action: create `playground/spring-lab/src/test/java/com/buildabank/springlab/aop/AuditAspectSelfInvocationTest.java`.
+
 ⚠️ **Pitfall:** `@WebMvcTest` (a *slice* that loads only the web layer) would **not** create the `AuditAspect`/service beans by default — you'd have to mock the service, and you'd lose the aspect. We use `@SpringBootTest` here precisely so the full proxy chain is exercised.
 
 ---
 
-### Sub-step 7 of 7 — Write the self-invocation proof and SEE the pitfall 🧭 *(deps ✅ → aspect ✅ → slice ✅ → proxy proof ✅ → curl ✅ → MockMvc test ✅ → **self-invocation proof**)*
+### Sub-step 7 of 7 — Write the self-invocation proof and SEE the pitfall 🧭 *(deps ✅ → aspect ✅ → slice ✅ → proxy proof ✅ → curl ✅ → MockMvc test ✅ → **self-invocation proof**)* *(⏱ ~90 min)*
 
 🎯 **Goal:** the keystone. Prove with a **counter** (not flaky log parsing) that an external call *is* audited, that an internal `this.findById()` from `summaryFor` is *not*, and that the bean really is a CGLIB proxy — turning the pitfall into something you've demonstrated, not just read.
 
 📁 **Location:** new file → `playground/spring-lab/src/test/java/com/buildabank/springlab/aop/AuditAspectSelfInvocationTest.java`
 
-⌨️ **Code:**
+⌨️ **Code — type it yourself this time.** By now you've used `@SpringBootTest`, `@Autowired`, AssertJ's `assertThat`, and the whole `AuditCounter` API (`reset()`, `total()`, `calls()`). So no copy-paste: start from this skeleton and fill in the three test bodies from the hints — retrieval beats transcription, and this is *the* test of the step:
+
+```java
+// playground/spring-lab/src/test/java/com/buildabank/springlab/aop/AuditAspectSelfInvocationTest.java
+package com.buildabank.springlab.aop;
+
+// imports you'll need: AssertJ assertThat (static), JUnit @Test, AopUtils,
+// @Autowired, @SpringBootTest, and com.buildabank.springlab.account.AccountService
+
+@SpringBootTest
+class AuditAspectSelfInvocationTest {
+
+    // inject AccountService (you'll receive the PROXY) and AuditCounter (the same singleton the aspect writes to)
+
+    @Test
+    void externalCallIsAudited() {
+        // reset the counter; call findById("1") through the injected bean; assert total() == 1
+    }
+
+    @Test
+    void selfInvocationBypassesTheProxyAndIsNotAudited() {
+        // reset; call summaryFor("1") through the injected bean;
+        // assert total() — 1 or 2? — and assert calls() contains no "findById"
+    }
+
+    @Test
+    void auditedServiceBeanIsACglibProxy() {
+        // assert AopUtils.isAopProxy(accountService) AND AopUtils.isCglibProxy(accountService) are both true
+    }
+}
+```
+
+<details>
+<summary><b>Stuck? The full working listing</b></summary>
 
 ```java
 // playground/spring-lab/src/test/java/com/buildabank/springlab/aop/AuditAspectSelfInvocationTest.java
@@ -1050,6 +1176,7 @@ class AuditAspectSelfInvocationTest {
     }
 }
 ```
+</details>
 
 🔍 **Line-by-line:**
 - `@SpringBootTest` — full context, so `accountService` is the **proxy** and the aspect is live; `counter` is the same singleton the aspect writes to.
@@ -1073,7 +1200,7 @@ class AuditAspectSelfInvocationTest {
 [INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0 -- in com.buildabank.springlab.aop.AuditAspectSelfInvocationTest
 ```
 
-🔬 **Break-it #1 — prove the test tests something (the §12 mindset):** temporarily change the assertion in `selfInvocationBypassesTheProxyAndIsNotAudited` to expect the *wrong* answer, `isEqualTo(2)`, and rerun. It **fails** (`expected: 2 but was: 1`) — confirming the counter really is `1` and the inner call really is unaudited. Change it back to `1`. (This is exactly the deliberate-break discipline from the verification protocol.)
+🔬 **Break-it #1 — prove the test tests something (the verify-don't-guess discipline):** temporarily change the assertion in `selfInvocationBypassesTheProxyAndIsNotAudited` to expect the *wrong* answer, `isEqualTo(2)`, and rerun. It **fails** (`expected: 2 but was: 1`) — confirming the counter really is `1` and the inner call really is unaudited. Change it back to `1`. (This is exactly the deliberate-break discipline from the verification protocol.)
 
 🔬 **Break-it #2 — move `@Audited` to a private method:** add a `private` helper to `AccountService`, annotate it `@Audited`, and call it internally. Rerun — it is **never advised** (no counter increment), because (a) it's a self-call *and* (b) CGLIB can't override a `private` method anyway. Two reasons it can't be proxied. Remove it. (Lesson: AOP advises **public, externally-called** methods.)
 
@@ -1087,6 +1214,8 @@ class AuditAspectSelfInvocationTest {
 git add playground/spring-lab/src/test/java/com/buildabank/springlab/aop/AuditAspectSelfInvocationTest.java
 git commit -m "test(spring-lab): prove self-invocation bypasses the proxy (counter == 1, not 2) + CGLIB proxy"
 ```
+
+🛑 **Stopping here?** You have all 16 spring-lab tests green and the pitfall proven — the build work is done and committed. Next: 🎮 Play With It; first action: `./mvnw -pl playground/spring-lab spring-boot:run`.
 
 ⚠️ **Pitfall:** if you assert against **log lines** instead of a counter, the test is flaky (log format/levels change) and slow. Asserting a counter is deterministic — and clearer about *what* was intercepted.
 
@@ -1134,7 +1263,7 @@ The app is your toy now. Start it and poke at it:
   - `GET /api/accounts/999` → clean `404` (still audited — the `findById` ran, just returned empty).
 - **Watch the AUDIT log** in the app terminal: every audited call prints `AUDIT ▶ … called` then `AUDIT ✔ … returned in N µs`. This *is* your bank's audit trail in embryo.
 
-🧪 **Little experiments** (change X → see Y):
+🧪 **Little experiments** (change X → see Y; optional — ~5 min each, ~25 min for all five):
 
 | Try this | What you'll see | Why |
 |---|---|---|
@@ -1229,7 +1358,7 @@ The smoke script builds + tests, boots the jar on `:8082`, asserts the `200` bod
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary><b>The five AOP advice kinds — and when to reach for each</b></summary>
+<summary><b>The five AOP advice kinds — and when to reach for each</b> (+~10 min)</summary>
 
 | Advice | Annotation | Runs | Use it for |
 |---|---|---|---|
@@ -1243,7 +1372,7 @@ The smoke script builds + tests, boots the jar on `:8082`, asserts the `200` bod
 </details>
 
 <details>
-<summary><b>Pointcut designators you'll meet later</b></summary>
+<summary><b>Pointcut designators you'll meet later</b> (+~10 min)</summary>
 
 Our pointcut is `@annotation(...)` (match by method annotation). Others:
 - `execution(* com.buildabank..*Service.*(..))` — match by method signature pattern (the classic).
@@ -1255,7 +1384,7 @@ Our pointcut is `@annotation(...)` (match by method annotation). Others:
 </details>
 
 <details>
-<summary><b>Fixing self-invocation properly (preview of Step 12)</b></summary>
+<summary><b>Fixing self-invocation properly (preview of Step 12)</b> (+~10 min)</summary>
 
 Three real options:
 1. **Self-inject the proxy.** Add `@Autowired private AccountService self;` (or `@Lazy` to break the cycle) and call `self.findById(...)`. Now the inner call goes through the proxy. (A little smelly, but explicit.)
@@ -1419,7 +1548,7 @@ The aspect is a singleton and the web server is multi-threaded, so the counter i
 
 > **You just built the capstone.** The whole point of Phase A's capstone is to **wire a tiny end-to-end vertical slice (one endpoint → service → in-memory store) and run it** — proving your toolchain and Spring fundamentals. That's exactly the `AccountController → AccountService → InMemoryAccountStore` slice you ran on `:8080`, with the audit aspect threaded through. **The capstone is done when `GET /api/accounts/1` returns `200` from the CLI and the MockMvc test is green** — which you have.
 
-**🏅 The challenge — extend the slice (reference solution in `solutions/step-07/`):**
+**🏅 The challenge — extend the slice (+~60–90 min, optional — skippable without affecting `step-07-end`; reference solution in `solutions/step-07/`):**
 
 1. **Add a `POST /api/accounts`** that creates an account from a JSON body (`{"id","owner","balance"}`), validating `balance >= 0`, persisting via `InMemoryAccountStore.save(...)`, and returning `201 Created`.
 2. **Audit it** — make the new service method `@Audited` and confirm an `AUDIT ▶/✔` pair appears.
