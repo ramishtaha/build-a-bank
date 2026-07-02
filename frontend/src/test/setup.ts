@@ -3,7 +3,8 @@
 // between tests so they're independent.
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach } from 'vitest';
+import { beforeAll, afterEach, afterAll } from 'vitest';
+import { server } from '../mocks/server';
 
 // jsdom's localStorage getter throws for an opaque origin, so Vitest leaves the global `undefined`. The app
 // uses localStorage (AuthContext), so install a tiny in-memory Storage for tests — deterministic and isolated.
@@ -34,7 +35,16 @@ if (typeof globalThis.EventSource === 'undefined') {
   globalThis.EventSource = NoopEventSource as unknown as typeof EventSource;
 }
 
+// Establish API mocking before all tests.
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  // Reset any request handlers that we may add during the tests,
+  // so they don't affect other tests.
+  server.resetHandlers();
 });
+
+// Clean up after the tests are finished.
+afterAll(() => server.close());
