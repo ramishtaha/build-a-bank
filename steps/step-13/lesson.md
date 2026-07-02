@@ -11,14 +11,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | the MVC request lifecycle · ProblemDetail · filters vs interceptors · content negotiation |
-| **C** | [🛠️ Build](#build) | upgrade demand-account: ProblemDetail global handler · springdoc/Swagger UI · filter + interceptor |
-| **D** | [🔬 Prove](#prove) | the Verification Log — 13 tests, live OpenAPI/Swagger/Problem+JSON, §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~Time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1h |
+| **B** | [🧠 Understand](#understand) | the MVC request lifecycle · ProblemDetail · filters vs interceptors · content negotiation | ~3h |
+| **C** | [🛠️ Build](#build) | upgrade demand-account: ProblemDetail global handler · springdoc/Swagger UI · filter + interceptor | ~10.5h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — 13 tests, live OpenAPI/Swagger/Problem+JSON, §12.3 mutation | ~1.5h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~1.5h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~30 min |
 
 ---
 
@@ -117,6 +117,22 @@ The API *is* the product to every client and frontend — and the difference bet
 
 > **Depends on: Steps 12, 8, 7.**
 
+## 🗓️ Session Plan (~18h → 7 sittings)
+
+Each sitting is ~2–3h and ends at a real commit or checkpoint you can walk away from — every sub-step below also carries a 🚪 re-entry line for when you come back.
+
+| Sitting | Covers | ~Time | Save point (where you stop) |
+|---|---|---|---|
+| **S1 · The map** | A Orient + B: 🧠 Big Idea, 🧩 Pattern Spotlight (RFC 9457) | ~2.5h | end of Pattern Spotlight |
+| **S2 · The machinery** | B rest (🌱 Under the Hood → 🧵 thread-safety) + sub-step 0 (springdoc + instant win) | ~2.5h | commit `build(demand-account): add springdoc-openapi 3.0.3 (Boot-4 compatible)` |
+| **S3 · Errors done right** | sub-steps 1–2 (GlobalExceptionHandler + validation ProblemDetail) | ~3h | commit `feat(demand-account): validation errors as ProblemDetail with field map` |
+| **S4 · Click and see it** | sub-step 3 (OpenApiConfig + live Swagger UI) | ~2h | commit `feat(demand-account): OpenAPI metadata + Swagger UI (springdoc)` |
+| **S5 · Cross-cutting** | sub-steps 4–5 (RequestIdFilter + TimingInterceptor/WebConfig) | ~2.5h | commit `feat(demand-account): handler-timing interceptor + registration` |
+| **S6 · Prove it** | sub-step 6 (tests 11 → 13) + 🎮 Play With It + D Prove (mutation, smoke.sh) | ~3h | **13 green tests** + tag `step-13-end` |
+| **S7 · Cement it** | E Apply (go deeper, interview prep, challenges) + F Review (recap, flashcards) | ~2.5h | end of step |
+
+*Optional routes:* the ⏭️ skip-test (5 min) can turn this into a ~3h skim for experienced Spring devs; each 🚀 Go Deeper aside is **+~10 min**; 🏋️ Your Turn challenges run **+15–60 min** each — none of them block the step.
+
 ---
 
 <a id="understand"></a>
@@ -197,6 +213,8 @@ sequenceDiagram
 
 Our `RequestIdFilter` (correlation id) is a `OncePerRequestFilter` — it sets `X-Request-Id` *before* calling the chain so it's present even on errors. Our `TimingInterceptor` sets a marker in `preHandle` (reliably, before the response commits) and logs elapsed time in `afterCompletion` (which always runs). Note: setting a *response header in `postHandle`* is unreliable for `@ResponseBody` handlers because the body (and headers) may already be committed by the message converter — that's why timing is *logged* in `afterCompletion`, not written as a header.
 
+❓ **Knowledge-check:** a request arrives for a path with no matching `@RequestMapping` (a 404) — which runs: your filter, your interceptor, both, or neither? <details><summary>answer</summary>Only the filter — it sits at the servlet-container level and sees every request; the interceptor is part of the `HandlerExecutionChain`, which only exists when a handler matched.</details>
+
 **springdoc generates OpenAPI from your code.** The `springdoc-openapi-starter-webmvc-ui` dependency scans your `@RequestMapping`s, request/response types, and validation annotations to build an **OpenAPI 3.1** document at `/v3/api-docs`, and serves **Swagger UI** (a browsable HTML client) at `/swagger-ui.html`. You supply only metadata (title/version) via an `OpenAPI` bean; the paths/schemas are inferred.
 
 ## 🛡️ Security Lens: What Could Go Wrong
@@ -264,7 +282,7 @@ steps/step-13/{requests.http, smoke.sh}
 
 ---
 
-### Sub-step 0 of 6 — Add springdoc (pinned) 🧭 *(you are here: **dependency** → ProblemDetail → validation → OpenAPI → filter → interceptor → tests)*
+### Sub-step 0 of 6 — Add springdoc (pinned) *(~1h)* 🧭 *(you are here: **dependency** → ProblemDetail → validation → OpenAPI → filter → interceptor → tests)*
 
 🎯 **Goal:** pull in OpenAPI/Swagger UI support, pinned to the version that works with Boot 4.
 
@@ -285,22 +303,47 @@ steps/step-13/{requests.http, smoke.sh}
 
 💭 **Under the hood:** on startup springdoc auto-configures handlers for `/v3/api-docs` (the generated OpenAPI JSON) and `/swagger-ui/**` (the UI). It introspects your `RequestMappingHandlerMapping` to build the spec.
 
+⚡ **Instant win (~5 min):** you already have something to *see* — springdoc serves a default Swagger UI with zero Java written. Start the service (the cheat-card commands: `docker compose -f services/demand-account/compose.yaml up -d`, then `SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run`) and open **http://localhost:8082/swagger-ui.html** — your Step-12 endpoints are already listed, browsable. Sub-step 3 will make the metadata (title/version/description) *yours*.
+
 ✋ **Checkpoint:** `./mvnw -q -pl services/demand-account dependency:resolve` succeeds (3.0.3 downloads).
 
 💾 **Commit:** `git add services/demand-account/pom.xml && git commit -m "build(demand-account): add springdoc-openapi 3.0.3 (Boot-4 compatible)"`
 
 ⚠️ **Pitfall:** using springdoc **2.8.x** on Boot 4 fails at runtime (Spring 6 vs 7 APIs). Always check the springdoc↔Boot compatibility (we verified 3.0.3 boots — 🔬).
 
+🚪 **Stopping here?** You have springdoc 3.0.3 on the classpath and a default Swagger UI booting, committed. Next: sub-step 1 (`GlobalExceptionHandler`); first action: create `GlobalExceptionHandler.java` in `services/demand-account/src/main/java/com/buildabank/account/web/`.
+
 ---
 
-### Sub-step 1 of 6 — `GlobalExceptionHandler` → Problem Details 🧭 *(dependency ✅ → **ProblemDetail** → validation → OpenAPI → filter → interceptor → tests)*
+### Sub-step 1 of 6 — `GlobalExceptionHandler` → Problem Details *(~1.5h)* 🧭 *(dependency ✅ → **ProblemDetail** → validation → OpenAPI → filter → interceptor → tests)*
 
 🎯 **Goal:** replace the Step-12 placeholder with RFC 9457 Problem Details for the domain exceptions.
 
 📁 **Location:** new file `services/demand-account/src/main/java/com/buildabank/account/web/GlobalExceptionHandler.java` (and **delete** `ApiExceptionHandler.java`).
 
-⌨️ **Code** (the domain handlers; the validation override is sub-step 2; full file in the repo):
+⌨️ **Code** (the domain handlers; the validation override is sub-step 2 — the import block below already covers it):
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/web/GlobalExceptionHandler.java
+package com.buildabank.account.web;
+
+import java.net.URI;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+
+import com.buildabank.account.domain.InsufficientFundsException;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
@@ -339,16 +382,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
 ⚠️ **Pitfall:** don't put a user's secret/SQL into `detail`. Keep it safe-to-show.
 
+🚪 **Stopping here?** You have domain errors as RFC 9457 ProblemDetail (422/400), committed. Next: sub-step 2 (validation field errors); first action: reopen `GlobalExceptionHandler.java` and add the `handleMethodArgumentNotValid` override.
+
 ---
 
-### Sub-step 2 of 6 — Validation → Problem Details with field errors 🧭 *(… → **validation** → …)*
+### Sub-step 2 of 6 — Validation → Problem Details with field errors *(~1.5h)* 🧭 *(… → **validation** → …)*
 
 🎯 **Goal:** turn Bean Validation failures into a Problem Detail that lists which fields failed.
 
 📁 **Location:** `GlobalExceptionHandler.java` (override a hook from the base class)
 
-⌨️ **Code:**
+⌨️ **Code** (add inside `GlobalExceptionHandler`, below the two domain handlers — the imports from sub-step 1 already cover everything here):
 ```java
+// GlobalExceptionHandler.java (same file) — override the ResponseEntityExceptionHandler hook
 @Override
 protected ResponseEntity<Object> handleMethodArgumentNotValid(
         MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
@@ -369,6 +415,8 @@ protected ResponseEntity<Object> handleMethodArgumentNotValid(
 
 💭 **Under the hood:** the binding + validation happens in the `HandlerAdapter` *before* your controller method runs; the exception is resolved by the advice. The default messages ("must be greater than 0") come from the validation annotations (`@Positive`, etc.).
 
+❓ **Knowledge-check:** why must `GlobalExceptionHandler` extend `ResponseEntityExceptionHandler` for this validation override to ever be called? <details><summary>answer</summary>`MethodArgumentNotValidException` is a built-in MVC exception handled by the base class — extending it is what routes the exception to the `handleMethodArgumentNotValid` hook; without it you'd get Boot's default error JSON.</details>
+
 ▶️ **Run & See** (proven in the slice test):
 ```bash
 ./mvnw -pl services/demand-account test -Dtest=TransferControllerTest
@@ -381,9 +429,11 @@ protected ResponseEntity<Object> handleMethodArgumentNotValid(
 
 ⚠️ **Pitfall:** if you *don't* extend `ResponseEntityExceptionHandler`, `MethodArgumentNotValidException` won't route to your override and you'll get Boot's default error JSON instead.
 
+🚪 **Stopping here?** You have validation failures returning 400 ProblemDetail with an `errors` map, committed. Next: sub-step 3 (OpenAPI + Swagger UI); first action: create `OpenApiConfig.java` in the `web/` package.
+
 ---
 
-### Sub-step 3 of 6 — OpenAPI config + Swagger UI 🧭 *(… → **OpenAPI** → …)*
+### Sub-step 3 of 6 — OpenAPI config + Swagger UI *(~2h)* 🧭 *(… → **OpenAPI** → …)*
 
 🎯 **Goal:** add API metadata and confirm Swagger UI is served.
 
@@ -391,6 +441,15 @@ protected ResponseEntity<Object> handleMethodArgumentNotValid(
 
 ⌨️ **Code:**
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/web/OpenApiConfig.java
+package com.buildabank.account.web;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+
 @Configuration
 public class OpenApiConfig {
     @Bean
@@ -404,7 +463,7 @@ public class OpenApiConfig {
 }
 ```
 
-🔍 **Line-by-line:** `OpenAPI`/`Info` (from `io.swagger.v3.oas.models`, brought by springdoc) supply the *metadata*; springdoc generates the **paths** and **schemas** from your controllers/DTOs automatically.
+🔍 **Line-by-line:** `OpenAPI` (`io.swagger.v3.oas.models.OpenAPI`) and `Info` (`io.swagger.v3.oas.models.info.Info` — note the `.info` sub-package), both brought in by springdoc, supply the *metadata*; springdoc generates the **paths** and **schemas** from your controllers/DTOs automatically.
 
 💭 **Under the hood:** springdoc serves the spec at `/v3/api-docs` (OpenAPI 3.1 JSON) and Swagger UI at `/swagger-ui.html` (which redirects to `/swagger-ui/index.html`).
 
@@ -427,9 +486,11 @@ Swagger UI (`/swagger-ui/index.html`) returns **200** — a browsable client lis
 
 ⚠️ **Pitfall:** Swagger UI is unauthenticated here — fine for dev, **gate it in production** (Phase H).
 
+🚪 **Stopping here?** You have ProblemDetail errors + a live Swagger UI with your metadata, committed. Next: sub-step 4 (`RequestIdFilter`); first action: create `RequestIdFilter.java` in the `web/` package.
+
 ---
 
-### Sub-step 4 of 6 — `RequestIdFilter` (a servlet filter) 🧭 *(… → **filter** → …)*
+### Sub-step 4 of 6 — `RequestIdFilter` (a servlet filter) *(~1h)* 🧭 *(… → **filter** → …)*
 
 🎯 **Goal:** stamp a correlation id (`X-Request-Id`) on every response — the servlet-level cross-cutting concern.
 
@@ -437,6 +498,20 @@ Swagger UI (`/swagger-ui/index.html`) returns **200** — a browsable client lis
 
 ⌨️ **Code:**
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/web/RequestIdFilter.java
+package com.buildabank.account.web;
+
+import java.io.IOException;
+import java.util.UUID;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
 @Component
 public class RequestIdFilter extends OncePerRequestFilter {
     public static final String HEADER = "X-Request-Id";
@@ -465,22 +540,57 @@ public class RequestIdFilter extends OncePerRequestFilter {
 
 ⚠️ **Pitfall:** setting the header *after* `chain.doFilter` may be too late — the response can already be committed. Set it before.
 
+🚪 **Stopping here?** You have `X-Request-Id` stamped on every response, committed. Next: sub-step 5 (`TimingInterceptor` — you'll write this one yourself); first action: create `TimingInterceptor.java` in the `web/` package.
+
 ---
 
-### Sub-step 5 of 6 — `TimingInterceptor` + `WebConfig` 🧭 *(… → **interceptor** → …)*
+### Sub-step 5 of 6 — `TimingInterceptor` + `WebConfig` *(~1.5h)* 🧭 *(… → **interceptor** → …)*
 
 🎯 **Goal:** time each handler and demonstrate the MVC-level interceptor (vs the filter).
 
 📁 **Location:** new files `TimingInterceptor.java` and `WebConfig.java`
 
-⌨️ **Code** (the interceptor + its registration):
+⌨️ **Code — your turn to type it.** You've now seen the pattern twice (the filter in sub-step 4; the hook table in 🌱 Under the Hood). Write the interceptor from this skeleton + spec *before* opening the solution:
+
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/web/TimingInterceptor.java
+package com.buildabank.account.web;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+
 @Component
 public class TimingInterceptor implements HandlerInterceptor {
     private static final Logger log = LoggerFactory.getLogger(TimingInterceptor.class);
     private static final String START_ATTR = "timing.startNanos";
     public static final String HEADER = "X-Timing-Enabled";
 
+    @Override public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler) {
+        // TODO 1 + 2 (see spec)
+    }
+
+    @Override public void afterCompletion(HttpServletRequest req, HttpServletResponse res, Object handler, Exception ex) {
+        // TODO 3 (see spec)
+    }
+}
+```
+
+**The spec:**
+- **preHandle:** store `System.nanoTime()` in a request attribute named `timing.startNanos` — a request attribute, **not** an instance field (shared singleton → a field is a cross-thread race, Step 11).
+- **preHandle:** set the `X-Timing-Enabled: true` response header (before the response can commit) and return `true` to proceed to the handler.
+- **afterCompletion:** if the start attribute is present, log `"{method} {uri} -> {status} in {ms} ms"` — `afterCompletion` always runs, even on exception; don't set headers here (may be committed).
+- **Register it** in a new `WebConfig implements WebMvcConfigurer`, overriding `addInterceptors` — a `@Component` interceptor alone is **never** wired into the chain (unlike filters).
+
+<details>
+<summary>✅ Full solution — compare after you've tried</summary>
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/web/TimingInterceptor.java  (methods)
     @Override public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler) {
         req.setAttribute(START_ATTR, System.nanoTime());   // per-request state in a request attribute (NOT a field)
         res.setHeader(HEADER, "true");                      // set before commit → reliably visible
@@ -492,9 +602,16 @@ public class TimingInterceptor implements HandlerInterceptor {
             log.info("{} {} -> {} in {} ms", req.getMethod(), req.getRequestURI(), res.getStatus(), ms);
         }
     }
-}
 ```
+
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/web/WebConfig.java
+package com.buildabank.account.web;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
     private final TimingInterceptor timingInterceptor;
@@ -505,6 +622,8 @@ public class WebConfig implements WebMvcConfigurer {
 }
 ```
 
+</details>
+
 🔍 **Line-by-line:**
 - `preHandle` runs before the handler; we record the start time **in a request attribute** (request-scoped — thread-safe; an instance field would be a race, Step 11), set the marker header (before commit), and return `true` to proceed.
 - `afterCompletion` always runs (even on exception) — the right place to *observe* (log timing). We don't set a response header here because the response may already be committed for `@ResponseBody`.
@@ -512,7 +631,7 @@ public class WebConfig implements WebMvcConfigurer {
 
 💭 **Under the hood:** the interceptor is part of the `HandlerExecutionChain` the `DispatcherServlet` builds — so it only runs for requests that **matched a handler** (a 404 with no handler skips it; the filter still runs). That's the core filter-vs-interceptor distinction.
 
-▶️ **Run & See** (live transfer, showing both headers):
+▶️ **Run & See** (live transfer, showing both headers). Two prerequisites: the server from sub-step 3 must still be running (if not, restart it with the compose + `spring-boot:run` commands from the cheat card), and `ACC-A`/`ACC-B` must exist — create them first via `steps/step-13/requests.http` (first two requests) or the Swagger-UI flow in 🎮 Play With It.
 ```bash
 curl -s -D - -o /dev/null -X POST localhost:8082/api/transfers \
   -H 'Content-Type: application/json' -d '{"from":"ACC-A","to":"ACC-B","amount":50.00}' \
@@ -523,6 +642,7 @@ curl -s -D - -o /dev/null -X POST localhost:8082/api/transfers \
 X-Request-Id: 23685b7f-2253-48f4-9b08-f5e008dbd212
 X-Timing-Enabled: true
 ```
+Both headers appear even if the transfer itself errors (e.g. missing accounts) — the filter and the interceptor run regardless of the handler's outcome.
 
 ✋ **Checkpoint:** both headers present; the timing log line appears in the service log.
 
@@ -530,39 +650,89 @@ X-Timing-Enabled: true
 
 ⚠️ **Pitfall:** registering nothing — a `HandlerInterceptor @Component` that you forget to add in `addInterceptors` simply never runs. (Filters auto-register; interceptors don't.)
 
+🚪 **Stopping here?** You have both cross-cutting headers live (`X-Request-Id`, `X-Timing-Enabled`), committed. Next: sub-step 6 (tests, 11 → 13); first action: open `TransferControllerTest.java` under `src/test/java/com/buildabank/account/web/`.
+
 ---
 
-### Sub-step 6 of 6 — Tests 🧭 *(… → **tests**)*
+### Sub-step 6 of 6 — Tests *(~1.5h)* 🧭 *(… → **tests**)*
 
 🎯 **Goal:** prove ProblemDetail (slice), and the headers + live OpenAPI/Swagger (integration).
 
 📁 **Location:** `TransferControllerTest.java` (updated) and `DemandAccountIntegrationTest.java` (updated)
 
-⌨️ **Code** (the key new assertions; full files in the repo):
+**The delta, explicitly** (matching the per-class counts in 🔬 Prove §1): `TransferControllerTest` 4 → **5** — two Step-12 tests upgraded to assert the RFC 9457 shape (`overdrawReturns422` → `overdrawReturnsProblemDetail422`, `negativeAmountReturns400` → `negativeAmountReturnsValidationProblemDetail400`) plus one **new** test, `responseCarriesTheCorrelationIdHeader`. `DemandAccountIntegrationTest` 1 → **2** — the existing transfer test gains header + `problem+json` assertions, plus one **new** test, `openApiDocsAndSwaggerUiAreServed`.
+
+⌨️ **Code** (the complete changed/new slice methods — full files in the repo). Two new static imports at the top of `TransferControllerTest`: `MockMvcResultMatchers.content` and `MockMvcResultMatchers.header`:
 ```java
-// slice — overdraw returns a Problem Detail
-.andExpect(status().isUnprocessableEntity())
-.andExpect(content().contentTypeCompatibleWith("application/problem+json"))
-.andExpect(jsonPath("$.title").value("Insufficient funds"))
-.andExpect(jsonPath("$.status").value(422))
-.andExpect(jsonPath("$.type").value("https://buildabank.example/problems/insufficient-funds"));
+// TransferControllerTest.java — @WebMvcTest(TransferController.class) slice: controller + advice + MVC infra,
+// service mocked. These three methods are the Step-13 delta.
 
-// slice — validation Problem Detail with field errors
-.andExpect(status().isBadRequest())
-.andExpect(jsonPath("$.title").value("Validation failed"))
-.andExpect(jsonPath("$.errors.amount").exists());
+    @Test
+    void overdrawReturnsProblemDetail422() throws Exception {          // upgraded from overdrawReturns422
+        given(transfers.transfer(any(), any(), any(), any()))
+                .willThrow(new InsufficientFundsException("balance too low"));
 
-// slice — the filter + interceptor headers
-.andExpect(header().exists("X-Request-Id"))
-.andExpect(header().string("X-Timing-Enabled", "true"));
+        mvc.perform(post("/api/transfers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":9999.00}
+                                """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))   // RFC 9457
+                .andExpect(jsonPath("$.title").value("Insufficient funds"))
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.detail").value("balance too low"))
+                .andExpect(jsonPath("$.type").value("https://buildabank.example/problems/insufficient-funds"));
+    }
+
+    @Test
+    void negativeAmountReturnsValidationProblemDetail400() throws Exception {   // upgraded from negativeAmountReturns400
+        // @Positive on the amount fails Bean Validation before the controller body runs.
+        mvc.perform(post("/api/transfers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":-5.00}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.title").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.amount").exists());   // per-field error attached
+    }
+
+    @Test
+    void responseCarriesTheCorrelationIdHeader() throws Exception {   // NEW
+        UUID txId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        given(transfers.transfer(any(), any(), any(), any())).willReturn(txId);
+
+        mvc.perform(post("/api/transfers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":25.00}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("X-Request-Id"))        // set by RequestIdFilter
+                .andExpect(header().string("X-Timing-Enabled", "true"));   // set by TimingInterceptor.preHandle
+    }
 ```
 ```java
-// integration (real HTTP) — OpenAPI doc + Swagger UI are served
-HttpResponse<String> apiDocs = get("/v3/api-docs");
-assertThat(apiDocs.statusCode()).isEqualTo(200);
-assertThat(apiDocs.body()).contains("Demand Account API").contains("/api/transfers").contains("/api/accounts");
-assertThat(get("/swagger-ui/index.html").statusCode()).isEqualTo(200);
+// DemandAccountIntegrationTest.java — the complete NEW test (real HTTP against the Testcontainers-backed app)
+
+    @Test
+    void openApiDocsAndSwaggerUiAreServed() throws Exception {
+        // springdoc generates the spec from the controllers (Step 13).
+        HttpResponse<String> apiDocs = get("/v3/api-docs");
+        assertThat(apiDocs.statusCode()).isEqualTo(200);
+        assertThat(apiDocs.body())
+                .contains("Demand Account API")     // our OpenApiConfig title
+                .contains("/api/transfers")         // the documented endpoints
+                .contains("/api/accounts");
+
+        // Swagger UI is served (it redirects /swagger-ui.html → /swagger-ui/index.html).
+        HttpResponse<String> swagger = get("/swagger-ui/index.html");
+        assertThat(swagger.statusCode()).isEqualTo(200);
+    }
 ```
+In the *existing* integration transfer test, add the header assertions (`transfer.headers().firstValue("X-Request-Id")` is present, `X-Timing-Enabled` has value `"true"`) and upgrade the overdraft assertion to check `Content-Type` contains `application/problem+json` and the body contains `"title":"Insufficient funds"` + `"status":422`.
 
 🔮 **Predict:** in the slice test, why can we assert the `X-Request-Id`/`X-Timing-Enabled` headers? <details><summary>answer</summary>`@WebMvcTest` loads `Filter` beans and `WebMvcConfigurer`/`HandlerInterceptor`s, so the filter + interceptor run in the slice too.</details>
 
@@ -581,6 +751,10 @@ assertThat(get("/swagger-ui/index.html").statusCode()).isEqualTo(200);
 💾 **Commit:** `git add services/demand-account/src/test && git commit -m "test(demand-account): ProblemDetail, correlation-id/timing headers, live OpenAPI/Swagger"`
 
 ⚠️ **Pitfall:** asserting the old `{"error":...}` shape — the body is now `{type,title,status,detail,...}`. Update the assertions (we did).
+
+💥 **Break it on purpose (~10 min):** prove *your* tests are load-bearing, the §12.3 way. In `GlobalExceptionHandler.handleInsufficientFunds`, change `HttpStatus.UNPROCESSABLE_ENTITY` to `HttpStatus.OK`, then run `./mvnw -pl services/demand-account test -Dtest=TransferControllerTest` — you should see the same failure pasted in 🔬 Prove §5 (`Status expected:<422> but was:<200>`). Revert with `git checkout -- services/demand-account/src/main/java/com/buildabank/account/web/GlobalExceptionHandler.java` and re-run to green.
+
+🚪 **Stopping here?** You have **13 green tests**, committed. Next: 🎮 Play With It, then the 🔬 Prove log and the `step-13-end` tag; first action: run `bash steps/step-13/smoke.sh`.
 
 ---
 
@@ -701,22 +875,24 @@ Fresh `git clone` at `step-13-end` → `make doctor` + `./mvnw verify` → **BUI
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① Content negotiation in depth</summary>
+<summary>① Content negotiation in depth (+~10 min)</summary>
 
 The `Accept` header (and `produces`/`consumes` on mappings) drives which `HttpMessageConverter` runs. Ask for `Accept: application/xml` and — if a Jackson XML converter is on the classpath — you'd get XML from the *same* controller. springdoc documents the produced media types. You can also negotiate by URL suffix or a query param, but header-based is the REST-correct default. Errors negotiate to `application/problem+json`.
 </details>
 
 <details>
-<summary>② Why `OncePerRequestFilter` and filter ordering</summary>
+<summary>② Why `OncePerRequestFilter` and filter ordering (+~10 min)</summary>
 
 A plain `Filter` can run twice on async dispatches/forwards; `OncePerRequestFilter` dedupes. Order matters: a correlation-id filter should run *early* (before logging/auth filters) so everything downstream sees the id. Control order with `@Order`/`FilterRegistrationBean`. Security filters (Step 16) are themselves a filter chain — you'll slot into it.
 </details>
 
 <details>
-<summary>③ Customizing the whole error contract</summary>
+<summary>③ Customizing the whole error contract (+~10 min)</summary>
 
 `ProblemDetail` supports arbitrary extension members (`setProperty`) — add a `traceId` (your `X-Request-Id`!), a machine `code`, or links. For a public API you'd publish the `type` URIs as real docs pages. `ResponseEntityExceptionHandler` has a hook per built-in exception (`handleHttpMessageNotReadable`, `handleNoResourceFound`, …) — override the ones you care about.
 </details>
+
+❓ **Knowledge-check:** the `TimingInterceptor` logs elapsed time in `afterCompletion` instead of writing it as a response header in `postHandle` — why? <details><summary>answer</summary>For `@ResponseBody` handlers the message converter may have already committed the response (headers included) by `postHandle`, so a header set there is unreliable; `afterCompletion` always runs (even on exception), making it the right place to observe/log.</details>
 
 ## 💼 Interview Prep: Questions You'll Be Asked
 
@@ -736,11 +912,11 @@ A plain `Filter` can run twice on async dispatches/forwards; `OncePerRequestFilt
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-1. **Add `traceId` to every Problem Detail.** In the advice, read the `X-Request-Id` (from the request) and `setProperty("traceId", ...)` so errors are correlatable. <details><summary>hint</summary>Inject `HttpServletRequest` into the handler method or read it from `RequestContextHolder`.</details>
-2. **Document an endpoint richly.** Add `@Operation(summary=...)` and `@ApiResponse`s to `transfer` and see them in Swagger UI.
-3. **Apply ProblemDetail to CIF.** Give `services/cif` the same `@RestControllerAdvice` treatment (it currently returns plain 404s). *(Reference: `solutions/step-13/`.)*
-4. **Stretch — a logging filter with body capture.** Use `ContentCachingRequestWrapper`/`ContentCachingResponseWrapper` in a filter to log request/response bodies safely (and discuss the pitfalls of reading a stream twice).
-5. **Stretch — negotiate XML.** Add `jackson-dataformat-xml`, request `Accept: application/xml`, and watch the same controller return XML.
+1. **Add `traceId` to every Problem Detail** *(+~20 min)*. In the advice, read the `X-Request-Id` (from the request) and `setProperty("traceId", ...)` so errors are correlatable. <details><summary>hint</summary>Inject `HttpServletRequest` into the handler method or read it from `RequestContextHolder`.</details>
+2. **Document an endpoint richly** *(+~15 min)*. Add `@Operation(summary=...)` and `@ApiResponse`s to `transfer` and see them in Swagger UI.
+3. **Apply ProblemDetail to CIF** *(+~45 min)*. Give `services/cif` the same `@RestControllerAdvice` treatment (it currently returns plain 404s). *(Reference: `solutions/step-13/`.)*
+4. **Stretch — a logging filter with body capture** *(+~60 min)*. Use `ContentCachingRequestWrapper`/`ContentCachingResponseWrapper` in a filter to log request/response bodies safely (and discuss the pitfalls of reading a stream twice).
+5. **Stretch — negotiate XML** *(+~30 min)*. Add `jackson-dataformat-xml`, request `Accept: application/xml`, and watch the same controller return XML.
 
 ---
 

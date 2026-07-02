@@ -16,6 +16,9 @@
 > [!CAUTION]
 > Build-a-Bank exists **only to teach engineering**. It **never** handles real money, real customers, or real personal data, and it is **not security-audited for production banking**. Money is modelled as a simplified double-entry ledger; KYC is mocked; all data is **synthetic**. The security and ML material is taught as *learning*, not as a compliance or accuracy guarantee. **Never put real secrets, real money, or real personal data anywhere in this repo.**
 
+> [!NOTE]
+> **Authoring status:** the course is fully built and verified through **Step 30** (Step 31 in progress); **Steps 32–67 are the planned curriculum, not yet authored**. Live state: [PROGRESS.md](PROGRESS.md).
+
 ---
 
 ## 📑 Table of Contents
@@ -35,6 +38,7 @@
 - [Guardrails](#-guardrails)
 - [Repository layout](#-repository-layout)
 - [Where to go next](#-where-to-go-next)
+- [For AI Agents & Maintainers](#-for-ai-agents--maintainers)
 
 ---
 
@@ -187,7 +191,7 @@ Milestones are **by step, not date** — celebrations along the journey, not gat
 - **Cloud alternative for weak laptops:** a cloud dev environment (GitHub Codespaces / Gitpod / a small cloud VM) — with the same **cost/teardown discipline** as the [Guardrails](#-guardrails).
 
 > [!WARNING]
-> **No local Kubernetes cluster is required to start.** On this reference machine there is no `kind`/`minikube` and Docker Desktop's k8s is off, so Kubernetes is **verify-adjacent** (we `helm lint`/`template` and `kubectl --dry-run`). When you reach Phase G, install a single-node cluster on your own machine (`choco install kind` on Windows, or your platform's package manager). See [CAPABILITIES.md](CAPABILITIES.md).
+> **No local Kubernetes cluster is required to start.** Kubernetes only arrives in Phase G — on the reference machine `kind` v0.32.0 is installed, so a real single-node cluster (`kind create cluster`) is available there. The lessons also teach the cluster-less verify path (`helm lint`/`template`, `kubectl --dry-run`) so nobody is blocked. When you reach Phase G, install `kind` on your own machine (`choco install kind` on Windows, or your platform's package manager). See [CAPABILITIES.md](CAPABILITIES.md).
 
 ---
 
@@ -198,7 +202,7 @@ Milestones are **by step, not date** — celebrations along the journey, not gat
 
 - **IntelliJ IDEA is *recommended* (and taught) but fully optional** because its Java/Spring tooling genuinely saves time. Skip it and you lose only convenience.
 - **If you use IntelliJ: Community Edition is plenty; Ultimate is optional** (and free for students / via the EAP). Every Ultimate-only convenience has a Community/CLI fallback the course ships: HTTP Client → Bruno/Postman/`curl`; DB tool → `psql`/DBeaver; Docker/k8s UI → the CLIs taught anyway.
-- Every IntelliJ tip appears as an optional **"💡 Faster in IntelliJ"** aside **after** the editor-neutral instructions — never as the only way to finish a step. The optional IDE thread is consolidated in `concepts/intellij-idea.md` as the course grows.
+- Every IntelliJ tip appears as an optional **"💡 Faster in IntelliJ"** aside **after** the editor-neutral instructions — never as the only way to finish a step. (A consolidated IDE guide, `concepts/intellij-idea.md`, is planned but not yet created — tracked in [docs/ai/CONTRACT-DEBT.md](docs/ai/CONTRACT-DEBT.md); today the 💡 asides live inline in each lesson.)
 
 ---
 
@@ -293,16 +297,18 @@ steps/step-01/lesson.md
 
 ## 📁 Repository layout
 
+This is the **target layout at course completion** — directories appear as their phases are built (today: Steps 1–30 built and verified, Step 31 in progress; `concepts/`, `ml/`, `infra/`, `k8s/` etc. arrive with their phases).
+
 ```
 build-a-bank/
 ├── README.md  COURSE.md                          # this page · the 67-step index + progress/skill-tree
 ├── PROGRESS.md  CAPABILITIES.md  VERSIONS.md      # resume state · sandbox capability matrix · pinned versions
 ├── pom.xml  mvnw  mvnw.cmd  .mvn/  .tool-versions # parent POM/BOM, Maven Wrapper, pinned JDK
-├── Makefile                                       # doctor, verify, build, test, run-hello, play-01, clean
+├── Makefile                                       # 40+ documented targets (`make help`): doctor, verify, run-*, play-NN, …
 ├── .run/  .editorconfig  .gitignore  .env.example # IntelliJ run configs · shared formatting · secrets scaffolding
 ├── docs/  concepts/  images/  adr/                # deep-dives · diagrams · ADRs · docs/flashcards.md (cumulative)
-├── steps/step-01../step-67/                       # per step: lesson.md + requests.http + Bruno/Postman + smoke.sh
-├── solutions/step-01../step-67/                   # reference solutions for the 🏋️ stretch goals
+├── steps/step-01../step-67/                       # per step: lesson.md (+ requests.http / smoke.sh where the step needs them)
+├── solutions/                                     # stretch-goal answers are inline in lessons (<details>); reference folders tracked in docs/ai/CONTRACT-DEBT.md
 ├── services/                                      # each = a Spring Boot Maven module
 │   ├── hello/                                     #   the Step-1 toolchain-proof sandbox
 │   └── cif/ demand-account/ retail/ market-info/ payments/ batch/ auth/ notification/ fraud/ assistant/
@@ -326,6 +332,17 @@ Per-step starting and ending points are **git branches/tags** (`step-01-start`, 
 | Check the **pinned versions** | **[VERSIONS.md](VERSIONS.md)** |
 | See **what this sandbox can run** | **[CAPABILITIES.md](CAPABILITIES.md)** |
 | Resume after a break | **[PROGRESS.md](PROGRESS.md)** |
+
+---
+
+## 🤖 For AI Agents & Maintainers
+
+This repo is **AI-operated, one step at a time**. Agents start at **[CLAUDE.md](CLAUDE.md)**, which routes into **`docs/ai/`**:
+
+- **[LESSON-SPEC.md](docs/ai/LESSON-SPEC.md)** — the lesson authoring contract · **[CONTEXT-PLAYBOOK.md](docs/ai/CONTEXT-PLAYBOOK.md)** — the minimal-context recipe · **[LESSON-CHECKLIST.md](docs/ai/LESSON-CHECKLIST.md)** — the QA gate
+- **[PROJECT-MAP.md](docs/ai/PROJECT-MAP.md)** — repo facts · **[VERIFICATION-LEDGER.md](docs/ai/VERIFICATION-LEDGER.md)** — per-tag verification history · **[CONTRACT-DEBT.md](docs/ai/CONTRACT-DEBT.md)** — skipped artifacts
+- **Humans operating the loop** read **[docs/GUIDE-FOR-HUMANS.md](docs/GUIDE-FOR-HUMANS.md)**.
+- The master prompt **[build-a-bank-claude-code-prompt.md](build-a-bank-claude-code-prompt.md)** remains the canonical kickoff spec.
 
 ---
 

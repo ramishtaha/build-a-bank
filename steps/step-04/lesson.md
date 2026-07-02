@@ -13,12 +13,12 @@
 
 A one-line map of where we're going. Click to jump.
 
-1. **[A · 🧭 Orient](#orient)** — what the JVM really is, why every backend engineer must know it cold, and whether you can skip.
-2. **[B · 🧠 Understand](#understand)** — source → bytecode → classloading → interpret → JIT → GC; the runtime data areas; the execution engine; and how it all changed across Java versions.
-3. **[C · 🛠️ Build](#build)** — the heart: add the `jvm` package — `BytecodeSample` (disassemble it with `javap -c`) and `AllocationDemo` (watch GC, JIT, JFR, and the escape-analysis *surprise*) — tested by `JvmLabTest`.
-4. **[D · 🔬 Prove](#prove)** — the Verification Log with the real, pasted `verify`, `javap`, `-Xlog:gc`, `+PrintCompilation`, JFR, and classloading output.
-5. **[E · 🎓 Apply](#apply)** — go-deeper, interview prep, and your-turn exercises.
-6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, and the recap/study notes.
+1. **[A · 🧭 Orient](#orient)** — what the JVM really is, why every backend engineer must know it cold, and whether you can skip. *(~1h)*
+2. **[B · 🧠 Understand](#understand)** — source → bytecode → classloading → interpret → JIT → GC; the runtime data areas; the execution engine; and how it all changed across Java versions. *(~3h)*
+3. **[C · 🛠️ Build](#build)** — the heart: add the `jvm` package — `BytecodeSample` (disassemble it with `javap -c`) and `AllocationDemo` (watch GC, JIT, JFR, and the escape-analysis *surprise*) — tested by `JvmLabTest`. *(~8h hands-on)*
+4. **[D · 🔬 Prove](#prove)** — the Verification Log with the real, pasted `verify`, `javap`, `-Xlog:gc`, `+PrintCompilation`, JFR, and classloading output. *(~30 min read)*
+5. **[E · 🎓 Apply](#apply)** — go-deeper, interview prep, and your-turn exercises. *(~2–3h; stretch exercises extra)*
+6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, and the recap/study notes. *(~1h)*
 
 ---
 
@@ -131,6 +131,22 @@ java -version          # expect: openjdk/Java 25.0.x
 
 > **Depends on:** **Steps 1–2** (toolchain + the compiled `java-basics` classes). Forward references: **Step 11** (concurrency / the Java Memory Model — the *threading* side of the runtime data areas), **Step 55** (performance & GC tuning — G1 vs ZGC, JMH, JFR/async-profiler in depth).
 
+## 🗓️ Session Plan
+
+15–20 hours won't happen in one sitting — and shouldn't. Here's the step cut into **seven ~2–2.5h sittings**, each ending at a real save point. Stop at a boundary, not mid-experiment.
+
+| Sitting | Covers | ~Time | Ends at (save point) |
+|---|---|---|---|
+| **S1 — The map** | A · Orient + Understand §§1–3 (Big Idea, `javac`, the launcher, classloaders) | ~2h | end of Understand §3 — you can draw the delegation chain |
+| **S2 — The engine room** | Understand §§4–6 (data areas, JIT tiers, GC) + Security Lens + Then vs. Now | ~2h | end of movement B — pipeline diagram from memory |
+| **S3 — First code** | Build sub-steps 1–2 (`BytecodeSample` + `AllocationDemo`) | ~2.5h | both classes committed; the demo prints its checksum line |
+| **S4 — The surprise** | Sub-step 3: GC watching + the escape-analysis experiment | ~2h | escape surprise seen; `ring[...]` line restored; `git status` clean |
+| **S5 — JIT & JFR** | Sub-steps 4–5 (`-XX:+PrintCompilation`, Flight Recorder) | ~2h | `jfr summary` read; nothing to commit |
+| **S6 — Lock it green** | Sub-steps 6–7 (classloading + `JvmLabTest`) + D · Prove | ~2.5h | **`step-04-end` tagged**, 22 tests green |
+| **S7 — Make it stick** | E · Apply (go-deeper, interview prep, quick exercises) + F · Review | ~2h | flashcards appended; recap done |
+
+**Optional routes:** the ⏭️ 5-minute skip-test above can send you straight to Step 5; each 🚀 Go Deeper aside is ~5 min; each 🔬 optional experiment is +5–10 min; the three Stretch exercises are ~45–90 min each (a fine eighth sitting).
+
 ---
 
 <a id="understand"></a>
@@ -173,11 +189,23 @@ No magic. Let's open every box in that pipeline.
 
 `javac` is a *compiler*, but it does **not** produce machine code. It produces **bytecode**: a stream of one-byte **opcodes** (plus operands) for a stack-based virtual machine, packaged into a `.class` file along with a **constant pool** (the class's strings, method/field references, and type names). Bytecode is the JVM's portable contract: the *same* `.class` runs unchanged on Windows/x64, macOS/ARM, or Linux — because it targets the *abstract* JVM, not a real CPU.
 
+Here's what that looks like — the *entire* compiled `add(int, int)` method, which you'll produce yourself with `javap -c` in sub-step 1:
+
+```text
+0: iload_0
+1: iload_1
+2: iadd
+3: ireturn
+```
+
 The JVM is a **stack machine**: instead of named registers, instructions push and pop operands on a per-method **operand stack**. You'll *see* this in the build: `iload_0` pushes argument 0, `iload_1` pushes argument 1, `iadd` pops both and pushes their sum, `ireturn` pops and returns it. (The `i` prefix = `int`; `l` = `long`; `a` = reference.) Reading bytecode is the single best way to understand what your Java *actually* does — and to debug surprises (autoboxing, string concatenation, hidden `synchronized`, the cost of a lambda).
 
 ### 2. The `java` launcher
 
-`java` is the launcher that **starts a JVM process**, bootstraps the core libraries, creates the **main thread**, loads your main class, verifies its bytecode, and invokes `main(String[])`. Everything else — loading more classes, interpreting, JIT-compiling, allocating, collecting garbage — happens lazily, *on demand*, as your program runs. (A `.jar` is just a ZIP of `.class` files plus a `META-INF/MANIFEST.MF`; `java -jar app.jar` reads the manifest's `Main-Class` and launches that.)
+`java` is the launcher that **starts a JVM process**, bootstraps the core libraries, creates the **main thread**, loads your main class, verifies its bytecode, and invokes `main(String[])`. Everything else — loading more classes, interpreting, JIT-compiling, allocating, collecting garbage — happens lazily, *on demand*, as your program runs. And a `.jar` is nothing exotic:
+
+- a **`.jar`** = a ZIP of `.class` files + a `META-INF/MANIFEST.MF`;
+- **`java -jar app.jar`** = read the manifest's `Main-Class`, then launch it exactly as above.
 
 ### 3. The classloader subsystem (a delegation hierarchy)
 
@@ -195,6 +223,8 @@ flowchart TB
 *Alt-text: the classloader delegation model. A request to load a class enters at the application classloader, which first delegates up to the platform classloader, which delegates up to the bootstrap classloader. The bootstrap loader (core `java.*` classes) gets first refusal; only if a parent can't find the class does the child try to load it. This top-down delegation guarantees core classes can't be impersonated.*
 
 The **delegation model** is a security and consistency mechanism: because the bootstrap loader always gets first refusal, **no application JAR can replace `java.lang.String`** with a counterfeit — the real one is loaded by the trusted bootstrap loader before yours is ever consulted. (You'll see this exact ordering and the source of each class in the build's classloading sub-step.) Many `java.*` classes load from the **CDS archive** ("shared objects file") — *Class Data Sharing*, a pre-parsed, memory-mappable snapshot of common core classes that speeds startup and shares memory across JVMs.
+
+❓ **Knowledge-check:** in the delegation model, which classloader gets *first refusal* when your code references `java.lang.String` — and what security guarantee does that ordering give you? <details><summary>answer</summary>The **bootstrap** loader: every load request delegates *parent-first* (application → platform → bootstrap), so the trusted bootstrap loader always answers first for core `java.*` classes. That means **no JAR on your classpath can ever substitute a counterfeit `java.lang.String`** — the delegation model is a trust boundary.</details>
 
 ### 4. Runtime data areas (where everything lives)
 
@@ -310,6 +340,9 @@ You're at **`step-04-start`** (== `step-03-end`). The `playground/java-basics` m
 
 ## 🛠️ Let's Build It — Step by Step
 
+> [!IMPORTANT]
+> **Windows learners:** run every command in this step from **Git Bash** (installed with Git in Step 1) — the `CP=...`/`"$CP"`/`grep` syntax below is bash, and PowerShell will choke on it. If you must use PowerShell: `$CP='playground/java-basics/target/classes'`, pass `-cp $CP`, and swap `| grep X` → `| Select-String X`, `| grep -c X` → `(... | Select-String X).Count`.
+
 ### 🗺️ What we're about to build
 
 ```mermaid
@@ -345,7 +378,7 @@ We'll go in seven sub-steps: **(1)** write & disassemble `BytecodeSample`, **(2)
 
 ---
 
-### Sub-step 1 of 7 — Write `BytecodeSample` and read its bytecode 🧭 *(you are here: **bytecode** → allocation demo → GC → JIT → JFR → classloading → test)*
+### Sub-step 1 of 7 — Write `BytecodeSample` and read its bytecode (~1.5h) 🧭 *(you are here: **bytecode** → allocation demo → GC → JIT → JFR → classloading → test)*
 
 🎯 **Goal:** create the smallest possible class whose compiled bytecode is easy to read, then disassemble it with `javap -c` to see the *real* instructions the JVM executes — the gap between the Java you write and what actually runs.
 
@@ -412,6 +445,16 @@ javap -c -p -cp playground/java-basics/target/classes com.buildabank.basics.jvm.
 
 `javap` = the JDK's **class file disassembler**. `-c` = print the **bytecode** of each method; `-p` = include `private` members (so we see the private constructor); `-cp` = where to find the class.
 
+A dozen opcodes are about to land at once — this 5-row legend decodes *all* of them. (And remember from Understand: bytecode pushes/pops an **operand stack**; there are no registers.)
+
+| Pattern | Means |
+|---|---|
+| prefix `i` / `l` / `a` | operates on `int` / `long` / reference |
+| `…load` / `…store` | push a local variable onto the stack / pop into a local |
+| `…const` | push a constant |
+| `if_…` / `goto` | branch (conditionally / unconditionally) |
+| `iinc` | increment an `int` local in place (no stack) |
+
 ✅ **Expected output** (the real, captured disassembly):
 
 ```
@@ -456,6 +499,8 @@ You just saw a `for` loop become **compare-branch-body-increment-goto** — exac
 
 ✋ **Checkpoint:** you can see both methods' `Code:` blocks, and you can point to the loop's `goto` and `if_icmpgt`. If `javap` printed only the method *signatures* with no `Code:`, you forgot `-c`.
 
+🔖 **Stopping here?** Make the 💾 commit below first — then you have `BytecodeSample` committed and disassembled. Next: sub-step 2 (`AllocationDemo`); first action: create `playground/java-basics/src/main/java/com/buildabank/basics/jvm/AllocationDemo.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -467,7 +512,7 @@ git commit -m "feat(playground): add BytecodeSample for reading JVM bytecode wit
 
 ---
 
-### Sub-step 2 of 7 — Write `AllocationDemo` (the GC/JIT/JFR target) 🧭 *(bytecode ✅ → **allocation demo** → GC → JIT → JFR → classloading → test)*
+### Sub-step 2 of 7 — Write `AllocationDemo` (the GC/JIT/JFR target) (~1h) 🧭 *(bytecode ✅ → **allocation demo** → GC → JIT → JFR → classloading → test)*
 
 🎯 **Goal:** create a program that allocates a lot of short-lived garbage in a hot loop, so that the garbage collector, the JIT, and Flight Recorder all become *observable* when we run it with diagnostic flags.
 
@@ -559,6 +604,8 @@ The point isn't the number yet — it's that the program runs and prints a check
 
 ✋ **Checkpoint:** the program compiles and prints an `Allocated 5,000,000 blocks …` line. If you get `ClassNotFoundException`, you didn't compile, or the `-cp` path is wrong.
 
+🔖 **Stopping here?** After the 💾 commit below you have both lab classes committed (end of sitting S3). Next: sub-step 3 (watch GC + the escape surprise); first action: run `java -Xmx64m -Xlog:gc -cp playground/java-basics/target/classes com.buildabank.basics.jvm.AllocationDemo 5000000`.
+
 💾 **Commit:**
 
 ```bash
@@ -570,7 +617,7 @@ git commit -m "feat(playground): add AllocationDemo as a GC/JIT/JFR observation 
 
 ---
 
-### Sub-step 3 of 7 — Watch garbage collection (and meet escape analysis) 🧭 *(bytecode ✅ → demo ✅ → **GC** → JIT → JFR → classloading → test)*
+### Sub-step 3 of 7 — Watch garbage collection (and meet escape analysis) (~2h incl. the escape experiment) 🧭 *(bytecode ✅ → demo ✅ → **GC** → JIT → JFR → classloading → test)*
 
 🎯 **Goal:** run `AllocationDemo` under a **small heap** with **GC logging** and watch real young-generation collections happen — then discover the headline surprise: *the version without the ring buffer produces **no GC at all**, because escape analysis erases the allocation.*
 
@@ -603,6 +650,8 @@ java -Xmx64m -Xlog:gc -cp "$CP" com.buildabank.basics.jvm.AllocationDemo 5000000
 [0.070s][info][gc] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 38M->1M(64M) 0.933ms
 [0.076s][info][gc] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 38M->1M(64M) 0.786ms
 ```
+
+*(First 5 pauses shown — a full 5M-iteration run continues with ~15+ more similar `Pause Young` lines and ends with the program's own `Allocated 5,000,000 blocks …` line. Seeing more than 5 is normal.)*
 
 **Read a line with me:** `GC(2) Pause Young (Normal) (G1 Evacuation Pause) 37M->1M(64M) 1.043ms` =
 
@@ -648,7 +697,7 @@ This is one of the most important performance lessons in the whole JVM: **the fa
 > [!IMPORTANT]
 > Restore the `ring[...] = block;` line before continuing. The committed `AllocationDemo` *keeps* the ring buffer so that GC, JIT, and JFR are all observable for the rest of the step (and so the smoke test behaves as documented).
 
-#### 🔬 Second experiment: shrink the heap → more frequent GC
+#### 🔬 Second experiment: shrink the heap → more frequent GC (+~10 min)
 
 With the ring buffer restored, try an even smaller heap and watch GCs get *more frequent* (less Eden to fill before each collection):
 
@@ -660,13 +709,15 @@ Then try a *bigger* heap — `-Xmx512m` — and watch them get rarer or vanish (
 
 ✋ **Checkpoint:** you've seen (a) real `G1 Evacuation Pause` lines with the ring buffer, (b) **zero** GC when the block can't escape, and (c) GC frequency change with `-Xmx`. If you *never* saw GC pauses even *with* the ring buffer, double-check you restored the `ring[...] = block;` line and recompiled.
 
+🔖 **Stopping here?** You have the escape lesson done, the `ring[...] = block;` line restored, and `git status` clean (end of sitting S4). Next: sub-step 4 (watch the JIT); first action: run `java -XX:+PrintCompilation -cp "$CP" com.buildabank.basics.jvm.AllocationDemo 5000000`.
+
 💾 **Commit:** *(nothing to commit — the file is unchanged from sub-step 2; this was observation. Just confirm `git status` is clean for `AllocationDemo.java`.)*
 
 ⚠️ **Pitfall:** don't conclude "escape analysis means I never need to worry about allocation." It's powerful but *conservative* — it only fires when it can *prove* non-escape, which complex code often defeats (storing in a field, returning the object, passing it to a non-inlined method). Real services allocate plenty; that's why GC tuning (Step 55) matters.
 
 ---
 
-### Sub-step 4 of 7 — Watch the JIT compile the hot method 🧭 *(bytecode ✅ → demo ✅ → GC ✅ → **JIT** → JFR → classloading → test)*
+### Sub-step 4 of 7 — Watch the JIT compile the hot method (~1h) 🧭 *(bytecode ✅ → demo ✅ → GC ✅ → **JIT** → JFR → classloading → test)*
 
 🎯 **Goal:** watch the just-in-time compiler promote `AllocationDemo.run` from interpreted, to C1 (level 3), to C2 (level 4), see an **OSR** compilation (`%`), and even a **deoptimization** ("made not entrant").
 
@@ -704,7 +755,9 @@ java -XX:+PrintCompilation -cp "$CP" com.buildabank.basics.jvm.AllocationDemo 50
 
 You just watched a method climb the tiers (interpreter → C1 → C2), get OSR-compiled *inside a running loop*, and get *deoptimized* — the entire adaptive-optimization story in five lines.
 
-#### 🔬 Optional experiment: turn off tiered compilation
+❓ **Knowledge-check:** `run` is called exactly **once** — so why does the JVM need OSR (the `%` lines) to compile it at all? <details><summary>answer</summary>Normally a method is swapped to compiled code on its *next call* — but `run` is never re-entered; only its **loop** runs millions of times. The **back-edge counter** trips mid-loop, and **On-Stack Replacement** compiles the method and swaps it onto the stack *while the loop is still running* (at the loop's bytecode index, `@ 4`).</details>
+
+#### 🔬 Optional experiment: turn off tiered compilation (+~10 min)
 
 Force everything straight to C2 and watch the `% 3` (C1) lines disappear:
 
@@ -716,13 +769,15 @@ Or watch a *cold* program never reach C2 at all by running with very few iterati
 
 ✋ **Checkpoint:** you can find at least one `% 3` (C1 OSR) and one `% 4` (C2 OSR) line for `…AllocationDemo::run`, and you can explain what "made not entrant" means. (The exact ids/timestamps differ every run — JIT timing is nondeterministic. The *pattern* is what matters.)
 
+🔖 **Stopping here?** You have GC + JIT observation done; nothing to commit. Next: sub-step 5 (JFR); first action: run `java -XX:StartFlightRecording=filename=alloc.jfr -cp "$CP" com.buildabank.basics.jvm.AllocationDemo 5000000`.
+
 💾 **Commit:** *(observation only — nothing to commit.)*
 
 ⚠️ **Pitfall:** `-XX:+PrintCompilation` output is **nondeterministic** — ids, timestamps, and even *which* methods appear vary run-to-run because compilation races with execution. Don't assert on exact lines; read the *shape*. (This is also why micro-benchmarking by hand is a trap — you'll use **JMH** properly in Step 55 to handle warm-up.)
 
 ---
 
-### Sub-step 5 of 7 — Record and summarize a JFR profile 🧭 *(bytecode ✅ → demo ✅ → GC ✅ → JIT ✅ → **JFR** → classloading → test)*
+### Sub-step 5 of 7 — Record and summarize a JFR profile (~1h) 🧭 *(bytecode ✅ → demo ✅ → GC ✅ → JIT ✅ → **JFR** → classloading → test)*
 
 🎯 **Goal:** capture a **Java Flight Recorder** profile of the run — a low-overhead, always-on flight data recorder for the JVM — then summarize it with the `jfr` CLI to see allocation, GC, and execution events.
 
@@ -759,6 +814,8 @@ jfr summary alloc.jfr
  jdk.GarbageCollection                       4            92
 ```
 
+*(Excerpt — the full table lists dozens of `jdk.*` event types; these four are the ones to find.)*
+
 **Read it with me:**
 
 - `jdk.ObjectAllocationSample` (30) — **sampled** allocations (JFR samples, it doesn't record every single `new` — that would be too much). The top count, as predicted: this is an allocation-heavy program.
@@ -768,7 +825,7 @@ jfr summary alloc.jfr
 
 The startup line notes JFR defaulted to a 250 MB max recording size since we didn't specify one. You now have a `.jfr` file you could open in **JDK Mission Control** for flame graphs — or feed to `jfr print --events jdk.GarbageCollection alloc.jfr` to see each GC's details.
 
-#### 🔬 Optional experiment: see individual GC events
+#### 🔬 Optional experiment: see individual GC events (+~5 min)
 
 ```bash
 jfr print --events jdk.GarbageCollection alloc.jfr | head -40   # one record per collection, with timings
@@ -776,13 +833,15 @@ jfr print --events jdk.GarbageCollection alloc.jfr | head -40   # one record per
 
 ✋ **Checkpoint:** `jfr summary alloc.jfr` prints the event table, and `jdk.ObjectAllocationSample` / `jdk.GarbageCollection` appear. If `alloc.jfr` doesn't exist, the recording flag was mistyped (it's `-XX:StartFlightRecording=filename=...`, note the `=` and no space).
 
+🔖 **Stopping here?** You have a summarized `alloc.jfr` (then delete it — it's a build artifact) and nothing to commit (end of sitting S5). Next: sub-step 6 (classloading); first action: run `java -Xlog:class+load=info -cp "$CP" com.buildabank.basics.jvm.AllocationDemo 1000`.
+
 💾 **Commit:** *(observation only. Don't commit `alloc.jfr` — recordings are build artifacts; ensure it's git-ignored or just `rm alloc.jfr` when done.)*
 
 ⚠️ **Pitfall:** JFR **samples**, so counts are not exact totals — `30` allocation *samples* doesn't mean 30 allocations (we did 5 million). For exact allocation accounting you'd raise the sampling rate or use a dedicated profiler; for finding *where* time/allocation goes, sampling is exactly right.
 
 ---
 
-### Sub-step 6 of 7 — Inspect classloading 🧭 *(bytecode ✅ → demo ✅ → GC ✅ → JIT ✅ → JFR ✅ → **classloading** → test)*
+### Sub-step 6 of 7 — Inspect classloading (~45 min) 🧭 *(bytecode ✅ → demo ✅ → GC ✅ → JIT ✅ → JFR ✅ → **classloading** → test)*
 
 🎯 **Goal:** see the **classloader subsystem** at work — which classes the launcher loads to run even a tiny program, and *from where* (the JDK runtime image / **CDS** "shared objects file" vs. your compiled output).
 
@@ -816,7 +875,7 @@ java -Xlog:class+load=info -cp "$CP" com.buildabank.basics.jvm.AllocationDemo 10
 
 This is the **delegation model made visible**: the core `java.*` types come from the trusted, shared archive (the bootstrap loader's domain), and only *your* classes load from *your* classpath. The full run loaded **~826 classes** to execute this tiny program — a vivid reminder of how much runtime stands behind even `new byte[128]`, and why CDS (loading them pre-parsed) matters for startup.
 
-#### 🔬 Optional experiment: count them
+#### 🔬 Optional experiment: count them (+~5 min)
 
 ```bash
 java -Xlog:class+load=info -cp "$CP" com.buildabank.basics.jvm.AllocationDemo 1000 | grep -c 'class,load'   # ~826 on this setup
@@ -824,19 +883,21 @@ java -Xlog:class+load=info -cp "$CP" com.buildabank.basics.jvm.AllocationDemo 10
 
 ✋ **Checkpoint:** you can see lines with `source: shared objects file` (CDS / bootstrap-loaded core classes) and a line for `AllocationDemo` with `source: file:.../target/classes/` (your app classloader). You can explain *why* `String` comes from a different source than `AllocationDemo`.
 
+🔖 **Stopping here?** All five observations are done; only the test remains. Next: sub-step 7 (`JvmLabTest`); first action: create `playground/java-basics/src/test/java/com/buildabank/basics/jvm/JvmLabTest.java`.
+
 💾 **Commit:** *(observation only.)*
 
 ⚠️ **Pitfall:** the `source:` path for *your* class is machine-specific (it contains your working directory). When sharing logs, **generalize the path** (as we did: `.../build-a-bank/...`) — never paste your home directory into docs or issues. The *interesting* sources are `shared objects file` (CDS) and `jrt:` (runtime image), not your local path.
 
 ---
 
-### Sub-step 7 of 7 — Lock the lab green with `JvmLabTest` 🧭 *(bytecode ✅ → demo ✅ → GC ✅ → JIT ✅ → JFR ✅ → classloading ✅ → **test**)*
+### Sub-step 7 of 7 — Lock the lab green with `JvmLabTest` (~1h) 🧭 *(bytecode ✅ → demo ✅ → GC ✅ → JIT ✅ → JFR ✅ → classloading ✅ → **test**)*
 
 🎯 **Goal:** prove both programs are *correct* (not just good observation targets) with a JUnit test, and gate `step-04-end` on a green build.
 
 📁 **Location:** new file → `playground/java-basics/src/test/java/com/buildabank/basics/jvm/JvmLabTest.java`
 
-⌨️ **Code:**
+⌨️ **Code — your turn this time.** You've pasted AssertJ/JUnit tests twice already (Steps 2–3), so the scaffolding fades: the skeleton and the first test are given; you write the second. Start from this:
 
 ```java
 // playground/java-basics/src/test/java/com/buildabank/basics/jvm/JvmLabTest.java
@@ -855,13 +916,23 @@ class JvmLabTest {
         assertThat(BytecodeSample.sumTo(100)).isEqualTo(5050L);
     }
 
+    // TODO(you): add the second test here — see the instruction below.
+}
+```
+
+**Now write `allocationChecksumIsDeterministic` yourself:** a `@Test` that calls `AllocationDemo.run(256)` and asserts it `isEqualTo(32640L)` — with a comment that *proves* the math (sum of `(i & 0xFF)` for `i` in `[0, 256)` = `0+1+…+255 = 32640`).
+
+<details>
+<summary>Stuck? Full listing</summary>
+
+```java
     @Test
     void allocationChecksumIsDeterministic() {
         // sum of (i & 0xFF) for i in [0,256) = 0+1+...+255 = 32640.
         assertThat(AllocationDemo.run(256)).isEqualTo(32640L);
     }
-}
 ```
+</details>
 
 🔍 **Line-by-line:**
 
@@ -892,7 +963,7 @@ class JvmLabTest {
 
 *Predicted 22? The 20 from before + our 2 = 22.*
 
-#### 🔬 Break-it-on-purpose (prove the test tests something)
+#### 🔬 Break-it-on-purpose (prove the test tests something) (+~5 min)
 
 Temporarily change the demo's checksum and watch the test catch it:
 
@@ -904,6 +975,8 @@ Temporarily change the demo's checksum and watch the test catch it:
 Rerun `./mvnw -pl playground/java-basics -am test` → you'll see `JvmLabTest.allocationChecksumIsDeterministic` **FAIL** (expected `32640` but got `32896`), and `BUILD FAILURE`. **Revert the `+ 1`**, rerun, and it's green again. That red→green is your proof the test actually constrains the code.
 
 ✋ **Checkpoint:** `BUILD SUCCESS`, `Tests run: 22, Failures: 0`, and you can see `JvmLabTest` ran 2 tests. That's `step-04-end`.
+
+🔖 **Stopping here?** After the 💾 commit + tag below you are at `step-04-end`: 22 tests green (end of sitting S6). Next: skim D · Prove to diff your outputs against the captured log, then E · Apply; first action: scroll to the Verification Log below.
 
 💾 **Commit & tag:**
 
@@ -961,6 +1034,8 @@ No HTTP, no Swagger, no `requests.http` this step — and that's honest: there's
 - **Shrink `-Xmx` (64m → 32m → 16m)** → GC pauses get **more frequent**. Push it too far (`-Xmx8m`) → `OutOfMemoryError: Java heap space` (the ring buffer + overhead won't fit).
 - **`-XX:-TieredCompilation`** → the `% 3` (C1) lines disappear; only C2 compiles.
 - **Run with `1000` vs `5000000` iterations** → the cold run never gets hot enough to JIT-compile `run` to C2.
+
+❓ **Knowledge-check:** two lines in `run()` exist purely to defeat two *different* JIT optimizations — which line defeats which? <details><summary>answer</summary>`checksum += block[0] & 0xFF` **uses** the value, defeating **dead-code elimination** (an unused result lets the JIT delete the whole loop body). `ring[i & 1023] = block` makes the block **escape** the iteration, defeating **escape analysis / scalar replacement** (a non-escaping array would never be heap-allocated at all — and GC would vanish).</details>
 
 > [!TIP]
 > Pipe the noisy outputs through a filter to focus: `... -XX:+PrintCompilation ... | grep AllocationDemo` to see only *your* method's JIT activity, or `... -Xlog:class+load=info ... | grep -c class,load` to count classes.
@@ -1110,19 +1185,19 @@ public final class com.buildabank.basics.jvm.BytecodeSample {
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>How does HotSpot actually decide a method is "hot"?</summary>
+<summary>How does HotSpot actually decide a method is "hot"? (+~5 min)</summary>
 
 Each method has **invocation counters** and each loop has **back-edge counters**. When a counter crosses a threshold (e.g. `-XX:CompileThreshold`, and tier-specific thresholds under tiered compilation), the method is queued for compilation by a background **compiler thread** — so compilation doesn't block your code. A method called once but whose *loop* spins millions of times trips the **back-edge** counter, triggering **OSR** (compile-and-swap mid-loop) — exactly what we saw with `AllocationDemo::run @ 4`. The counters can *decay* over time so a once-hot-now-cold method doesn't stay compiled forever. This adaptive, profile-guided approach is why the JVM often *beats* naive ahead-of-time compilation: it optimizes for what the program *actually* does at runtime, not what the compiler guessed statically.
 </details>
 
 <details>
-<summary>Why is the JVM a *stack* machine and not a *register* machine?</summary>
+<summary>Why is the JVM a *stack* machine and not a *register* machine? (+~5 min)</summary>
 
 Bytecode uses an **operand stack** (push/pop) rather than named registers because a stack machine is **compact** (no need to encode register numbers) and **trivially portable** (no assumptions about how many registers the *real* CPU has). The cost — that a stack machine looks slow — is erased by the JIT, which maps the stack operations onto real CPU registers when it compiles to native code. So you get bytecode's portability *and* register-machine speed. (Some VMs, like Dalvik/ART on older Android, chose register-based bytecode for different trade-offs.)
 </details>
 
 <details>
-<summary>What's the difference between AOT (GraalVM native), CRaC, and the JIT?</summary>
+<summary>What's the difference between AOT (GraalVM native), CRaC, and the JIT? (+~5 min)</summary>
 
 - **JIT (this step)** — compile *at runtime*, profile-guided, peak performance after warm-up; slower startup, larger memory.
 - **GraalVM native image (AOT)** — compile *ahead of time* to a native binary: near-instant startup, low memory, but no runtime profiling (and a closed-world assumption that complicates reflection/dynamic loading). Great for serverless/CLI.
@@ -1181,7 +1256,7 @@ The **JIT** compiles **hot** bytecode to optimized **native code at runtime**, g
 3. Why does `java.lang.String` show `source: shared objects file` while `AllocationDemo` shows `source: file:.../target/classes/`? <details><summary>answer</summary>`String` is a **core class** loaded by the **bootstrap** loader from the **CDS** archive (pre-parsed for fast startup); `AllocationDemo` is **your** class, loaded by the **application** classloader from your classpath. Different loaders, different sources — the delegation model made visible.</details>
 4. You comment out the `ring[...] = block;` line and GC disappears. What optimization did that trigger? <details><summary>answer</summary>**Escape analysis** → **scalar replacement**: the `byte[128]` no longer escapes the loop body, so C2 proves it can't be seen elsewhere and never allocates it on the heap — no heap traffic, no GC.</details>
 
-**Stretch (reference solutions in `solutions/step-04/`):**
+**Stretch (~45–90 min each; reference solutions in `solutions/step-04/`):**
 
 - **`BoxingBytecode`** — write a method `sum(List<Integer> xs)` that sums with autoboxing and a parallel `int[]` version, then `javap -c` both. **Find the `Integer.valueOf` / `intValue` calls** the boxing version hides and explain the allocation cost. (Connects bytecode-reading to a real performance gotcha.)
 - **`PromotionDemo`** — modify a copy of `AllocationDemo` to keep a *growing* `List<byte[]>` (objects that *never* die) and run under `-Xmx128m -Xlog:gc`. Watch young collections give way to **old-gen** growth and eventually `OutOfMemoryError: Java heap space`. Explain the difference between "garbage" and a **leak** (reachable but unused).
@@ -1300,16 +1375,13 @@ Q: In the classloader delegation model, who loads java.lang.String, and why?
 A: The bootstrap loader (parent-first delegation) — so application JARs cannot impersonate core classes. It's a trust boundary.
 
 Q: Name the JVM runtime data areas.
-A: Heap (objects, young/old), thread stacks (locals/frames), Metaspace (class metadata, native), PC registers, native memory.
+A: Heap (objects, young/old), thread stacks (locals/frames), Metaspace (class metadata, native), PC registers, native memory. The heap's young gen is collected by G1 evacuation pauses (G1 = default GC since Java 9).
 
 Q: What replaced PermGen and when?
 A: Metaspace, in Java 8 — class metadata moved to native, auto-growing memory; OutOfMemoryError: PermGen space can't occur anymore.
 
 Q: What is escape analysis, and what did it do to our allocation loop?
 A: A JIT proof that an object can't be seen outside its method → scalar replacement (no heap allocation). It erased our byte[128] allocation → zero GC when the object didn't escape.
-
-Q: What is G1, OSR, and deoptimization?
-A: G1 = default region-based GC (since Java 9) with young evacuation pauses. OSR = compile/swap a running loop mid-execution. Deopt = discard JIT code when a speculative assumption breaks; fall back to the interpreter.
 ```
 
 > **🔁 Revisit this in ~5 steps** (around Step 9–11): re-derive the runtime-data-areas diagram from memory, and connect "thread stacks are confined / the heap is shared" to the concurrency you'll learn in Step 11.

@@ -1,6 +1,6 @@
 # 🃏 Build-a-Bank — Cumulative Flashcards
 
-> Spaced-repetition deck. Each step appends 3–5 Q/A pairs. Import into Anki via the optional CSV, or just self-quiz.
+> Cumulative Q/A deck for self-quizzing. Each step appends 3–5 Q/A pairs as markdown bullets (no Anki/CSV export exists yet — quiz yourself straight from this file).
 > Format: **Q:** question — **A:** answer.
 
 ## Step 1 — Setup, CLI/Git & first Spring Boot app

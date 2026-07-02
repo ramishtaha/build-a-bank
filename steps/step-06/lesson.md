@@ -13,12 +13,12 @@
 
 A one-line map of where we're going. Click to jump.
 
-1. **[A · 🧭 Orient](#orient)** — what auto-configuration *is*, why it matters, the cheat card, and whether you can skip.
-2. **[B · 🧠 Understand](#understand)** — how Boot's auto-configuration actually resolves, `@Conditional*` evaluation, `@ConfigurationProperties` binding, and Actuator as the X-ray machine — no magic; plus the security lens, the `spring.factories` → `.imports` version story, and the convention-over-configuration pattern.
-3. **[C · 🛠️ Build](#build)** — the heart: type-safe `BankProperties` → enable it → refactor `LabRunner` off `@Value`/SpEL → write `GreetingService` → write `GreetingAutoConfiguration` + the `.imports` file → wire it in and run → widen `hello-service` Actuator and read `/actuator/conditions`. Then 🎮 Play With It and the 🏁 finished result.
-4. **[D · 🔬 Prove](#prove)** — the Verification Log: the real, pasted `verify` (10 spring-lab tests), the app run, and the live Actuator capture.
-5. **[E · 🎓 Apply](#apply)** — go-deeper asides, interview prep, and your-turn exercises.
-6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, and the recap/study notes.
+1. **[A · 🧭 Orient](#orient)** — what auto-configuration *is*, why it matters, the cheat card, and whether you can skip. *(~30 min)*
+2. **[B · 🧠 Understand](#understand)** — how Boot's auto-configuration actually resolves, `@Conditional*` evaluation, `@ConfigurationProperties` binding, and Actuator as the X-ray machine — no magic; plus the security lens, the `spring.factories` → `.imports` version story, and the convention-over-configuration pattern. *(~2.5h)*
+3. **[C · 🛠️ Build](#build)** — the heart: type-safe `BankProperties` → enable it → refactor `LabRunner` off `@Value`/SpEL → write `GreetingService` → write `GreetingAutoConfiguration` + the `.imports` file → wire it in and run → widen `hello-service` Actuator and read `/actuator/conditions`. Then 🎮 Play With It and the 🏁 finished result. *(~12h)*
+4. **[D · 🔬 Prove](#prove)** — the Verification Log: the real, pasted `verify` (10 spring-lab tests), the app run, and the live Actuator capture. *(~1h)*
+5. **[E · 🎓 Apply](#apply)** — go-deeper asides, interview prep, and your-turn exercises. *(~2.5h)*
+6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, and the recap/study notes. *(~1.5h)*
 
 ---
 
@@ -126,6 +126,23 @@ java -version      # → 25.x
 
 Optional but handy for the Actuator part: **`jq`** (pretty-prints/queries JSON). If you don't have it, every `curl … | jq …` below has a plain-`curl` fallback noted inline. No Docker, no database, no new ports beyond `hello-service`'s `:8080`.
 
+## 🗓️ Session Plan
+
+≈ 20 hours ≠ one heroic weekend. Here's the step cut into **8 sittings of ~2–3h**, each ending at a real save point (a ✋ checkpoint + 💾 commit). Returning after days away? Jump to the sitting whose end-state you last committed.
+
+| # | Sitting | Covers | ~Time | Ends at |
+|---|---|---|---|---|
+| S1 | Map the territory | A · Orient (self-check, cheat card) + B · Understand (big idea, under-the-hood, security lens, then-vs-now) | ~3h | the baseline `verify` in "Your Starting Point" (6 tests green) |
+| S2 | Typed config | Sub-step 1 — `BankProperties` record + `@EnableConfigurationProperties` + `BankPropertiesTest` | ~2.5h | sub-step 1 commit (7 tests green) |
+| S3 | Refactor + plain service | Sub-step 2 (`LabRunner` off `@Value`) + Sub-step 3 (`GreetingService`) | ~2.5h | sub-step 3 commit |
+| S4 | The auto-config itself | Sub-step 4 — `GreetingAutoConfiguration` + `.imports` file + 3 runner tests | ~3h | sub-step 4 commit (10 tests green) |
+| S5 | Wire, run, break it | Sub-step 5 — final `LabRunner`, the app run, break-its #1–#3 | ~2h | sub-step 5 commit |
+| S6 | Actuator X-ray | Sub-step 6 — widen `hello-service`, read `/actuator/conditions` + 🎮 Play With It + 🏁 Finished Result | ~2.5h | sub-step 6 commit (== `step-06-end`) |
+| S7 | Prove + interview lens | D · Prove (read the log, run `smoke.sh`) + E · Go Deeper + Interview Prep | ~2.5h | end of Interview Prep |
+| S8 | Practice + lock it in | E · Your Turn (+ optional Stretch) + F · Review + flashcards + reflection | ~2.5h | step sign-off 🎉 |
+
+**Optional routes:** experienced Boot devs can take the ⏭️ skip-test above (~3h skim total instead). Detours and their costs: 🚀 Go Deeper asides (~10 min each), Break-it #2 (~10 min), Break-it #3 (~2 min), the Stretch exercise (~45–60 min).
+
 ---
 
 <a id="understand"></a>
@@ -185,6 +202,8 @@ flowchart LR
 ```
 
 *Alt-text: the `@ConfigurationProperties` binding flow. Property sources (YAML, environment variables, command-line args, defaults) feed into relaxed binding, which normalizes key formats; values are type-converted (String to BigDecimal, nested records built); the immutable `BankProperties` record is constructed and injected as a single typed bean wherever it's needed.*
+
+❓ **Knowledge-check:** where does Spring Boot find the list of candidate auto-configuration classes at startup, and what decides whether each candidate's beans are actually registered? <details><summary>answer</summary>It reads every `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` file on the classpath (one fully-qualified class name per line) to build the candidate list; then each candidate's `@Conditional*` annotations are evaluated — all satisfied → its `@Bean` methods run (positive match), otherwise the class is skipped (negative match).</details>
 
 **Actuator.** Actuator adds operational HTTP endpoints under `/actuator`. The ones we use are *reports about the container itself*: `/conditions` (the `ConditionEvaluationReport` — every positive/negative auto-config match, with the reason), `/configprops` (every bound `@ConfigurationProperties` object), `/beans` (the full bean graph), `/env` (resolved property sources in precedence order), `/mappings` (every URL→handler). Endpoints are **opt-in** for web exposure — you choose what `management.endpoints.web.exposure.include` reveals. That opt-in is a *security control*, which brings us to…
 
@@ -308,7 +327,7 @@ Six sub-steps. Build top-to-bottom, run between each.
 
 ---
 
-### Sub-step 1 of 6 — Type-safe config: the `BankProperties` record 🧭 *(you are here: **typed config** → refactor runner → service → auto-config → wire → actuator)*
+### Sub-step 1 of 6 (≈ 2.5h) — Type-safe config: the `BankProperties` record 🧭 *(you are here: **typed config** → refactor runner → service → auto-config → wire → actuator)*
 
 🎯 **Goal:** replace the idea of scattered `@Value("${bank.rates.fixed:…}")` strings with **one immutable, typed object** that mirrors the `bank.*` config prefix — and turn on its binding.
 
@@ -412,7 +431,9 @@ public class LabConfig {
 [INFO] BUILD SUCCESS
 ```
 
-Still 6 — we've only *added* a bindable type; nothing depends on it yet. ✋ **Checkpoint:** the module compiles and the 6 Step-5 tests still pass.
+❌ **Common wrong output:** `cannot find symbol … EnableConfigurationProperties` at compile → you added the annotation but not its import line in `LabConfig`.
+
+Still 6 — we've only *added* a bindable type; nothing depends on it yet. ✋ **Checkpoint:** the module compiles and the 6 Step-5 tests still pass. *Stopping here? You have typed config compiling (nothing committed yet — the commit lands after the next test). Next: `BankPropertiesTest`, same sub-step; first action: create `playground/spring-lab/src/test/java/com/buildabank/springlab/config/BankPropertiesTest.java`.*
 
 Let's prove the binding actually works with a tiny test.
 
@@ -467,7 +488,9 @@ class BankPropertiesTest {
 [INFO] BUILD SUCCESS
 ```
 
-7 tests now (the 6 from Step 5 + this one). ✋ **Checkpoint:** `BankPropertiesTest` is green — your typed config binds.
+❌ **Common wrong output:** `NoSuchBeanDefinitionException: … BankProperties` → the class was never registered — check `@EnableConfigurationProperties(BankProperties.class)` on `LabConfig` (Troubleshooting, row 1).
+
+7 tests now (the 6 from Step 5 + this one). ✋ **Checkpoint:** `BankPropertiesTest` is green — your typed config binds. *Stopping here? Commit below first — then you have 7 green tests and proven binding. Next: Sub-step 2 (refactor `LabRunner`); first action: open `playground/spring-lab/src/main/java/com/buildabank/springlab/LabRunner.java`.*
 
 💾 **Commit:**
 
@@ -479,7 +502,7 @@ git add . && git commit -m "feat(spring-lab): add type-safe BankProperties (cons
 
 ---
 
-### Sub-step 2 of 6 — Refactor `LabRunner` onto typed config 🧭 *(typed config ✅ → **refactor runner** → service → auto-config → wire → actuator)*
+### Sub-step 2 of 6 (≈ 1.5h) — Refactor `LabRunner` onto typed config 🧭 *(typed config ✅ → **refactor runner** → service → auto-config → wire → actuator)*
 
 🎯 **Goal:** make `LabRunner` read the bank name and rate from `BankProperties` (typed) instead of any hard-coded string — proving the typed object flows through real wiring. (We'll add the greeting in sub-step 5; first, just the props.)
 
@@ -487,10 +510,42 @@ git add . && git commit -m "feat(spring-lab): add type-safe BankProperties (cons
 
 > We'll do this edit in two passes so each idea lands separately: **(2)** inject `BankProperties` and use it for the banner + rate; **(5)** inject the auto-configured `GreetingService`. Here's pass (2).
 
-⌨️ **Edit (key parts — add the `BankProperties` field, constructor param, and use it):**
+⌨️ **Edit (before → after — the constructor and `run()`):**
 
 ```java
-// playground/spring-lab/src/main/java/com/buildabank/springlab/LabRunner.java  (pass 2 of 2)
+// BEFORE — LabRunner.java (Step 5): the @Value/SpEL pattern we're retiring
+import org.springframework.beans.factory.annotation.Value;   // ← this import goes away
+// ...
+    private final InterestService interest;
+    private final ApplicationContext context;
+    private final Clock clock;
+    private final String bankName;                            // ← DELETE
+    private final double ratePercent;                         // ← DELETE
+
+    public LabRunner(InterestService interest,
+                     ApplicationContext context,
+                     Clock clock,
+                     @Value("${bank.name}") String bankName,  // ← DELETE
+                     // SpEL: resolve the placeholder, then do arithmetic — 0.0325 * 100 = 3.25
+                     @Value("#{ ${bank.rates.fixed:0.0325} * 100 }") double ratePercent) {  // ← DELETE
+        this.interest = interest;
+        this.context = context;
+        this.clock = clock;
+        this.bankName = bankName;                             // ← DELETE
+        this.ratePercent = ratePercent;                       // ← DELETE
+    }
+
+    @Override
+    public void run(String... args) {
+        log.info("================ Spring Lab :: {} ================", bankName);
+        log.info("wired RateProvider     : {}", interest.rateSource());
+        log.info("annual rate (via SpEL) : {}%", ratePercent);                              // ← DELETE
+        // ... interest + clock + singleton/prototype lines unchanged ...
+    }
+```
+
+```java
+// AFTER — playground/spring-lab/src/main/java/com/buildabank/springlab/LabRunner.java  (pass 1 of 2 — pass 2 lands in sub-step 5)
 import com.buildabank.springlab.config.BankProperties;   // NEW import
 // ...
     private final InterestService interest;
@@ -510,7 +565,7 @@ import com.buildabank.springlab.config.BankProperties;   // NEW import
 
     @Override
     public void run(String... args) {
-        log.info("================ Spring Lab :: {} ================", properties.name());   // was a literal
+        log.info("================ Spring Lab :: {} ================", properties.name());   // was injected via @Value("${bank.name}") — the pattern we're retiring
         log.info("wired RateProvider     : {}", interest.rateSource());
         log.info("annual rate (props)    : {}%", properties.rates().fixed().movePointRight(2).toPlainString());
         log.info("interest on 10000.00   : {}", interest.annualInterest(new BigDecimal("10000.00")));
@@ -519,9 +574,12 @@ import com.buildabank.springlab.config.BankProperties;   // NEW import
 ```
 
 🔍 **Line-by-line:**
+- **DELETE the old `@Value` machinery entirely:** the two constructor params (`bankName`, `ratePercent`), their two fields and two assignments, the `annual rate (via SpEL)` log line, and the now-unused `import org.springframework.beans.factory.annotation.Value;`. Leftovers = the file won't compile (duplicate responsibilities, unused imports).
 - `private final BankProperties properties;` + the constructor param — **constructor injection** again (Step 5). Spring sees the single constructor and supplies the bound `BankProperties` bean automatically.
-- `properties.name()` — the banner now reads the bank name from config, not a literal. Change `bank.name` in config and the banner changes — no recompile.
+- `properties.name()` — the banner now reads the bank name from the typed record instead of a raw `@Value` string. Change `bank.name` in config and the banner changes — no recompile.
 - `properties.rates().fixed().movePointRight(2).toPlainString()` — `0.0325` × 100 → `3.25` as a plain string (a clean percentage display without floating-point surprises).
+
+💭 **Under the hood:** how does the bound record reach this constructor? At startup the binder builds the `BankProperties` bean first (sub-step 1's `@EnableConfigurationProperties` registered it); when the container then instantiates the `@Component` `LabRunner`, it resolves each constructor parameter **by type** and finds exactly one `BankProperties` bean — the fully-bound, immutable record. No `@Autowired` needed on a single constructor (Step 5).
 
 🔮 **Predict:** when you run the app with the default config (`bank.rates.fixed=0.0325`), what will the `annual rate (props)` line print? <details><summary>answer</summary>`annual rate (props)    : 3.25%` — `0.0325` with the point moved right two places.</details>
 
@@ -537,7 +595,9 @@ import com.buildabank.springlab.config.BankProperties;   // NEW import
 [INFO] BUILD SUCCESS
 ```
 
-✋ **Checkpoint:** `LabRunner` compiles against `BankProperties`. (It won't *run* fully yet because we haven't set `bank.name` — we'll provide it via the run args / config in sub-step 5, and the greeting bean doesn't exist yet.)
+❌ **Common wrong output:** `COMPILATION ERROR` mentioning `bankName` or `ratePercent` → the old `@Value` fields/params weren't fully deleted — re-check the BEFORE → AFTER above.
+
+✋ **Checkpoint:** `LabRunner` compiles against `BankProperties` — and the app already *runs*: `bank.name` and `bank.rates.*` have lived in the lab's `application.yml` since Step 5 (Step 5's `@Value("${bank.name}")` had no default, so it required them). Want an early reward loop? `./mvnw -pl playground/spring-lab -am package`, then `java -jar playground/spring-lab/target/spring-lab-0.1.0-SNAPSHOT.jar` — the banner and rate lines now come from the typed record. *Stopping here? Commit below first. Next: Sub-step 3 (the plain `GreetingService`); first action: create `playground/spring-lab/src/main/java/com/buildabank/springlab/autoconfig/GreetingService.java`.*
 
 💾 **Commit:**
 
@@ -549,7 +609,7 @@ git add . && git commit -m "refactor(spring-lab): LabRunner reads bank name + ra
 
 ---
 
-### Sub-step 3 of 6 — A plain `GreetingService` (the thing the auto-config will provide) 🧭 *(typed config ✅ → refactor ✅ → **service** → auto-config → wire → actuator)*
+### Sub-step 3 of 6 (≈ 1h) — A plain `GreetingService` (the thing the auto-config will provide) 🧭 *(typed config ✅ → refactor ✅ → **service** → auto-config → wire → actuator)*
 
 🎯 **Goal:** write the bean that our custom auto-configuration will contribute — deliberately a **plain class, NOT a `@Component`**, so the *only* way it enters the context is via the auto-config (just like Boot's own starter beans).
 
@@ -587,6 +647,8 @@ public class GreetingService {
 
 💭 **Under the hood:** because there's no `@Component`/`@Service`, **component scan ignores this class entirely.** The bean appears in the context only if the auto-config's `@Bean` method runs — which we wire next. That separation (plain logic class + a config that decides whether to register it) is the heart of how starters stay optional and overridable.
 
+🔮 **Predict:** if you booted the app right now and asked `context.getBean(GreetingService.class)`, would it succeed? Why (not)? <details><summary>answer</summary>No — `NoSuchBeanDefinitionException`. Nothing registers the class: it has no stereotype annotation, and the auto-config that will contribute it doesn't exist until sub-step 4.</details>
+
 ▶️ **Run & See:**
 
 ```bash
@@ -599,7 +661,9 @@ public class GreetingService {
 [INFO] BUILD SUCCESS
 ```
 
-✋ **Checkpoint:** `GreetingService` compiles. It is currently **not** a bean (nothing registers it yet) — that's expected.
+❌ **Common wrong sign:** the build stays green either way — but if you reflexively added `@Service`/`@Component`, the demonstration is silently broken (see the Pitfall below); remove the annotation.
+
+✋ **Checkpoint:** `GreetingService` compiles. It is currently **not** a bean (nothing registers it yet) — that's expected. *Stopping here? Commit below first — you have typed config wired plus an unregistered service class. Next: Sub-step 4 (the auto-config itself); first action: create `playground/spring-lab/src/main/java/com/buildabank/springlab/autoconfig/GreetingAutoConfiguration.java`.*
 
 💾 **Commit:**
 
@@ -611,7 +675,7 @@ git add . && git commit -m "feat(spring-lab): add plain GreetingService (no @Com
 
 ---
 
-### Sub-step 4 of 6 — The custom `@AutoConfiguration` + the `.imports` file 🧭 *(typed config ✅ → refactor ✅ → service ✅ → **auto-config** → wire → actuator)*
+### Sub-step 4 of 6 (≈ 3h) — The custom `@AutoConfiguration` + the `.imports` file 🧭 *(typed config ✅ → refactor ✅ → service ✅ → **auto-config** → wire → actuator)*
 
 🎯 **Goal:** write a real (tiny) auto-configuration that registers `GreetingService` — *conditionally* — and make Boot **discover** it via the `AutoConfiguration.imports` file. This is the structural skeleton of every Boot starter.
 
@@ -666,6 +730,8 @@ Now make Boot **find** it. An auto-config class that isn't listed in the `.impor
 
 📁 **Location:** new file → `playground/spring-lab/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
 
+✍️ **Type it yourself first:** you already know everything this file contains — one **fully-qualified class name** per line, and our class is `GreetingAutoConfiguration` in package `com.buildabank.springlab.autoconfig`. Write the single content line before you peek, then compare.
+
 ⌨️ **Code:**
 
 ```
@@ -686,7 +752,7 @@ Test it the way Boot tests its own auto-configs — fast, boot-free, with `Appli
 
 📁 **Location:** new file → `playground/spring-lab/src/test/java/com/buildabank/springlab/autoconfig/GreetingAutoConfigurationTest.java`
 
-⌨️ **Code:**
+⌨️ **Code (the scaffold fades here — you get the harness + the first test; you write the other two):**
 
 ```java
 // playground/spring-lab/src/test/java/com/buildabank/springlab/autoconfig/GreetingAutoConfigurationTest.java
@@ -719,6 +785,17 @@ class GreetingAutoConfigurationTest {
         });
     }
 
+    // ✍️ TODO(you): backsOffWhenDisabled
+    // ✍️ TODO(you): backsOffWhenUserDefinesOwnBean
+}
+```
+
+✍️ **Your turn — write the two back-off tests yourself** from the behaviors they must prove, then compare: **(a) `backsOffWhenDisabled`** — with the property `bank.greeting.enabled=false`, the context contains **no** `GreetingService`; **(b) `backsOffWhenUserDefinesOwnBean`** — when the test supplies its own `GreetingService("Custom Bank")`, that bean wins and the greeting starts with `"Welcome to Custom Bank"`. Hints: `runner.withPropertyValues(...)`, `runner.withBean(...)`, AssertJ's `doesNotHaveBean`.
+
+<details>
+<summary>✅ Solution — the two back-off tests</summary>
+
+```java
     @Test
     void backsOffWhenDisabled() {
         runner.withPropertyValues("bank.greeting.enabled=false")
@@ -731,8 +808,9 @@ class GreetingAutoConfigurationTest {
                 .run(context -> assertThat(context.getBean(GreetingService.class).greet("x"))
                         .startsWith("Welcome to Custom Bank"));
     }
-}
 ```
+
+</details>
 
 🔍 **Line-by-line:**
 - `ApplicationContextRunner` — a **boot-free** test harness: it spins up a minimal context with exactly the configuration you give it, runs assertions, and tears down — milliseconds, no `@SpringBootTest`.
@@ -760,7 +838,9 @@ class GreetingAutoConfigurationTest {
 [INFO] BUILD SUCCESS
 ```
 
-**10 tests** now (6 Step-5 + 1 `BankPropertiesTest` + 3 `GreetingAutoConfigurationTest`). ✋ **Checkpoint:** all three conditional behaviors are proven by tests.
+❌ **Common wrong sign:** all 10 tests green here does **not** prove discovery — these tests register the class directly via `AutoConfigurations.of`, bypassing the `.imports` file. A misnamed `.imports` only bites when the real app runs (`UnsatisfiedDependencyException` — Troubleshooting, row 2, and the Break-it below).
+
+**10 tests** now (6 Step-5 + 1 `BankPropertiesTest` + 3 `GreetingAutoConfigurationTest`). ✋ **Checkpoint:** all three conditional behaviors are proven by tests. *Stopping here? Do the 60s break-it and commit below first — you have the full auto-config + 10 green tests. Next: Sub-step 5 (wire & run); first action: open `playground/spring-lab/src/main/java/com/buildabank/springlab/LabRunner.java`.*
 
 🔬 **Break-it (60s) — make the discovery file lie.** Temporarily rename the `.imports` file (e.g. add a `.bak` suffix) and rerun `./mvnw -pl playground/spring-lab -am verify`. Watch `registersGreetingServiceByDefault` still pass (the test registers the class *directly* via `AutoConfigurations.of`, bypassing discovery) — **but** if you also ran the full app it'd no longer auto-wire the greeting. This teaches the difference between *being an auto-config* and *being discovered* as one. Rename it back.
 
@@ -776,7 +856,7 @@ git add . && git commit -m "feat(spring-lab): custom GreetingAutoConfiguration +
 
 ---
 
-### Sub-step 5 of 6 — Wire `GreetingService` into `LabRunner` and run the whole thing 🧭 *(typed config ✅ → refactor ✅ → service ✅ → auto-config ✅ → **wire & run** → actuator)*
+### Sub-step 5 of 6 (≈ 2h) — Wire `GreetingService` into `LabRunner` and run the whole thing 🧭 *(typed config ✅ → refactor ✅ → service ✅ → auto-config ✅ → **wire & run** → actuator)*
 
 🎯 **Goal:** consume the auto-configured `GreetingService` in `LabRunner`, then run the app and *see* both the typed config and the auto-config in the logs. Here's the **complete, final** `LabRunner` (pass 5 — adds the greeting on top of pass 2).
 
@@ -861,7 +941,17 @@ public class LabRunner implements CommandLineRunner {
 
 💭 **Under the hood:** `LabRunner` now depends on `GreetingService` *by type*. At startup the auto-config registers that bean (default ON), and constructor injection supplies it here. If you disabled the auto-config *and* didn't provide your own, this injection would fail fast at startup with a clear "no `GreetingService` bean" message — exactly the kind of dependency Boot makes explicit.
 
-We need `bank.*` config for the run. The lab already has its bank name/rate config from Step 5 (the `FixedRateProvider` default is `0.0325`); we set `bank.name` so the banner and greeting read "Build-a-Bank". The smoke test and the app's own `application.yml`/run args provide these. To run the packaged jar:
+The `bank.*` config for the run is **already there from Step 5** — no new config needed. Confirm your `playground/spring-lab/src/main/resources/application.yml` still has this block (it's what the banner, rate, and greeting read):
+
+```yaml
+bank:
+  name: Build-a-Bank
+  rates:
+    source: fixed            # fixed | market  (selects which RateProvider bean is created)
+    fixed: 0.0325            # 3.25% annual
+```
+
+To run the packaged jar:
 
 🔮 **Predict:** write down the *exact* first two log lines you expect (the banner and the greeting) before you run. Then check.
 
@@ -885,7 +975,9 @@ INFO com.buildabank.springlab.LabRunner : singleton same instance? true
 INFO com.buildabank.springlab.LabRunner : prototype instances     : #1 vs #2  (same? false)
 ```
 
-There it is: the **greeting came from your auto-configuration**, the **name + rate came from the typed record**, and the Step-5 scope behavior still holds. ✋ **Checkpoint:** the app runs and prints the auto-configured greeting + typed props.
+❌ **Common wrong output:** `UnsatisfiedDependencyException … GreetingService` at startup → Boot never *discovered* your auto-config; check the `.imports` path/filename character-for-character (Troubleshooting, row 2).
+
+There it is: the **greeting came from your auto-configuration**, the **name + rate came from the typed record**, and the Step-5 scope behavior still holds. ✋ **Checkpoint:** the app runs and prints the auto-configured greeting + typed props. *Stopping here? Run break-it #1 and commit below first (or save break-its #2/#3, ~12 min, for next sitting). Next: Sub-step 6 (Actuator); first action: open `services/hello/src/main/resources/application.yml`.*
 
 🔬 **Break-it #1 (the headline experiment) — disable the greeting auto-config:**
 
@@ -895,9 +987,9 @@ java -jar playground/spring-lab/target/spring-lab-0.1.0-SNAPSHOT.jar --bank.gree
 
 ❌ **What you'll see:** the app **fails to start** with an `UnsatisfiedDependencyException` — `LabRunner` needs a `GreetingService` bean, but `@ConditionalOnProperty` switched the auto-config off, so none exists. This is auto-config working *exactly as designed*: turn the convention off, the bean vanishes, and anything depending on it fails fast and loudly (no silent nulls). (In the tests, nothing depends on the missing bean, so `backsOffWhenDisabled` simply asserts it's absent.)
 
-🔬 **Break-it #2 — define your own bean and watch the auto-config back off.** Add a `@Bean GreetingService` to `LabConfig` returning `new GreetingService("My Own Bank")`, rebuild, and run with defaults. The banner still says "Build-a-Bank" (that's `bank.name`), but the **greeting** line now reads `Welcome to My Own Bank, intern!` — because `@ConditionalOnMissingBean` saw your bean and the auto-config stepped aside. Remove it when done. (This is what Test 3 proves.)
+🔬 **Break-it #2 (+~10 min — edit + rebuild + revert) — define your own bean and watch the auto-config back off.** Add a `@Bean GreetingService` to `LabConfig` returning `new GreetingService("My Own Bank")`, rebuild, and run with defaults. The banner still says "Build-a-Bank" (that's `bank.name`), but the **greeting** line now reads `Welcome to My Own Bank, intern!` — because `@ConditionalOnMissingBean` saw your bean and the auto-config stepped aside. Remove it when done. (This is what Test 3 proves.)
 
-🔬 **Break-it #3 — mistype a property and watch binding.** Run with `--bank.rates.fixed=oops`. Boot can't convert `"oops"` to a `BigDecimal`, so startup fails with a **binding/conversion error** naming the offending property and target type — far better than a `NumberFormatException` deep inside your code at runtime. Typed config catches config mistakes *at the door*.
+🔬 **Break-it #3 (+~2 min) — mistype a property and watch binding.** Run with `--bank.rates.fixed=oops`. Boot can't convert `"oops"` to a `BigDecimal`, so startup fails with a **binding/conversion error** naming the offending property and target type — far better than a `NumberFormatException` deep inside your code at runtime. Typed config catches config mistakes *at the door*.
 
 💾 **Commit:**
 
@@ -909,7 +1001,7 @@ git add . && git commit -m "feat(spring-lab): LabRunner consumes the auto-config
 
 ---
 
-### Sub-step 6 of 6 — Widen `hello-service` Actuator and read the auto-config report 🧭 *(typed config ✅ → refactor ✅ → service ✅ → auto-config ✅ → wire ✅ → **actuator**)*
+### Sub-step 6 of 6 (≈ 1.5h) — Widen `hello-service` Actuator and read the auto-config report 🧭 *(typed config ✅ → refactor ✅ → service ✅ → auto-config ✅ → wire ✅ → **actuator**)*
 
 🎯 **Goal:** point Actuator at a *real* web app (`hello-service`) and use `/actuator/conditions` to see Boot's auto-config decisions on hundreds of candidates — the exact tool you'll use to debug "why is/isn't this bean here?" forever.
 
@@ -969,6 +1061,8 @@ info:
 - `management.endpoint.health.show-details: always` — show full health detail (component statuses) without auth. Fine locally; locked down in Phase H.
 - `management.info.env.enabled: true` — lets the `info.*` keys below surface at `/actuator/info`.
 
+💭 **Under the hood:** the endpoint beans (conditions, beans, env…) are auto-configured into the context either way — `exposure.include` is the *filter* deciding which of them get **web-mapped** under `/actuator/**`. That's why opening them is a config change, not a code change, and why the allow-list (not the endpoint's existence) is the security control.
+
 > [!WARNING]
 > We are deliberately opening reconnaissance-grade endpoints **for learning** (see the 🛡️ Security Lens). On any internet-facing app you'd expose only `health`/`info`, move the rest behind a firewalled management port, and require auth. Phase H does the hardening.
 
@@ -995,6 +1089,10 @@ negativeMatches (auto-configs SKIPPED): 82
 sample positiveMatches: BeansEndpointAutoConfiguration, ConditionsReportEndpointAutoConfiguration
 ```
 
+> 🙂 **Your exact counts may differ by a few** (they depend on the Boot patch version and dependency updates) — seeing e.g. 143/80 is fine. What matters: **both** sets are non-empty and `DataSourceAutoConfiguration` appears in `negativeMatches`.
+
+❌ **Common wrong output:** `404` on `/actuator/conditions` → the endpoint isn't in `exposure.include` (or a typo). `Connection refused` on `:8080` → `hello-service` isn't running — `make run-hello` in terminal 1 first. (Both in Troubleshooting.)
+
 **Read that.** Boot evaluated **hundreds** of candidate auto-configurations and **applied 141** based on what's on the classpath + your config. The **82 negatives** were *skipped* — e.g. there's no JDBC driver/`DataSource` on this service's classpath, so `DataSourceAutoConfiguration` lands in `negativeMatches` with the reason "required class … not found." This report is **exactly how you debug "why is / isn't this bean here?"** in any Boot app, forever.
 
 > No `jq`? Use the raw endpoint and skim: `curl -s http://localhost:8080/actuator/conditions` (or open `http://localhost:8080/actuator/conditions` in a browser). The JSON has `positiveMatches` and `negativeMatches` objects keyed by auto-config class name; each negative entry carries a human-readable reason.
@@ -1008,7 +1106,7 @@ curl -s http://localhost:8080/actuator/env         | jq '.activeProfiles, (.prop
 curl -s http://localhost:8080/actuator/mappings    | jq '.contexts."hello-service".mappings.dispatcherServlets | keys'  # every URL → handler
 ```
 
-✋ **Checkpoint:** `hello-service` starts on `:8080`, `/actuator/conditions` returns positive *and* negative matches, and `/actuator/beans` lists the live bean graph. Stop the service with `Ctrl+C` when done.
+✋ **Checkpoint:** `hello-service` starts on `:8080`, `/actuator/conditions` returns positive *and* negative matches, and `/actuator/beans` lists the live bean graph. Stop the service with `Ctrl+C` when done. *Stopping here? Commit below first — that's the full build done (`step-06-end` state). Next: 🎮 Play With It, then D · Prove; first action: `bash steps/step-06/smoke.sh`.*
 
 💾 **Commit:**
 
@@ -1017,6 +1115,8 @@ git add . && git commit -m "feat(hello): widen Actuator exposure to reveal auto-
 ```
 
 ⚠️ **Pitfall:** `404 Not Found` on `/actuator/conditions` means the endpoint isn't in the `include` list (or you typoed it) — check `exposure.include`. `503` on `/actuator/health` usually means a component is `DOWN`, not that Actuator is broken. And remember the **JSON shape is keyed by context id** (`hello-service`) — that's why the `jq` paths read `.contexts."hello-service"…`.
+
+❓ **Knowledge-check:** you widened `exposure.include` — did that change which endpoint beans exist in the context, and why is the `include` list (not the endpoints' existence) the security control? <details><summary>answer</summary>No — the endpoint beans (conditions, beans, env…) are auto-configured into the context either way. `exposure.include` is an allow-list *filter* deciding which of them get web-mapped under `/actuator/**`; anything not listed is unreachable over HTTP, which is exactly why exposure is the security control and why the safe production default is `health` (and `info`) only.</details>
 
 ### 🔁 The flow you just built
 
@@ -1159,7 +1259,7 @@ The smoke script builds + tests the module, runs the jar, and `grep`s the output
 
 # E · 🎓 Apply
 
-## 🚀 Go Deeper (Optional)
+## 🚀 Go Deeper (Optional — 4 asides, +~10 min each)
 
 <details>
 <summary>How does Boot's <code>ConditionEvaluationReport</code> actually get built (and how to dump it without Actuator)?</summary>
@@ -1243,7 +1343,7 @@ It makes an auto-configured bean a **default you can override**: the framework p
 2. Write a one-line `curl … | jq` that prints the **reason** `DataSourceAutoConfiguration` was skipped on hello-service. <details><summary>answer</summary><code>curl -s http://localhost:8080/actuator/conditions | jq '.contexts."hello-service".negativeMatches.DataSourceAutoConfiguration'</code> — the JSON shows `notMatched` with the failing condition and message.</details>
 3. Without Actuator, how do you get the same conditions report? <details><summary>answer</summary>Start the app with <code>--debug</code> (or set <code>debug=true</code>) and read the "CONDITIONS EVALUATION REPORT" printed at startup.</details>
 
-**Stretch (reference solution in `solutions/step-06/`):**
+**Stretch (+~45–60 min · reference solution in `solutions/step-06/`):**
 
 - **Add config validation.** Annotate `BankProperties` with `@Validated` and add `@NotBlank` on `name` and `@DecimalMin("0.0")` on `rates.fixed` (you'll need `spring-boot-starter-validation`). Prove it: a test (or a run) with `--bank.rates.fixed=-1` should **fail startup** with a clear validation message, and the valid config should still boot. Bonus: add `@ConditionalOnClass` to `GreetingAutoConfiguration` so it only applies when some marker class is present — the classpath-driven trigger Boot's own starters use most.
 

@@ -11,14 +11,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | asymmetric signing & JWKS · resource servers · method security · MFA/step-up |
-| **C** | [🛠️ Build](#build) | auth → RS256 + JWKS + method security · demand-account → resource server + @PreAuthorize |
-| **D** | [🔬 Prove](#prove) | the Verification Log — cross-service JWKS validation live, 401/403/201, §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1h |
+| **B** | [🧠 Understand](#understand) | asymmetric signing & JWKS · resource servers · method security · MFA/step-up | ~3h |
+| **C** | [🛠️ Build](#build) | auth → RS256 + JWKS + method security · demand-account → resource server + @PreAuthorize | ~12h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — cross-service JWKS validation live, 401/403/201, §12.3 mutation | ~3h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~2h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~1h |
 
 ---
 
@@ -113,6 +113,23 @@ The moment you have more than one service, "who can validate a token?" becomes t
 
 > **Depends on: Steps 16, 12, 15.** Second of the two security deep-dives.
 
+## 🗓️ Session Plan
+
+≈22 hours is not one sitting. Eight sittings of ~2–3h, each ending at a commit or a natural boundary — stop at the end of any row and you lose nothing:
+
+| # | Sitting | Covers | ~time | Ends at |
+|---|---|---|---|---|
+| S1 | Read the map | A · Orient + B · Understand (Big Idea → Thread-safety note) | ~2.5h | `./mvnw -q verify` green at `step-17-start` |
+| S2 | Issuer goes asymmetric | Sub-step 1 (auth: RS256 + JWKS) | ~3h | sub-step 1 commit |
+| S3 | Method security | Sub-step 2 (`@EnableMethodSecurity` + `@PreAuthorize` + tests) | ~2h | sub-step 2 commit — auth 11 tests green |
+| S4 | Resource-server wiring | Sub-step 3 (deps + `jwk-set-uri`) | ~2h | sub-step 3 commit |
+| S5 | Secure the money | Sub-step 4 (demand-account SecurityConfig + admin ping) | ~3h | sub-step 4 commit |
+| S6 | Tests get tokens | Sub-step 5 (`jwt()` + minted RS256) + break-it | ~3h | sub-step 5 commit — 11 + 31 green |
+| S7 | Prove it live | 🎮 Play With It + live cross-service run + `smoke.sh` (D · 🔬) | ~3h | ✅ Definition of Done all checked |
+| S8 | Lock it in | E · Apply (interview prep, challenges) + F · Review (flashcards) | ~2.5h | `step-17-end` tagged |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can shrink this to a ~5h skim for experienced learners; the three 🚀 Go Deeper asides are +~10 min each; 🏋️ Your Turn stretch challenges 4–5 are +1–2h each.
+
 ---
 
 <a id="understand"></a>
@@ -163,15 +180,32 @@ sequenceDiagram
 
 > **Implementation (here).** auth publishes `/oauth2/jwks` (RS256 public key); demand-account sets `jwk-set-uri` to it and `oauth2ResourceServer(jwt(...))`. Proven live: demand-account accepted an auth-minted token (201) and rejected an unauthenticated one (401).
 
+❓ **Quick check:** an attacker fully compromises demand-account and dumps everything it holds. Can they now forge admin tokens the rest of the fleet would accept — and why (not)? <details><summary>answer</summary>No — demand-account only ever holds auth's <em>public</em> key (fetched from the JWKS), which can verify signatures but not create them. Only auth's private key can mint tokens. With a shared HMAC secret the answer would be yes — that's exactly the forgery risk RS256 + JWKS removes.</details>
+
 ## 🌱 Under the Hood: How It Really Works
 
 **Generating & using the RSA key (auth).** A `RSAKey` (Nimbus) is generated at startup; `NimbusJwtEncoder` signs over an `ImmutableJWKSet` of it, and the `JwsHeader` declares `RS256`. The `/oauth2/jwks` controller returns `new JWKSet(rsaKey.toPublicJWK()).toJSONObject()` — **public** material only (`kty`, `kid`, `n`, `e`; never the private exponent `d`). *Production note:* generating at startup is ephemeral (a restart rotates the key, invalidating live tokens); real systems load a persisted key from a keystore/Vault (Phase H) and rotate deliberately — JWKS' multi-key support makes rollover seamless.
 
 **Validating (demand-account, the resource server).** With `spring.security.oauth2.resourceserver.jwt.jwk-set-uri` set, Boot auto-configures a `JwtDecoder` that **lazily** fetches the JWKS on first use (so the service boots even if auth is down) and **caches** it. Per request, the `BearerTokenAuthenticationFilter` extracts the token, the decoder validates signature + `exp`, and our `JwtAuthenticationConverter` maps the `roles` claim to authorities. No session, no callback to auth per request.
 
-**URL rules vs `@PreAuthorize` (and a blast-radius lesson).** We secure the HTTP edge with `authorizeHttpRequests` (`/api/**` → authenticated; health + docs → permitAll) and demonstrate **method security** (`@EnableMethodSecurity` + `@PreAuthorize("hasRole('ADMIN')")`) on a narrow admin endpoint. We deliberately **did not** put `@PreAuthorize` on the core transfer *service* methods: method security wraps the bean with an AOP proxy and applies to **direct** calls too — which would force a security context into the dozens of service-level unit tests that call `transfer(...)` directly. Keeping authorization at the edge (URL rules) + a narrow method-security demo means only the **HTTP-layer tests** needed tokens, not the service tests. (A real system *would* use method security on services — and accept setting up the security context in those tests.)
+**URL rules vs `@PreAuthorize` (and a blast-radius lesson).** We use both, but they live in different places:
 
-**Testing security without committing keys.** Controller slice (`@WebMvcTest`): `spring-security-test`'s `jwt()` request post-processor injects the `Authentication` directly (no real decoding) — but the slice needs `@EnableWebSecurity` on the config to get an `HttpSecurity` bean, and a mock `JwtDecoder`. Integration test (`@SpringBootTest`, real HTTP): a `@TestConfiguration` supplies a `JwtDecoder` from a **test** RSA public key (overriding the production `jwk-set-uri`), and the test **mints** RS256 tokens with the matching private key. No private key is committed; the real auth↔demand-account JWKS interop is proven by a **live** run instead (🔬).
+| | URL rules (`authorizeHttpRequests`) | Method security (`@PreAuthorize`) |
+|---|---|---|
+| **Where enforced** | in the filter chain, before any controller runs | on the bean method via an AOP proxy — applies to **direct** calls too |
+| **Granularity** | coarse, path-shaped (`/api/**` → authenticated) | fine-grained SpEL on the exact method (`hasRole('ADMIN')`) |
+| **Test impact** | only HTTP-layer tests need tokens | *every* test calling the method directly needs a security context |
+
+That third row is why we deliberately **did not** put `@PreAuthorize` on the core transfer *service* methods: it would force a security context into the dozens of service-level unit tests that call `transfer(...)` directly. We secure the edge with URL rules (health + docs → permitAll; everything else → authenticated) and demonstrate method security on a narrow admin endpoint — so only the **HTTP-layer tests** needed tokens. (A real system *would* use method security on services — and accept setting up the security context in those tests.)
+
+❓ **Quick check:** you add `@PreAuthorize("hasRole('ADMIN')")` to `TransferService.transfer(...)`. Which tests break, and why? <details><summary>answer</summary>Every service-level unit test that calls <code>transfer(...)</code> directly — method security wraps the bean in an AOP proxy that checks the SecurityContext on <em>any</em> invocation, not just HTTP ones. With no <code>Authentication</code> on the test thread, it throws <code>AccessDeniedException</code>.</details>
+
+**Testing security without committing keys.** Two techniques, one per test style:
+
+- **Controller slice (`@WebMvcTest`):** `spring-security-test`'s `jwt()` request post-processor injects the `Authentication` directly (no real decoding) — but the slice needs `@EnableWebSecurity` on the config to get an `HttpSecurity` bean, and a mock `JwtDecoder`.
+- **Integration test (`@SpringBootTest`, real HTTP):** a `@TestConfiguration` supplies a `JwtDecoder` from a **test** RSA public key (overriding the production `jwk-set-uri`), and the test **mints** RS256 tokens with the matching private key.
+
+No private key is committed; the real auth↔demand-account JWKS interop is proven by a **live** run instead (🔬).
 
 **Identity propagation.** The gateway (Step 15) forwards the `Authorization` header to downstreams by default, so a token presented at the edge reaches the services unchanged — they validate it independently. (Hardening: the gateway should *strip* any inbound headers it sets itself so clients can't spoof identity; full identity propagation + mTLS between services is Step 41/43.)
 
@@ -192,7 +226,7 @@ sequenceDiagram
 | **Cross-service token validation** | Shared secret, or call the auth server per request (introspection). | **JWKS** — fetch the issuer's public keys, validate locally. | Decentralized, fast, no shared secret; the OAuth2/OIDC standard. |
 | **Signing** | HMAC (HS256) symmetric. | **RS256/ES256** asymmetric for multi-validator setups. | Validators can verify but not forge (least privilege). |
 | **Method security** | `@Secured` / `@EnableGlobalMethodSecurity`. | **`@EnableMethodSecurity`** + `@PreAuthorize` (SpEL). | Cleaner, SpEL-powered, on by default for `@PreAuthorize`. |
-| **Auth factors / passwordless** | Password + maybe SMS OTP. | **Passkeys/WebAuthn** (phishing-resistant, public-key); SS7 models **factors** for step-up. | Passwords are the weak link; passkeys + step-up are the modern direction. |
+| **Auth factors / passwordless** | Password + maybe SMS OTP. | **Passkeys/WebAuthn** (phishing-resistant, public-key); Spring Security 7 models **factors** for step-up. | Passwords are the weak link; passkeys + step-up are the modern direction. |
 
 > [!NOTE]
 > *Verify, don't guess.* We're on **Spring Security 7 / Boot 4** — verified RS256 signing, the `/oauth2/jwks` endpoint, the resource-server `jwk-set-uri` validation, and `@EnableMethodSecurity`/`@PreAuthorize` all **work**, including a **live cross-service** validation (auth's token accepted by demand-account, 🔬). WebAuthn has a Spring Security DSL (`webAuthn()`), but the full passkey ceremony needs the **frontend** (Phase F) — taught here as a concept, not faked.
@@ -238,28 +272,173 @@ steps/step-17/{requests.http,smoke.sh} · adr/0009-...md
 
 ---
 
-### Sub-step 1 of 5 — auth: RS256 + JWKS 🧭 *(you are here: **RS256/JWKS** → method security → resource-server deps → secure → tests)*
+### Sub-step 1 of 5 — auth: RS256 + JWKS (~3h) 🧭 *(you are here: **RS256/JWKS** → method security → resource-server deps → secure → tests)*
 
-🎯 **Goal:** sign with an RSA private key and publish the public key.
+🎯 **Goal:** sign with an RSA private key and publish the public key. Two halves: **1a** swaps the signing machinery to RS256; **1b** publishes the JWKS.
 
-📁 **Location:** `services/auth/.../security/SecurityConfig.java`, `JwtService.java`, new `web/JwksController.java`
+Meet the new types first (all imported in the code below — refer back here as you type):
 
-⌨️ **Code** (the key beans + JWKS):
+| Type | Role |
+|---|---|
+| `RSAKey` / `RSAKeyGenerator` | the RSA key pair (private + public halves), generated at startup |
+| `JWKSet` / `JWKSource` / `ImmutableJWKSet` | a set of JSON Web Keys; the source the encoder signs over |
+| `NimbusJwtEncoder` / `NimbusJwtDecoder` | sign with the private half / validate with the public half |
+| `kid`, `kty`, `n`, `e` | JWK fields: key id, key type, RSA modulus + public exponent — enough to verify, useless to sign |
+
+#### 1a — generate the key, swap the beans
+
+📁 **Location:** `services/auth/src/main/java/com/buildabank/auth/security/SecurityConfig.java` — replace the HMAC machinery. Complete file (the `@EnableMethodSecurity` line is explained in sub-step 2; type it now, it changes nothing until then):
+
 ```java
-private final RSAKey rsaKey = new RSAKeyGenerator(2048).keyID(UUID.randomUUID().toString()).generate();
-@Bean JWKSource<SecurityContext> jwkSource() { return new ImmutableJWKSet<>(new JWKSet(rsaKey)); }
-@Bean JwtEncoder jwtEncoder(JWKSource<SecurityContext> s) { return new NimbusJwtEncoder(s); }       // signs RS256
-@Bean JwtDecoder jwtDecoder() { return NimbusJwtDecoder.withPublicKey(rsaKey.toRSAPublicKey()).build(); }
-@Bean JWKSet publicJwkSet() { return new JWKSet(rsaKey.toPublicJWK()); }                            // PUBLIC only
-```
-```java
-// JwksController
-@GetMapping("/oauth2/jwks")
-public Map<String, Object> jwks() { return publicJwkSet.toJSONObject(); }
-```
-and `JwtService` now uses `JwsHeader.with(SignatureAlgorithm.RS256)` (was `MacAlgorithm.HS256`).
+// services/auth/src/main/java/com/buildabank/auth/security/SecurityConfig.java
+package com.buildabank.auth.security;
 
-🔍 **Line-by-line:** the `RSAKey` is generated once at startup. The `JwtEncoder` signs over the JWK source (private key); the `JwtDecoder` validates with the public half. `publicJwkSet()` exposes only `rsaKey.toPublicJWK()` — no private material — which the controller serializes at `/oauth2/jwks` (permit it in the filter chain).
+import java.util.UUID;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.web.SecurityFilterChain;
+
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
+import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import com.nimbusds.jose.jwk.source.JWKSource;
+import com.nimbusds.jose.proc.SecurityContext;
+
+/** Step 17: asymmetric (RS256) signing + a published JWKS, plus method security. */
+@Configuration
+@EnableMethodSecurity   // turns on @PreAuthorize (method-level authorization) — sub-step 2
+public class SecurityConfig {
+
+    private final RSAKey rsaKey = generateRsaKey();
+
+    private static RSAKey generateRsaKey() {
+        try {
+            return new RSAKeyGenerator(2048).keyID(UUID.randomUUID().toString()).generate();
+        } catch (Exception e) {
+            throw new IllegalStateException("failed to generate RSA key", e);
+        }
+    }
+
+    @Bean
+    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())                                          // stateless token API
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .cors(Customizer.withDefaults())
+                .authorizeHttpRequests(authorize -> authorize
+                        // public: login, health, and the JWKS so resource servers can fetch the public key
+                        .requestMatchers("/api/auth/login", "/actuator/health", "/oauth2/jwks").permitAll()
+                        .requestMatchers("/api/auth/admin").hasRole("ADMIN")           // URL-based authZ
+                        .anyRequest().authenticated())                                 // everything else: authN
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter())));
+        return http.build();
+    }
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    /** The signing key pair, as a JWK source (private key included — used only to SIGN). */
+    @Bean
+    JWKSource<SecurityContext> jwkSource() {
+        return new ImmutableJWKSet<>(new JWKSet(rsaKey));
+    }
+
+    /** Signs JWTs with the RSA private key (RS256). */
+    @Bean
+    JwtEncoder jwtEncoder(JWKSource<SecurityContext> jwkSource) {
+        return new NimbusJwtEncoder(jwkSource);
+    }
+
+    /** Validates JWTs with the RSA public key (this service validates its own tokens too). */
+    @Bean
+    JwtDecoder jwtDecoder() {
+        try {
+            return NimbusJwtDecoder.withPublicKey(rsaKey.toRSAPublicKey()).build();
+        } catch (Exception e) {
+            throw new IllegalStateException("failed to build JwtDecoder", e);
+        }
+    }
+
+    /** The PUBLIC half only — what we publish at /oauth2/jwks (no private key material). */
+    @Bean
+    JWKSet publicJwkSet() {
+        return new JWKSet(rsaKey.toPublicJWK());
+    }
+
+    /** Maps the token's {@code roles} claim (already like "ROLE_USER") straight to granted authorities. */
+    private JwtAuthenticationConverter jwtAuthConverter() {
+        JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
+        authorities.setAuthoritiesClaimName("roles");
+        authorities.setAuthorityPrefix("");   // the claim already carries the ROLE_ prefix
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(authorities);
+        return converter;
+    }
+}
+```
+
+`JwtService` changes exactly two lines — HS256 out, RS256 in:
+
+```diff
+ // services/auth/src/main/java/com/buildabank/auth/security/JwtService.java
+-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
++import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+ ...
+-        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
++        JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).build();   // asymmetric (Step 17)
+```
+
+🔍 **Line-by-line (1a):** `generate()` throws the checked `JOSEException`, so the key is built in a small static factory that wraps it in an `IllegalStateException` — a bare field initializer can't throw a checked exception (same reason the decoder bean wraps `toRSAPublicKey()` in try/catch). The `JwtEncoder` signs over the JWK source (private key); the `JwtDecoder` validates with the public half. The HMAC secret, `@Value` constructor, and `SecretKeySpec` from Step 16 are gone.
+
+#### 1b — publish the JWKS
+
+📁 **Location:** new `services/auth/src/main/java/com/buildabank/auth/web/JwksController.java` — complete file:
+
+```java
+// services/auth/src/main/java/com/buildabank/auth/web/JwksController.java
+package com.buildabank.auth.web;
+
+import java.util.Map;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.nimbusds.jose.jwk.JWKSet;
+
+/** Publishes the JWKS — the auth service's PUBLIC signing key(s) — at /oauth2/jwks. */
+@RestController
+public class JwksController {
+
+    private final JWKSet publicJwkSet;
+
+    public JwksController(JWKSet publicJwkSet) {
+        this.publicJwkSet = publicJwkSet;
+    }
+
+    @GetMapping("/oauth2/jwks")
+    public Map<String, Object> jwks() {
+        return publicJwkSet.toJSONObject();   // { "keys": [ { "kty":"RSA", "kid":..., "n":..., "e":"AQAB" } ] }
+    }
+}
+```
+
+🔍 **Line-by-line (1b):** the controller injects the `publicJwkSet` bean — only `rsaKey.toPublicJWK()`, no private material — and serializes it at `/oauth2/jwks`, which the filter chain already permits (`.requestMatchers(..., "/oauth2/jwks").permitAll()` in 1a).
 
 💭 **Under the hood:** the published JWK has `kty/kid/n/e` (modulus + exponent) — enough to verify, useless to sign. Tokens carry the `kid` so verifiers pick the right key (rotation-ready).
 
@@ -279,41 +458,68 @@ curl -s localhost:8083/oauth2/jwks
 
 💾 **Commit:** `git add services/auth/src/main && git commit -m "feat(auth): RS256 signing + JWKS endpoint"`
 
+↩️ **Stopping here?** You have auth signing RS256 and serving a public JWKS, committed. Next: sub-step 2 (method security); first action: open `services/auth/src/main/java/com/buildabank/auth/web/AuthController.java`.
+
 ⚠️ **Pitfall:** exposing the full `JWKSet` (with the private key) instead of `toPublicJWK()` would leak your signing key. Publish public only.
 
 ---
 
-### Sub-step 2 of 5 — auth: method security 🧭 *(RS256/JWKS ✅ → **method security** → …)*
+### Sub-step 2 of 5 — auth: method security (~2h) 🧭 *(RS256/JWKS ✅ → **method security** → …)*
 
-🎯 **Goal:** show `@PreAuthorize` (authorization on the method, not the URL).
+🎯 **Goal:** show `@PreAuthorize` (authorization on the method, not the URL). `@EnableMethodSecurity` is already on `SecurityConfig` from sub-step 1's full file — now we use it.
 
-📁 **Location:** `SecurityConfig` (`@EnableMethodSecurity`) + `AuthController`
+📁 **Location:** `services/auth/src/main/java/com/buildabank/auth/web/AuthController.java` — add one endpoint (one new import: `org.springframework.security.access.prepost.PreAuthorize`):
 
 ⌨️ **Code:**
 ```java
-@Configuration
-@EnableMethodSecurity   // turns on @PreAuthorize
-public class SecurityConfig { ... }
-
-// AuthController
-@GetMapping("/admin-method")
-@PreAuthorize("hasRole('ADMIN')")
-public Map<String, String> adminViaMethodSecurity() { return Map.of("message", "admin (method security) access granted"); }
+// services/auth/src/main/java/com/buildabank/auth/web/AuthController.java  (add below the existing /admin endpoint)
+    /**
+     * ADMIN-only via method security (@PreAuthorize) instead of a URL rule — the authorization lives on
+     * the method, closer to the domain and reusable from any caller. (There's no URL rule for this path
+     * beyond `anyRequest().authenticated()`, so the @PreAuthorize is what enforces ADMIN.)
+     */
+    @GetMapping("/admin-method")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, String> adminViaMethodSecurity() {
+        return Map.of("message", "admin (method security) access granted");
+    }
 ```
 
-🔍 **Line-by-line:** `@EnableMethodSecurity` enables `@PreAuthorize`; the SpEL `hasRole('ADMIN')` requires authority `ROLE_ADMIN`. There's no URL rule for `/api/auth/admin-method` beyond "authenticated", so the **method** annotation is what enforces ADMIN.
+Now prove both sub-steps with two new tests (the `get(...)`/`tokenFor(...)` helpers already exist in this class from Step 16):
 
-▶️ **Run & See:** a USER token → 403, an ADMIN token → 200 (proven in `AuthSecurityTest`).
+```java
+// services/auth/src/test/java/com/buildabank/auth/AuthSecurityTest.java  (add below the existing tests)
+    @Test
+    void jwksEndpointPublishesPublicKeyOnly() throws Exception {
+        HttpResponse<String> jwks = get("/oauth2/jwks", null);   // public — no token needed
+        assertThat(jwks.statusCode()).isEqualTo(200);
+        assertThat(jwks.body()).contains("\"kty\":\"RSA\"").contains("\"keys\"");
+        // The PUBLIC JWK must NOT leak private key material (RSA private exponent "d", primes "p"/"q").
+        assertThat(jwks.body()).doesNotContain("\"d\":").doesNotContain("\"p\":").doesNotContain("\"q\":");
+    }
+
+    @Test
+    void methodSecurity_adminMethod_enforcesRole() throws Exception {
+        assertThat(get("/api/auth/admin-method", tokenFor("alice", "password")).statusCode()).isEqualTo(403);
+        assertThat(get("/api/auth/admin-method", tokenFor("admin", "admin123")).statusCode()).isEqualTo(200);
+    }
+```
+
+🔍 **Line-by-line:** `@EnableMethodSecurity` enables `@PreAuthorize`; the SpEL `hasRole('ADMIN')` requires authority `ROLE_ADMIN`. There's no URL rule for `/api/auth/admin-method` beyond "authenticated", so the **method** annotation is what enforces ADMIN. The first test locks in sub-step 1's security property (no `d`/`p`/`q` in the JWKS); the second proves the deny **and** the allow case for method security.
+
+▶️ **Run & See:** a USER token → 403, an ADMIN token → 200 (proven in `AuthSecurityTest` above).
 
 ✋ **Checkpoint:** `./mvnw -pl services/auth test` green (11 tests).
 
 💾 **Commit:** `git add services/auth/src && git commit -m "feat(auth): @EnableMethodSecurity + @PreAuthorize endpoint + tests"`
 
+↩️ **Stopping here?** You have the auth side fully done (RS256 + JWKS + method security, 11 tests green, committed). Next: sub-step 3 (demand-account becomes a resource server); first action: open `services/demand-account/pom.xml`.
+
 ⚠️ **Pitfall:** forgetting `@EnableMethodSecurity` → `@PreAuthorize` is silently ignored (everyone gets in). Always test the deny case.
 
 ---
 
-### Sub-step 3 of 5 — demand-account: resource-server deps + `jwk-set-uri` 🧭 *(… → **resource-server** → …)*
+### Sub-step 3 of 5 — demand-account: resource-server deps + `jwk-set-uri` (~2h) 🧭 *(… → **resource-server** → …)*
 
 🎯 **Goal:** make demand-account validate auth's tokens.
 
@@ -338,45 +544,85 @@ spring:
 
 💭 **Under the hood:** on the first token, the decoder downloads the JWKS, finds the key by `kid`, and validates the RS256 signature + `exp`. Subsequent requests reuse the cached key.
 
+❓ **Quick check:** Boot now sees `jwk-set-uri` — at what moment is the JWKS actually fetched, and what does that mean if auth is down when demand-account starts? <details><summary>answer</summary>Lazily, on the <em>first token validation</em> (then cached). So demand-account boots fine with auth down — but the first Bearer request will fail with a fetch error (401) until auth is reachable.</details>
+
 ✋ **Checkpoint:** `./mvnw -q -pl services/demand-account compile` succeeds.
 
 💾 **Commit:** `git add services/demand-account/pom.xml services/demand-account/src/main/resources/application.yml && git commit -m "build(demand-account): resource-server deps + jwk-set-uri"`
+
+↩️ **Stopping here?** You have the resource-server deps + `jwk-set-uri` committed (it compiles; nothing is enforced yet). Next: sub-step 4 (secure the edge); first action: create `services/demand-account/src/main/java/com/buildabank/account/web/SecurityConfig.java`.
 
 ⚠️ **Pitfall:** a `jwk-set-uri` the service can't reach at *first token* → 401s with a fetch error. It's fine at startup (lazy); ensure auth is reachable when tokens arrive (or use a static key in tests).
 
 ---
 
-### Sub-step 4 of 5 — demand-account: secure the edge + method security 🧭 *(… → **secure** → tests)*
+### Sub-step 4 of 5 — demand-account: secure the edge + method security (~3h) 🧭 *(… → **secure** → tests)*
 
 🎯 **Goal:** require a token on the money endpoints; demonstrate `@PreAuthorize`.
 
 📁 **Location:** new `services/demand-account/.../web/SecurityConfig.java` + `TransferController` (admin endpoint)
 
-⌨️ **Code:**
+⌨️ **Type it yourself first:** you wrote this exact shape in Step 16's auth `SecurityConfig` (and again in sub-step 1). Before looking below, write the three `requestMatchers` rules yourself — health + info public, the OpenAPI docs public, everything else authenticated — then compare.
+
+⌨️ **Code** — complete file:
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/web/SecurityConfig.java
+package com.buildabank.account.web;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.web.SecurityFilterChain;
+
+/** Step 17: demand-account becomes an OAuth2 resource server — money endpoints require auth's JWT. */
 @Configuration
-@EnableWebSecurity   // gives the @WebMvcTest slice an HttpSecurity bean too
+@EnableWebSecurity      // imports the HttpSecurity bean — needed in @WebMvcTest slices too
 @EnableMethodSecurity
 public class SecurityConfig {
-    @Bean SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http.csrf(c -> c.disable()).sessionManagement(s -> s.sessionCreationPolicy(STATELESS)).cors(withDefaults())
-            .authorizeHttpRequests(a -> a
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                .anyRequest().authenticated())                 // all /api/** money endpoints require a token
-            .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(rolesConverter())));
+
+    @Bean
+    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())                                  // stateless token API
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .cors(Customizer.withDefaults())
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .anyRequest().authenticated())                         // all /api/** money endpoints: authN
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(rolesConverter())));
         return http.build();
+    }
+
+    /** Map the JWT's {@code roles} claim (already "ROLE_*") to Spring authorities — same scheme as auth. */
+    private JwtAuthenticationConverter rolesConverter() {
+        JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
+        authorities.setAuthoritiesClaimName("roles");
+        authorities.setAuthorityPrefix("");
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(authorities);
+        return converter;
     }
 }
 ```
 ```java
-// TransferController — method security on a narrow admin endpoint
-@GetMapping("/api/v1/admin/ping")
-@PreAuthorize("hasRole('ADMIN')")
-public Map<String, String> adminPing() { return Map.of("message", "admin ok"); }
+// services/demand-account/src/main/java/com/buildabank/account/web/TransferController.java
+// (add this endpoint; two new imports: java.util.Map + org.springframework.security.access.prepost.PreAuthorize)
+    /** ADMIN-only operational endpoint, guarded by method security (a USER token gets 403, ADMIN 200). */
+    @GetMapping("/api/v1/admin/ping")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, String> adminPing() {
+        return Map.of("message", "admin ok");
+    }
 ```
 
-🔍 **Line-by-line:** `@EnableWebSecurity` ensures the `HttpSecurity` bean exists (needed in the `@WebMvcTest` slice). The rules: health + docs public, everything else (the money API) authenticated. `oauth2ResourceServer(jwt(...))` validates the Bearer token and maps `roles`. `@PreAuthorize` on `adminPing` adds a role check at the method (we kept it off the transfer *service* to avoid forcing auth into service-level unit tests — see 🌱).
+🔍 **Line-by-line:** `@EnableWebSecurity` ensures the `HttpSecurity` bean exists (needed in the `@WebMvcTest` slice). The rules: health + docs public, everything else (the money API) authenticated. `oauth2ResourceServer(jwt(...))` validates the Bearer token, and `rolesConverter()` maps the `roles` claim to authorities with an **empty** prefix (the claim already carries `ROLE_`) — the mirror image of auth's `jwtAuthConverter()`. `@PreAuthorize` on `adminPing` adds a role check at the method (we kept it off the transfer *service* to avoid forcing auth into service-level unit tests — see 🌱).
 
 🔮 **Predict:** `POST /api/transfers` with **no** `Authorization` header — status? <details><summary>answer</summary>401 (the resource server rejects before the controller). Proven in 🔬.</details>
 
@@ -384,31 +630,164 @@ public Map<String, String> adminPing() { return Map.of("message", "admin ok"); }
 
 💾 **Commit:** `git add services/demand-account/src/main && git commit -m "feat(demand-account): resource-server SecurityConfig + @PreAuthorize admin endpoint"`
 
+↩️ **Stopping here?** You have the money endpoints requiring a token, committed — but demand-account's HTTP-layer tests are now red until sub-step 5 gives them tokens. Next: sub-step 5; first action: open `services/demand-account/src/test/java/com/buildabank/account/web/TransferControllerTest.java`.
+
 ⚠️ **Pitfall:** without `@EnableWebSecurity`, a `@WebMvcTest` slice fails with *"No qualifying bean of type HttpSecurity"* — add it (the full app context provides it either way).
 
 ---
 
-### Sub-step 5 of 5 — fix the HTTP-layer tests 🧭 *(… → **tests**)*
+### Sub-step 5 of 5 — fix the HTTP-layer tests (~3h) 🧭 *(… → **tests**)*
 
 🎯 **Goal:** authenticate the controller-slice + integration tests (service tests are unaffected — they call services directly, no HTTP).
 
 📁 **Location:** `TransferControllerTest` (slice) + `DemandAccountIntegrationTest` (real HTTP)
 
-⌨️ **Code** (the two techniques):
-```java
-// Slice (@WebMvcTest): inject the auth directly with spring-security-test's jwt() post-processor
-mvc.perform(post("/api/transfers").with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER")))
-        .contentType(APPLICATION_JSON).content("...")).andExpect(status().isOk());
-// (also @MockitoBean JwtDecoder so the resource-server config can start)
+⌨️ **Code — technique 1, the slice** (`TransferControllerTest`). Four changes: import the security config, mock the decoder, add a `user()` helper, and give every existing `mvc.perform(...)` a `.with(user())`. Then two new tests:
 
-// Integration (@SpringBootTest, real HTTP): a test JwtDecoder from a test key, and mint real RS256 tokens
-@TestConfiguration static class JwtTestConfig {
-    @Bean JwtDecoder jwtDecoder() { return NimbusJwtDecoder.withPublicKey(TEST_KEY.toRSAPublicKey()).build(); }
+```java
+// services/demand-account/src/test/java/com/buildabank/account/web/TransferControllerTest.java
+// new imports:
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
+
+@WebMvcTest(TransferController.class)
+@Import(SecurityConfig.class)        // pull the real filter chain into the slice
+class TransferControllerTest {
+
+    // The resource-server config needs a JwtDecoder bean to start; jwt() below bypasses it, so a mock is fine.
+    @MockitoBean
+    JwtDecoder jwtDecoder;
+
+    private static JwtRequestPostProcessor user() {
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_USER"));
+    }
+
+    // ... every existing mvc.perform(post(...)) becomes mvc.perform(post(...).with(user())) ...
+
+    @Test
+    void unauthenticatedRequestIs401() throws Exception {
+        // No jwt() → the resource-server filter chain rejects before the controller (Step 17).
+        mvc.perform(post("/api/transfers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":25.00}
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void adminPing_methodSecurity_enforcesRole() throws Exception {
+        // @PreAuthorize("hasRole('ADMIN')") — a USER token is forbidden, an ADMIN token allowed.
+        mvc.perform(get("/api/v1/admin/ping").with(user()))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/ping").with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("admin ok"));
+    }
 }
-// mint: SignedJWT signed with TEST_KEY's private half, claim "roles"; send as Bearer
 ```
 
-🔍 **Line-by-line:** the slice's `jwt()` post-processor sets a `JwtAuthenticationToken` with the given authorities — no real token needed. The integration test overrides the production `jwk-set-uri` decoder with one built from a **test** key, and mints matching RS256 tokens — so it validates real signatures end-to-end without running auth (the real interop is the live run in 🔬). A new test asserts a no-token request is 401 and `/api/v1/admin/ping` is 403 for USER / 200 for ADMIN.
+⌨️ **Code — technique 2, the integration test** (`DemandAccountIntegrationTest`). A test key + test decoder + a real RS256 mint helper; the existing `post`/`get` helpers gain an `Authorization: Bearer` header:
+
+```java
+// services/demand-account/src/test/java/com/buildabank/account/DemandAccountIntegrationTest.java
+// new imports:
+import java.util.Date;
+import java.util.List;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import({ContainersConfig.class, DemandAccountIntegrationTest.JwtTestConfig.class})
+class DemandAccountIntegrationTest {
+
+    // One test signing key for the whole class: the resource server validates with its public half,
+    // and we mint tokens with its private half.
+    private static final RSAKey TEST_KEY = generateKey();
+
+    private static RSAKey generateKey() {
+        try {
+            return new RSAKeyGenerator(2048).keyID("test-key").generate();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** Override the production JwtDecoder (jwk-set-uri) with one backed by our test public key. */
+    @TestConfiguration
+    static class JwtTestConfig {
+        @Bean
+        JwtDecoder jwtDecoder() {
+            try {
+                return NimbusJwtDecoder.withPublicKey(TEST_KEY.toRSAPublicKey()).build();
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        }
+    }
+
+    private static String mintToken(List<String> roles) {
+        try {
+            JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                    .subject("alice")
+                    .claim("roles", roles)
+                    .issueTime(new Date())
+                    .expirationTime(new Date(System.currentTimeMillis() + 600_000))
+                    .build();
+            SignedJWT jwt = new SignedJWT(
+                    new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(TEST_KEY.getKeyID()).build(), claims);
+            jwt.sign(new RSASSASigner(TEST_KEY.toPrivateKey()));
+            return jwt.serialize();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static final String USER_TOKEN = mintToken(List.of("ROLE_USER"));
+    private static final String ADMIN_TOKEN = mintToken(List.of("ROLE_USER", "ROLE_ADMIN"));
+
+    @Test
+    void unauthenticatedMoneyRequestIs401() throws Exception {
+        // No Authorization header → the resource server rejects before any controller runs (Step 17).
+        HttpResponse<String> r = http.send(HttpRequest.newBuilder(URI.create(base + "/api/accounts/ACC-A"))
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(r.statusCode()).isEqualTo(401);
+    }
+
+    @Test
+    void adminPing_methodSecurity_overHttp() throws Exception {
+        // @PreAuthorize("hasRole('ADMIN')"): a USER token is forbidden, an ADMIN token allowed.
+        assertThat(getWithToken("/api/v1/admin/ping", USER_TOKEN).statusCode()).isEqualTo(403);
+        HttpResponse<String> ok = getWithToken("/api/v1/admin/ping", ADMIN_TOKEN);
+        assertThat(ok.statusCode()).isEqualTo(200);
+        assertThat(ok.body()).contains("admin ok");
+    }
+
+    // ── helpers (defaulting to a USER token; the existing post/get helpers add this header) ──
+    private HttpResponse<String> getWithToken(String path, String token) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create(base + path))
+                        .header("Authorization", "Bearer " + token).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+    // post(...) / postWithHeader(...) each gain: .header("Authorization", "Bearer " + USER_TOKEN)
+    // get(path) delegates to getWithToken(path, USER_TOKEN)
+}
+```
+
+🔍 **Line-by-line:** the slice's `jwt()` post-processor sets a `JwtAuthenticationToken` with the given authorities — no real token needed (the mocked `JwtDecoder` exists only so the resource-server config can start). The integration test overrides the production `jwk-set-uri` decoder with one built from `TEST_KEY`'s public half, and `mintToken(...)` signs real RS256 tokens with the private half — so it validates real signatures end-to-end without running auth (the real interop is the live run in 🔬). The new tests assert a no-token request is 401 and `/api/v1/admin/ping` is 403 for USER / 200 for ADMIN — in both test styles. The docs test loses its default token (docs must be reachable **without** auth).
 
 ▶️ **Run & See:**
 ```bash
@@ -421,11 +800,15 @@ demand-account: Tests run: 31, Failures: 0, Errors: 0
 BUILD SUCCESS
 ```
 
+🔮 **Predict:** you're about to open demand-account's edge rule to `.permitAll()` and rerun the slice. What status does the no-token request get now, and what happens to `unauthenticatedRequestIs401`? <details><summary>answer</summary>200 — the request sails through to the controller, so the test fails with <code>expected:&lt;401&gt; but was:&lt;200&gt;</code>. That failure is the point: it proves the test actually verifies the protection.</details>
+
 🔬 **Break-it (the §12.3 mutation):** change demand-account's `.anyRequest().authenticated()` to `.permitAll()` and rerun the slice — `unauthenticatedRequestIs401` fails (`expected:<401> but was:<200>`). Put it back. (See 🔬 §4.)
 
 ✋ **Checkpoint:** auth 11 + demand-account 31 tests green.
 
 💾 **Commit:** `git add services/demand-account/src/test && git commit -m "test(demand-account): authenticate HTTP tests (jwt() + minted RS256), method-security tests"`
+
+↩️ **Stopping here?** You have both services green (auth 11 + demand-account 31), committed. Next: the live cross-service run (🎮 Play With It → D · 🔬); first action: `./mvnw -pl services/auth spring-boot:run` (the Cheat Card has the full sequence).
 
 ⚠️ **Pitfall:** adding `@PreAuthorize` to a *service* method silently breaks every test that calls it directly (no security context → `AccessDeniedException`). Secure the edge; reserve method security for narrowly-scoped methods (or set up the context in those tests).
 
@@ -529,19 +912,19 @@ Fresh `git clone` at `step-17-end` → `make doctor` + `./mvnw verify` → **BUI
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① Key rotation with JWKS</summary>
+<summary>① Key rotation with JWKS (optional, +~10 min)</summary>
 
 JWKS lists *multiple* keys, and tokens carry a `kid`. To rotate: generate a new key, add it to the JWKS, start signing new tokens with it (old tokens still validate against the old key still in the set), then remove the old key after the longest token lifetime passes. Resource servers refresh the JWKS (Spring refreshes on an unknown `kid`), so rotation is seamless and zero-downtime. Our ephemeral-at-startup key is a stand-in; production persists keys (keystore/Vault, Phase H) and rotates on a schedule.
 </details>
 
 <details>
-<summary>② Passkeys / WebAuthn — the real flow</summary>
+<summary>② Passkeys / WebAuthn — the real flow (optional, +~10 min)</summary>
 
 WebAuthn registration: the server sends a challenge; the authenticator (Face ID/fingerprint/security key) generates a key pair, signs the challenge, and returns the *public* key + an attestation. Login: the server sends a challenge; the authenticator signs it with the *private* key (never leaves the device); the server verifies with the stored public key. No shared secret, nothing phishable. Spring Security has a `webAuthn()` DSL, but the ceremony is browser-driven — we wire it in **Phase F** (the frontend). Passkeys are the endgame for MFA.
 </details>
 
 <details>
-<summary>③ Step-up authentication with factors</summary>
+<summary>③ Step-up authentication with factors (optional, +~10 min)</summary>
 
 Spring Security 7 tracks *how* you authenticated as `FACTOR_*` authorities (e.g. `FACTOR_PASSWORD`, `FACTOR_OTP`, `FACTOR_WEBAUTHN`). A sensitive operation can require a stronger/fresh factor: `@PreAuthorize("hasAuthority('FACTOR_OTP')")` or a custom check on token age — if absent, the app triggers a re-auth (step-up) for *that* action, then proceeds. This is how a bank asks you to re-confirm before a large transfer even though you're logged in.
 </details>
@@ -558,7 +941,7 @@ Spring Security 7 tracks *how* you authenticated as `FACTOR_*` authorities (e.g.
 
 5. **"How do you revoke a JWT?"** *(gotcha)* → You mostly can't before `exp` (self-contained). Mitigate with short-lived access tokens + revocable refresh tokens, a `jti` denylist, and key rotation (JWKS). Or use opaque tokens + introspection if instant revocation is required.
 
-6. **"What are passkeys and step-up auth?"** *(modern)* → Passkeys/WebAuthn: phishing-resistant, device-bound public-key credentials (no password to steal). Step-up: requiring a stronger/fresh factor for sensitive actions even when logged in (modeled by SS7 `FACTOR_*` authorities).
+6. **"What are passkeys and step-up auth?"** *(modern)* → Passkeys/WebAuthn: phishing-resistant, device-bound public-key credentials (no password to steal). Step-up: requiring a stronger/fresh factor for sensitive actions even when logged in (modeled by Spring Security 7's `FACTOR_*` authorities).
 
 > **Behavioral/STAR seed:** *"Tell me about securing a distributed system."* → Moved from a shared JWT secret to asymmetric signing + JWKS so services validate without forging (S/T/A); proved a live cross-service flow where the money service trusted the identity service's token without ever holding the secret (R).
 
@@ -602,7 +985,7 @@ Spring Security 7 tracks *how* you authenticated as `FACTOR_*` authorities (e.g.
 - A **resource server** validates Bearer JWTs per request (`jwk-set-uri`), statelessly.
 - **URL rules** gate the edge; **`@PreAuthorize`** method security expresses fine-grained domain rules.
 - **Revocation** is the JWT weak spot → short-lived access + refresh tokens + key rotation.
-- **Modern auth**: MFA, **passkeys/WebAuthn** (phishing-resistant), **step-up** (SS7 `FACTOR_*`).
+- **Modern auth**: MFA, **passkeys/WebAuthn** (phishing-resistant), **step-up** (Spring Security 7 `FACTOR_*`).
 
 **(b) Key terms:** RS256 vs HS256, JWKS/kid/rotation, resource server/jwk-set-uri, JwtDecoder, URL authz vs @PreAuthorize/@EnableMethodSecurity, identity propagation, revocation/refresh, MFA/passkey/WebAuthn/step-up, algorithm confusion.
 
@@ -612,6 +995,7 @@ Spring Security 7 tracks *how* you authenticated as `FACTOR_*` authorities (e.g.
 3. URL rule vs @PreAuthorize? <details><summary>answer</summary>URL = coarse edge gating; @PreAuthorize = fine-grained, reusable rule on a method.</details>
 4. Why is a JWT hard to revoke? <details><summary>answer</summary>It's self-contained/valid until exp — no per-request lookup; mitigate with short lifetimes + refresh + key rotation.</details>
 5. What's an algorithm-confusion attack? <details><summary>answer</summary>Submitting an HS256 token using the RS256 public key as the HMAC secret; defend by pinning the expected algorithm.</details>
+6. Why are passkeys phishing-resistant where passwords and SMS OTP are not — and what is step-up auth? <details><summary>answer</summary>A passkey signs a server challenge with a device-bound private key that never leaves the device — there's no secret to type into a fake site (and SMS OTPs can be phished or intercepted). Step-up = requiring a stronger or fresh factor for a sensitive action even when already logged in (Spring Security 7 models this with <code>FACTOR_*</code> authorities).</details>
 
 **(d) 🔗 How this connects**
 - **Back to Step 16** (auth + filter chain + JWT), **Step 12/14** (the money endpoints), **Step 15** (gateway/identity propagation).

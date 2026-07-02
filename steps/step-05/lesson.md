@@ -13,12 +13,12 @@
 
 A one-line map of where we're going. Click to jump.
 
-1. **[A · 🧭 Orient](#orient)** — what IoC/DI is, why it matters, the cheat card, and whether you can skip.
-2. **[B · 🧠 Understand](#understand)** — Inversion of Control, the `ApplicationContext`, the bean lifecycle, scopes, conditions, SpEL — no magic; plus Strategy/DIP, the security lens, a version-evolution story, and a thread-safety note.
-3. **[C · 🛠️ Build](#build)** — the heart: a brand-new non-web Spring Boot module wired entirely by the container — `pom` → app → `RateProvider` strategy → two conditional beans → `InterestService` (constructor DI) → `@Bean Clock` → lifecycle + `BeanPostProcessor` → prototype bean → `LabRunner` → config → three tests. Then 🎮 Play With It and the 🏁 finished result.
-4. **[D · 🔬 Prove](#prove)** — the Verification Log: the real, pasted `verify` (6 tests) and the app run with lifecycle ordering.
-5. **[E · 🎓 Apply](#apply)** — go-deeper asides, interview prep, and your-turn exercises.
-6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, and the recap/study notes.
+1. **[A · 🧭 Orient](#orient)** — what IoC/DI is, why it matters, the cheat card, and whether you can skip. *(~45 min)*
+2. **[B · 🧠 Understand](#understand)** — Inversion of Control, the `ApplicationContext`, the bean lifecycle, scopes, conditions, SpEL — no magic; plus Strategy/DIP, the security lens, a version-evolution story, and a thread-safety note. *(~2h)*
+3. **[C · 🛠️ Build](#build)** — the heart: a brand-new non-web Spring Boot module wired entirely by the container — `pom` → app → `RateProvider` strategy → two conditional beans → `InterestService` (constructor DI) → `@Bean Clock` → lifecycle + `BeanPostProcessor` → prototype bean → `LabRunner` → config → three tests. Then 🎮 Play With It and the 🏁 finished result. *(~9-10h)*
+4. **[D · 🔬 Prove](#prove)** — the Verification Log: the real, pasted `verify` (6 tests) and the app run with lifecycle ordering. *(~45 min)*
+5. **[E · 🎓 Apply](#apply)** — go-deeper asides, interview prep, and your-turn exercises. *(~2h + optional extras)*
+6. **[F · 🏆 Review](#review)** — troubleshooting, resources & glossary, and the recap/study notes. *(~45 min)*
 
 ---
 
@@ -124,6 +124,22 @@ java -version      # → 25.x
 
 No Docker, no database, no ports. This is the calmest environment in the whole course — pure container, pure JVM.
 
+## 🗓️ Session Plan
+
+≈20h is a *marathon*, not a sitting. Here's the step cut into **seven sittings of ~2-3h**, each ending at a real ✋ checkpoint with everything committed — stop at any boundary and nothing is left dangling:
+
+| Sitting | Covers | ~Time | Ends at |
+|---|---|---|---|
+| **S1 · Map the container** | A · Orient + B · Understand (Big Idea → Thread-safety note) | ~2.5h | End of B, ⚡ quick checks answered |
+| **S2 · Scaffold & entry point** | Build sub-steps 1–3 (pom → `SpringLabApplication` → `RateProvider`) | ~2h | ✋ Sub-step 3 checkpoint, committed |
+| **S3 · Conditional beans & DI** | Build sub-steps 4–6 (two providers → `InterestService` → `LabConfig`) | ~2.5h | ✋ Sub-step 6 checkpoint, committed |
+| **S4 · Lifecycle & scopes** | Build sub-steps 7–8 (`LifecycleBean` + BPP → prototype `AuditEntry`) | ~2h | ✋ Sub-step 8 checkpoint, committed |
+| **S5 · First full run** | Build sub-steps 9–10 (`LabRunner` → `application.yml` → run + the flip) | ~2.5h | ✋ Sub-step 10 checkpoint (`fixed`/`325.00`, `market`/`475.00`) |
+| **S6 · Prove it** | Build sub-step 11 (three tests) + 🏁 Finished Result + D · Prove | ~2.5h | `verify` green (6 tests), tag `step-05-end` |
+| **S7 · Play & consolidate** | 🎮 Play With It + E · Apply + F · Review | ~3h | Recap & study notes done |
+
+That's ~17-18h of core work; the ≈20h budget leaves slack for debugging and breaks. **Optional routes:** the ⏭️ skip-test (5 min) can shrink the whole step to ~3h of skimming for experienced Spring devs; 🚀 Go Deeper asides cost +~4 min each (×4); the 🔬 break-it experiments +~15-20 min; the stretch goal +~45-60 min.
+
 ---
 
 <a id="understand"></a>
@@ -172,6 +188,12 @@ A precise mental model of each thing we use:
 
 **8. The lifecycle + `BeanPostProcessor`.** For each bean the container: ① **instantiates** it (constructor) → ② **injects** dependencies → ③ calls every **`BeanPostProcessor.postProcessBeforeInitialization`** → ④ runs **`@PostConstruct`** → ⑤ calls every **`BeanPostProcessor.postProcessAfterInitialization`** → bean is **in use**. On context close: **`@PreDestroy`** → destroyed. A `BeanPostProcessor` (BPP) is the official extension point invoked around *every* bean's initialization — it's how Spring itself wires AOP proxies and resolves `@Value`. We'll log around it to *see* steps ②–⑤ in order.
 
+⚡ **Quick check (30 seconds)** — eight dense ideas just went by; make sure they stuck before moving on:
+
+1. A `BeanDefinition` is the ___, not the ___. <details><summary>answer</summary>The **recipe** (class, scope, constructor args, conditions), not the **object/instance** — instances come later.</details>
+2. When are `@ConditionalOnProperty` conditions evaluated — before or after instantiation? <details><summary>answer</summary>**Before** — at `BeanDefinition` registration time, so the losing bean is never created at all.</details>
+3. In full-mode `@Configuration`, `beanB()` calling `clock()` returns what? <details><summary>answer</summary>The **same managed singleton** — the CGLIB proxy intercepts the call. (Lite mode would run the method body again → a new instance.)</details>
+
 ## 🧩 Pattern Spotlight: Strategy + Dependency Inversion
 
 > **Problem.** `InterestService` needs an interest rate, but the *source* of that rate should be swappable (a fixed configured rate today, a "live market" rate tomorrow) without touching the service.
@@ -205,9 +227,11 @@ The interview-critical "old way → new way → why → what legacy still uses."
 
 **Field → constructor injection** is the single biggest day-to-day shift: modern Spring code uses **constructor injection with `final` fields** (often via Lombok's `@RequiredArgsConstructor` in larger teams; we write the constructor by hand to keep it explicit). **What legacy still uses:** plenty of older codebases still have XML contexts and `@Autowired` fields — you'll meet both, and now you'll know why they're there and how to modernize them.
 
+❓ **Knowledge check:** what replaced XML wiring, in order? <details><summary>answer</summary>XML `<bean>` → annotation scanning (`@Component`/`@Autowired`, Spring 2.5/3) → Java config (`@Configuration`/`@Bean`, Spring 3) → single-constructor autowiring without `@Autowired` (4.3) → Boot auto-configuration with `@ConditionalOn…` beans.</details>
+
 ## 🧵 Thread-safety note (forward-ref Step 11)
 
-Singleton beans are **shared across every thread** that touches them — so a singleton must be **stateless or otherwise thread-safe**. Our `InterestService` holds only a **`final`, immutable collaborator** (`RateProvider`) and keeps **no mutable instance state**: every call to `annualInterest(...)` works purely on its arguments. That's the safest design for a singleton. (Contrast: if a singleton stored a mutable running total in a field, concurrent requests would race on it — exactly the kind of bug we'll force, observe, and fix in **Step 11**.) Note `AuditEntry` keeps a `static AtomicLong` counter shared across all its instances — `AtomicLong` is deliberately thread-safe for exactly this reason.
+Singleton beans are **shared across every thread** that touches them — so a singleton must be **stateless or otherwise thread-safe**. Our `InterestService` holds only a **`final`, immutable collaborator** (`RateProvider`) and keeps **no mutable instance state**: every call to `annualInterest(...)` works purely on its arguments. That's the safest design for a singleton. (Contrast: if a singleton stored a mutable running total in a field, concurrent requests would race on it — exactly the kind of bug we'll force, observe, and fix in **Step 11**.) Note: the prototype bean we'll build in Sub-step 8 (`AuditEntry`) keeps a `static AtomicLong` counter shared across all its instances — `AtomicLong` is deliberately thread-safe for exactly this reason.
 
 ---
 
@@ -361,6 +385,8 @@ playground/spring-lab/
 
 ✋ **Checkpoint:** you have `playground/spring-lab/pom.xml` and the parent lists the module. No Java yet — that's expected.
 
+🔖 **Stopping here?** You have the module scaffolded and registered (commit below). Next: Sub-step 2 — the entry point; first action: create `playground/spring-lab/src/main/java/com/buildabank/springlab/SpringLabApplication.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -415,6 +441,8 @@ public class SpringLabApplication {
 
 ✋ **Checkpoint:** the file compiles (`./mvnw -pl playground/spring-lab -am compile`).
 
+🔖 **Stopping here?** You have a bootable (if empty) Spring app that compiles (commit below). Next: Sub-step 3 — the `RateProvider` interface; first action: create `…/springlab/rates/RateProvider.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -462,6 +490,8 @@ public interface RateProvider {
 💭 **Under the hood:** this interface is the **type** the container will match against. When `InterestService` asks for a `RateProvider`, Spring looks for exactly one bean *assignable to* `RateProvider`. Because conditions ensure only one implementation is registered, that lookup is unambiguous.
 
 ✋ **Checkpoint:** compiles. No bean yet (interfaces aren't components).
+
+🔖 **Stopping here?** (End of sitting S2.) You have pom + entry point + the strategy interface, compiling and committed. Next: Sub-step 4 — two conditional implementations; first action: create `…/springlab/rates/FixedRateProvider.java`.
 
 💾 **Commit:**
 
@@ -525,7 +555,10 @@ public class FixedRateProvider implements RateProvider {
 
 📁 **Location 2:** new file → `playground/spring-lab/src/main/java/com/buildabank/springlab/rates/MarketRateProvider.java`
 
-⌨️ **Code:**
+⌨️ **Type it yourself** (you just saw the pattern — retrieve it, don't paste it). Same shape as `FixedRateProvider`, but: `havingValue = "market"`, **no** `matchIfMissing`, no constructor or `@Value` (drop those imports), `annualRate()` returns a hardcoded `new BigDecimal("0.0475")`, and `name()` returns `"market"`. Write it, then compare:
+
+<details>
+<summary><strong>Solution — MarketRateProvider.java</strong></summary>
 
 ```java
 // playground/spring-lab/src/main/java/com/buildabank/springlab/rates/MarketRateProvider.java
@@ -556,6 +589,8 @@ public class MarketRateProvider implements RateProvider {
 }
 ```
 
+</details>
+
 🔍 **Line-by-line:**
 - `@ConditionalOnProperty(name="bank.rates.source", havingValue="market")` — **no `matchIfMissing`**, so this bean exists *only* when `bank.rates.source=market` is set explicitly.
 - `new BigDecimal("0.0475")` — note the **String constructor** (`"0.0475"`, not `0.0475`) so the decimal is exact, not a binary approximation.
@@ -565,6 +600,8 @@ public class MarketRateProvider implements RateProvider {
 🔮 **Predict:** with default config, which provider's constructor runs, and which one never gets instantiated? <details><summary>answer</summary>`FixedRateProvider` is instantiated (`matchIfMissing=true`); `MarketRateProvider` is never even created because its condition fails.</details>
 
 ✋ **Checkpoint:** both compile. Still no service to inject them — next.
+
+🔖 **Stopping here?** You have both conditional providers compiling (commit below). Next: Sub-step 5 — `InterestService`; first action: create `…/springlab/interest/InterestService.java`.
 
 💾 **Commit:**
 
@@ -631,9 +668,13 @@ public class InterestService {
 
 💭 **Under the hood:** **no mutable state** lives in this singleton — `annualInterest` operates only on its argument and the immutable `rateProvider`. That's why one shared instance is safe across threads (the 🧵 note above). If you added a mutable field, you'd have introduced a shared-state race.
 
+❓ **Knowledge check:** why does `InterestService`'s constructor need no `@Autowired`, and what does making the injected field `final` buy you? <details><summary>answer</summary>Since Spring 4.3, a bean with **exactly one constructor** is autowired automatically. `final` means the dependency is assigned exactly once in the constructor — the object can never exist in a half-wired state, can't be reassigned later, and is safe to share across threads.</details>
+
 🔮 **Predict:** with `fixed` at `0.0325` and a principal of `10000.00`, what's `annualInterest`? <details><summary>answer</summary>`10000.00 × 0.0325 = 325.000000`, scaled to 2 dp → **`325.00`**. (Market at `0.0475` → `475.00`.)</details>
 
 ✋ **Checkpoint:** compiles. The wiring graph (`InterestService` → `RateProvider` → one impl) is now complete in principle.
+
+🔖 **Stopping here?** You have the full strategy wiring (interface → impls → service) compiling (commit below). Next: Sub-step 6 — `LabConfig`; first action: create `…/springlab/config/LabConfig.java`.
 
 💾 **Commit:**
 
@@ -642,7 +683,7 @@ git add playground/spring-lab/src/main/java/com/buildabank/springlab/interest/In
 git commit -m "feat(spring-lab): add InterestService with constructor injection"
 ```
 
-🔬 **Break-it (we'll do this for real later):** if you delete the constructor parameter (so the service no longer asks for a `RateProvider`) the app still starts — but then it can't compute a rate. If you instead make the field non-`final` and add an `@Autowired` field, you'd be sliding into field injection. **Keep it constructor + `final`.**
+🔬 **Break-it (we'll do this for real later):** if you delete the constructor parameter, you must also temporarily stub the field (`this.rateProvider = new FixedRateProvider(new BigDecimal("0.0325"))`) or it won't compile — and then the app starts, but you've hard-coupled the service again. That's Play With It break-it #2; restore constructor injection afterwards. If you instead make the field non-`final` and add an `@Autowired` field, you'd be sliding into field injection. **Keep it constructor + `final`.**
 
 ---
 
@@ -692,6 +733,8 @@ public class LabConfig {
 🔮 **Predict:** if a second `@Bean` method called `clock()` twice, how many `Clock` instances exist in full mode? <details><summary>answer</summary>**One.** The CGLIB proxy returns the same managed singleton each call. In lite mode you'd get a fresh `Clock` per call.</details>
 
 ✋ **Checkpoint:** compiles; a `Clock` bean now exists for `LabRunner` to inject.
+
+🔖 **Stopping here?** (End of sitting S3.) You have providers + service + a `@Bean Clock`, committed. Next: Sub-step 7 — the lifecycle; first action: create `…/springlab/lifecycle/LifecycleBean.java`.
 
 💾 **Commit:**
 
@@ -812,6 +855,8 @@ public class TimingBeanPostProcessor implements BeanPostProcessor {
 
 ✋ **Checkpoint:** both compile. The lifecycle is now fully instrumented.
 
+🔖 **Stopping here?** You have the lifecycle instrumented (commit below). Next: Sub-step 8 — a prototype bean; first action: create `…/springlab/audit/AuditEntry.java`.
+
 💾 **Commit:**
 
 ```bash
@@ -870,6 +915,8 @@ public class AuditEntry {
 🔮 **Predict:** `context.getBean(AuditEntry.class)` twice — same object or two? And `context.getBean(InterestService.class)` twice? <details><summary>answer</summary>`AuditEntry`: **two distinct** instances (prototype). `InterestService`: **the same** instance both times (singleton).</details>
 
 ✋ **Checkpoint:** compiles.
+
+🔖 **Stopping here?** (End of sitting S4.) Every bean except the runner exists and is committed. Next: Sub-step 9 — `LabRunner`; first action: create `…/springlab/LabRunner.java`.
 
 💾 **Commit:**
 
@@ -966,34 +1013,12 @@ public class LabRunner implements CommandLineRunner {
 
 🔮 **Predict (default config):** jot the six output values — wired provider, rate %, interest, singleton-same?, prototype same? <details><summary>answer</summary>`fixed`, `3.25%`, `325.00`, `true`, `#1 vs #2 (same? false)`. The clock instant is "now" in UTC.</details>
 
-▶️ **Run & See** (now that the app is functional end-to-end):
+> [!NOTE]
+> **Don't run it yet.** `@Value("${bank.name}")` has **no default**, so until `application.yml` exists (next sub-step) startup fails with `Could not resolve placeholder 'bank.name'`. That's intentional — it shows that a placeholder without a default is *required*. We add the yaml next, then do the first full run there.
 
-```bash
-./mvnw -pl playground/spring-lab spring-boot:run
-```
+✋ **Checkpoint:** compiles (`./mvnw -pl playground/spring-lab -am compile`). The app is complete but deliberately not yet runnable.
 
-✅ **Expected output** (lifecycle first, then the runner banner):
-
-```
-INFO c.b.springlab.lifecycle.LifecycleBean    : 1) constructor
-INFO c.b.s.lifecycle.TimingBeanPostProcessor  : 2) BPP before-init for bean 'lifecycleBean'
-INFO c.b.springlab.lifecycle.LifecycleBean    : 3) @PostConstruct
-INFO c.b.s.lifecycle.TimingBeanPostProcessor  : 4) BPP after-init for bean 'lifecycleBean'
-INFO com.buildabank.springlab.LabRunner       : ================ Spring Lab :: Build-a-Bank ================
-INFO com.buildabank.springlab.LabRunner       : wired RateProvider     : fixed
-INFO com.buildabank.springlab.LabRunner       : annual rate (via SpEL) : 3.25%
-INFO com.buildabank.springlab.LabRunner       : interest on 10000.00   : 325.00
-INFO com.buildabank.springlab.LabRunner       : clock.instant() (UTC)  : 2026-06-09T15:13:27.790169500Z
-INFO com.buildabank.springlab.LabRunner       : singleton same instance? true
-INFO com.buildabank.springlab.LabRunner       : prototype instances     : #1 vs #2  (same? false)
-INFO com.buildabank.springlab.LabRunner       : ==================================================
-INFO c.b.springlab.lifecycle.LifecycleBean    : @PreDestroy (context closing)
-```
-
-❌ **If you see this instead** — `Parameter 0 of constructor in ... required a bean of type '...RateProvider' that could not be found`: no provider matched. Check `bank.rates.source` (or that `FixedRateProvider` has `matchIfMissing=true`). See 🩺.
-❌ **If you see** `expected single matching bean but found 2`: two `RateProvider`s registered — your conditions overlap. See 🩺.
-
-✋ **Checkpoint:** you see all four lifecycle lines in order, the banner with `fixed`/`3.25%`/`325.00`, `singleton same instance? true`, prototype `(same? false)`, and `@PreDestroy` last.
+🔖 **Stopping here?** You have the whole app coded but (by design) not yet runnable — no config file (commit below). Next: Sub-step 10 — `application.yml` + the first full run; first action: create `playground/spring-lab/src/main/resources/application.yml`.
 
 💾 **Commit:**
 
@@ -1001,8 +1026,6 @@ INFO c.b.springlab.lifecycle.LifecycleBean    : @PreDestroy (context closing)
 git add playground/spring-lab/src/main/java/com/buildabank/springlab/LabRunner.java
 git commit -m "feat(spring-lab): add LabRunner that prints the IoC demo"
 ```
-
-⚠️ **Pitfall:** the run won't work until `application.yml` exists (next sub-step) because `@Value("${bank.name}")` has **no default** — a missing `bank.name` fails startup. That's intentional: it shows that a placeholder without a default is *required*.
 
 ---
 
@@ -1044,11 +1067,43 @@ logging:
 
 💭 **Under the hood:** Spring Boot loads `application.yml` into the **`Environment`** as a property source. Precedence (highest wins): command-line args → env vars → `application.yml`. That's why `--bank.rates.source=market` on the command line overrides the file *without editing it* — the basis of "flip by config."
 
+▶️ **Run & See** — the first full run (both files now exist, so this works):
+
+```bash
+./mvnw -pl playground/spring-lab spring-boot:run
+```
+
+✅ **Expected output** (lifecycle first, then the runner banner):
+
+```
+INFO c.b.springlab.lifecycle.LifecycleBean    : 1) constructor
+INFO c.b.s.lifecycle.TimingBeanPostProcessor  : 2) BPP before-init for bean 'lifecycleBean'
+INFO c.b.springlab.lifecycle.LifecycleBean    : 3) @PostConstruct
+INFO c.b.s.lifecycle.TimingBeanPostProcessor  : 4) BPP after-init for bean 'lifecycleBean'
+INFO com.buildabank.springlab.LabRunner       : ================ Spring Lab :: Build-a-Bank ================
+INFO com.buildabank.springlab.LabRunner       : wired RateProvider     : fixed
+INFO com.buildabank.springlab.LabRunner       : annual rate (via SpEL) : 3.25%
+INFO com.buildabank.springlab.LabRunner       : interest on 10000.00   : 325.00
+INFO com.buildabank.springlab.LabRunner       : clock.instant() (UTC)  : 2026-06-09T15:13:27.790169500Z
+INFO com.buildabank.springlab.LabRunner       : singleton same instance? true
+INFO com.buildabank.springlab.LabRunner       : prototype instances     : #1 vs #2  (same? false)
+INFO com.buildabank.springlab.LabRunner       : ==================================================
+INFO c.b.springlab.lifecycle.LifecycleBean    : @PreDestroy (context closing)
+```
+
+❌ **If you see this instead** — `Parameter 0 of constructor in ... required a bean of type '...RateProvider' that could not be found`: no provider matched. Check `bank.rates.source` (or that `FixedRateProvider` has `matchIfMissing=true`). See 🩺.
+❌ **If you see** `expected single matching bean but found 2`: two `RateProvider`s registered — your conditions overlap. See 🩺.
+
+✋ **Checkpoint:** you see all four lifecycle lines in order, the banner with `fixed`/`3.25%`/`325.00`, `singleton same instance? true`, prototype `(same? false)`, and `@PreDestroy` last.
+
 🔮 **Predict:** running with `--bank.rates.source=market` on the command line — which provider wires, and what's the interest on `10000.00`? <details><summary>answer</summary>`MarketRateProvider` (rate `0.0475`) → interest **`475.00`**. The file still says `fixed`, but the command-line arg wins.</details>
 
 ▶️ **Run & See** — the flip, with zero code change:
 
 ```bash
+# build the executable (fat) jar first — you've only compiled so far, never packaged:
+./mvnw -pl playground/spring-lab -am package
+
 java -jar playground/spring-lab/target/spring-lab-0.1.0-SNAPSHOT.jar --bank.rates.source=market
 ```
 
@@ -1063,6 +1118,8 @@ INFO com.buildabank.springlab.LabRunner       : interest on 10000.00   : 475.00
 > The `annual rate (via SpEL)` line still reads `3.25%` even in market mode — that SpEL expression reads `bank.rates.fixed` specifically, not the market provider's rate. It's there to demonstrate **SpEL arithmetic**, not to mirror the wired provider. (A nice teaching wrinkle: the *wired bean* and a *config-derived display value* are independent.)
 
 ✋ **Checkpoint:** default run shows `fixed`/`325.00`; the `--bank.rates.source=market` run shows `market`/`475.00`. Same jar, different config.
+
+🔖 **Stopping here?** (End of sitting S5.) You have a fully working demo — both runs proven and committed. Next: Sub-step 11 — three tests; first action: create `…/test/java/com/buildabank/springlab/rates/ConditionalBeansTest.java`.
 
 💾 **Commit:**
 
@@ -1190,7 +1247,10 @@ class SpringLabApplicationTests {
 
 📁 **Location 3 (full context, market):** new file → `playground/spring-lab/src/test/java/com/buildabank/springlab/MarketRateContextTest.java`
 
-⌨️ **Code:**
+⌨️ **Type it yourself** — write this one from `SpringLabApplicationTests` above: boot with `properties = {"bank.rates.source=market", "bank.name=Build-a-Bank"}`, inject only `InterestService`, and assert `rateSource()` is `"market"` and `annualInterest(new BigDecimal("10000.00"))` compares equal to `475.00`. Then check yourself:
+
+<details>
+<summary><strong>Solution — MarketRateContextTest.java</strong></summary>
 
 ```java
 // playground/spring-lab/src/test/java/com/buildabank/springlab/MarketRateContextTest.java
@@ -1221,6 +1281,8 @@ class MarketRateContextTest {
 }
 ```
 
+</details>
+
 🔍 **Line-by-line:**
 - `@SpringBootTest(properties = {"bank.rates.source=market", ...})` — boots the same app but with `market` selected.
 - The assertions prove the **other** bean wired and the calc is `475.00` — **by configuration alone**, with no production code changed. This is the payoff of conditional beans + DIP.
@@ -1247,6 +1309,8 @@ class MarketRateContextTest {
 
 ✋ **Checkpoint:** `Tests run: 6 … BUILD SUCCESS`. If any test fails, jump to 🩺.
 
+🔖 **Stopping here?** You have the whole module green — 6 tests, build committed. Next: 🎮 Play With It, then 🏁 tag `step-05-end`; first action: rerun `./mvnw -pl playground/spring-lab spring-boot:run` and work the experiments table.
+
 💾 **Commit:**
 
 ```bash
@@ -1254,7 +1318,7 @@ git add playground/spring-lab/src/test/
 git commit -m "test(spring-lab): conditional beans, scopes, fixed & market wiring"
 ```
 
-⚠️ **Pitfall:** in `ConditionalBeansTest`, `@ConditionalOnProperty` is a **Spring Boot** condition — it only evaluates because `ApplicationContextRunner` (a Boot test utility) supports it. Plain Spring (`@Conditional`) without Boot wouldn't honour `@ConditionalOnProperty`. Use the Boot test tooling for Boot conditions.
+⚠️ **Pitfall:** `@ConditionalOnProperty` ships in **spring-boot-autoconfigure**, not core Spring — but it works in *any* Spring context that has Boot on the classpath, because condition evaluation itself (`@Conditional`) is core Spring and `@ConditionalOnProperty` is just meta-annotated with `@Conditional(OnPropertyCondition.class)`. What `ApplicationContextRunner` adds is the ergonomic test harness (`withPropertyValues`, context assertions) — don't confuse the annotation's *origin* with *where it can run*.
 
 ---
 
@@ -1309,7 +1373,7 @@ java -jar playground/spring-lab/target/spring-lab-0.1.0-SNAPSHOT.jar
 | Temporarily delete `@Scope(...PROTOTYPE)` from `AuditEntry`, rerun | `prototype instances : #1 vs #1 (same? true)` | It became a singleton — one shared instance. Put it back. |
 | Set `logging.level.com.buildabank.springlab: DEBUG` | more startup detail | See the container working. |
 
-**🔬 Break-it-on-purpose (the headline experiments):**
+**🔬 Break-it-on-purpose (the headline experiments — +~15-20 min for all three):**
 
 1. **Two unconditional providers → ambiguity.** Temporarily delete the `@ConditionalOnProperty` line from **both** providers (or give both `matchIfMissing=true`), then run. Startup fails with something like:
    ```
@@ -1320,6 +1384,8 @@ java -jar playground/spring-lab/target/spring-lab-0.1.0-SNAPSHOT.jar
    That's `NoUniqueBeanDefinitionException` — "expected single matching bean but found 2." **This is why conditions matter.** Put the annotations back.
 2. **Drop the constructor arg → no rate.** Temporarily change `InterestService`'s constructor to take *no* `RateProvider` (and stub `rateProvider`); the app no longer wires a strategy. Restore it — and feel why constructor injection *fails fast* when a dependency is missing.
 3. **No matching provider.** Set `--bank.rates.source=nonsense`. Neither condition matches → no `RateProvider` bean → startup fails: `required a bean of type '…RateProvider' that could not be found`. Fail-fast at startup beats a `null` at runtime.
+
+❓ **Knowledge check:** you just saw two failure modes — zero matching `RateProvider` beans and two. Which exception does each produce, and *when* does the container decide which conditional bean survives? <details><summary>answer</summary>Zero candidates → `NoSuchBeanDefinitionException`-style startup failure ("required a bean of type '…RateProvider' that could not be found"); two candidates → `NoUniqueBeanDefinitionException` ("expected single matching bean but found 2"). Conditions are evaluated at **`BeanDefinition` registration time, before any instantiation** — the losing bean is never created, which is why exactly one provider exists to inject.</details>
 
 ## 🏁 The Finished Result
 
@@ -1426,25 +1492,25 @@ It asserts the three load-bearing facts — `fixed` wired, singleton identity `t
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary><strong>Why is field injection considered an anti-pattern? (the full case)</strong></summary>
+<summary><strong>Why is field injection considered an anti-pattern? (the full case)</strong> (+~4 min)</summary>
 
 Field injection (`@Autowired private RateProvider rp;`) works, but: (1) you **can't make the field `final`**, so the object is mutable and can be left in an invalid state; (2) the dependency is **invisible to the constructor**, so you can't construct the object in a unit test without reflection or a Spring context; (3) it **hides** how many dependencies a class really has, masking that a class has grown too large (a design smell); (4) it relies on **reflection** to set private fields, which is exactly the kind of access you want to minimize. Constructor injection fixes all four: `final` fields, fail-fast at construction, dependencies visible in the signature, trivially unit-testable with `new`.
 </details>
 
 <details>
-<summary><strong>Prototype beans inside singletons — the scoped-proxy / ObjectProvider gotcha</strong></summary>
+<summary><strong>Prototype beans inside singletons — the scoped-proxy / ObjectProvider gotcha</strong> (+~4 min)</summary>
 
 If a **singleton** injects a **prototype** directly, the prototype is resolved **once** (at the singleton's creation) and then effectively behaves like a singleton — you do *not* get a fresh instance per use. To get a genuinely fresh prototype each time inside a singleton, inject an `ObjectProvider<AuditEntry>` (call `.getObject()` per use) or use a **scoped proxy** (`@Scope(value = "prototype", proxyMode = ScopedProxyMode.TARGET_CLASS)`). Our `LabRunner` sidesteps this by calling `context.getBean(AuditEntry.class)` explicitly — each call asks the container anew, so we get `#1` then `#2`.
 </details>
 
 <details>
-<summary><strong>@Configuration "lite" mode and why Spring Boot uses it everywhere</strong></summary>
+<summary><strong>@Configuration "lite" mode and why Spring Boot uses it everywhere</strong> (+~4 min)</summary>
 
 `proxyBeanMethods = false` skips the CGLIB proxy of the config class — faster startup and lower memory, at the cost of **not** routing inter-`@Bean` calls through the container (so you must not rely on one `@Bean` method calling another to get the singleton; pass the dependency as a method parameter instead, which the container resolves). Spring Boot's auto-configuration classes are overwhelmingly lite-mode for exactly this startup-cost reason. For your own config where `@Bean` methods are independent, lite mode is a free win; keep full mode when methods call each other. (More in **Step 6**.)
 </details>
 
 <details>
-<summary><strong>Profiles vs @ConditionalOnProperty — which to reach for</strong></summary>
+<summary><strong>Profiles vs @ConditionalOnProperty — which to reach for</strong> (+~4 min)</summary>
 
 `@Profile("market")` activates beans for a named **profile** (`spring.profiles.active=market`) — coarse-grained, environment-shaped ("dev", "prod", "test"). `@ConditionalOnProperty` keys off **any property value** — fine-grained, feature-shaped. Rule of thumb: profiles for *which environment*, conditions for *which feature/implementation*. We chose `@ConditionalOnProperty` because "fixed vs market" is a feature toggle, not an environment. (Profiles appear again in Step 6.)
 </details>
@@ -1500,7 +1566,7 @@ A singleton bean is one instance shared by all threads, so it **must be stateles
 4. In `LabConfig`, add a second `@Bean` `String startedAtIso()` that calls `clock().instant().toString()`. With full-mode `@Configuration`, how many `Clock`s exist?
    <details><summary>answer</summary>**One.** The CGLIB proxy returns the same singleton `Clock` to the second `@Bean` method.</details>
 
-**Stretch goal** (reference solution in `solutions/step-05/`):
+**Stretch goal** (+~45-60 min; reference solution in `solutions/step-05/`):
 
 > Convert `FixedRateProvider`'s `@Value` constructor injection to a typed **`@ConfigurationProperties`** record (`bank.rates.*`) instead — a sneak peek at Step 6. Keep all 6 tests green and add one asserting the bound rate. Compare the ergonomics of `@Value` vs `@ConfigurationProperties`.
 

@@ -2,7 +2,7 @@
 
 > **Probed:** 2026-06-09 · **Host OS:** Windows 11 IoT Enterprise LTSC 2024 (10.0.26100) · **Shell:** PowerShell 5.1
 > This file is the honest record of what was *executed* vs. *verified-adjacent* vs. *not runnable here*.
-> The course plans around it (Operating Contract §4). Re-run `make doctor` on a new machine and update this.
+> The course plans around it (Operating Contract §4 of the master prompt, `build-a-bank-claude-code-prompt.md` — all §-references in this file point there). Re-run `make doctor` on a new machine and update this.
 
 ## ✅ Present & executable (versions verified by running them)
 
@@ -60,5 +60,6 @@
 
 ## 📌 What this means for the plan
 The entire backend (Java/Spring/JPA/Kafka/Batch), the frontend, Docker/Compose, Python ML, and most scanners are
-**fully runnable here**. Kubernetes and cloud are **verify-adjacent**; the learner runs them on their own machine
-(install `kind` for local k8s). Nothing in Phases A–F is blocked.
+**fully runnable here**. **Kubernetes is now locally runnable too** (`kind` v0.32.0 — see the 🟢 section above);
+cloud stays **verify-adjacent** (the learner deploys on their own account with teardown discipline). Nothing in
+Phases A–F is blocked.

@@ -13,14 +13,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | orchestration vs choreography · declarative HTTP clients · compensation · identity propagation |
-| **C** | [🛠️ Build](#build) | the orchestrator · `@HttpExchange` clients · the CIF compensation endpoint |
-| **D** | [🔬 Prove](#prove) | the Verification Log — happy path, compensation, token forwarding; §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~30 min |
+| **B** | [🧠 Understand](#understand) | orchestration vs choreography · declarative HTTP clients · compensation · identity propagation | ~1h |
+| **C** | [🛠️ Build](#build) | the orchestrator · `@HttpExchange` clients · the CIF compensation endpoint | ~7.5h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — happy path, compensation, token forwarding; §12.3 mutation | ~1.5h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~1h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~30 min |
 
 ---
 
@@ -96,6 +96,23 @@ Real features cross service boundaries: onboarding, checkout, KYC. Someone has t
 - **Connects to what you know:** the **`@HttpExchange` client** (Step 15), **compensation** (Step 21 Saga — the contrast), the **secured account service + token** (Step 17), **CIF** (Step 8).
 - **Depends on:** Steps **15, 21, 17, 8**.
 
+## 🗓️ Session Plan
+
+≈12 focused hours rarely fits one sitting. Six sittings, each ending at a real save point:
+
+| Sitting | Covers | ~time | Ends when |
+|---|---|---|---|
+| **1 · The map** | A · Orient + B · Understand (big idea, clients recap, compensation, identity propagation) | ~1.5h | You can say "compensation, not rollback" and have read the B→C files tree |
+| **2 · Compensation target** | Sub-step 1 of 3 — CIF `deactivate` service + endpoint | ~2h | `POST /api/customers/{id}/deactivate` → 204; cif tests green |
+| **3 · Clients** | Sub-step 2 of 3 — `CifClient`/`AccountClient`, records, `HttpInterfaceClients` factory + timeouts | ~2.5h | `services/onboarding` registered in the root `pom.xml` and compiling with both clients |
+| **4 · The orchestrator** | Sub-step 3 of 3 — `OnboardingService`, `OnboardingFailedException` (→ 502), controller | ~2.5h | 💾 commit made; `./mvnw -pl services/onboarding test` green |
+| **5 · Prove it** | 🎮 Play With It (live 4-service flow) + D · Prove (mutation check, `smoke.sh`, clean-room) | ~2.5h | `bash steps/step-23/smoke.sh` passes; tagged `step-23-end` |
+| **6 · Cement it** | E · Apply + F · Review (go-deeper, interview prep, recap, flashcards) | ~1h | Recap + one-line reflection done |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can send you straight to Step 24 · the two 🚀 Go Deeper fold-outs are +~5 min each · the 🎯 stretch challenge (durable saga) is +~1–2h on top.
+
+✋ **Stopping here?** You have the map, nothing built yet. Next: B · Understand (~1h of reading); first action: reopen this lesson at [🧠 The Big Idea](#understand).
+
 ---
 
 <a id="understand"></a>
@@ -109,6 +126,10 @@ A business operation that spans services has no single transaction. Two ways to 
   to do on failure. The flow lives in one place: easy to read, test, and trace.
 - **Choreography** — no coordinator; each service reacts to events and emits the next (Step 20/21). Maximally
   decoupled, but the flow is implicit across handlers.
+
+🪢 **Analogy:** an orchestrator is a **wedding planner** — one person calls the caterer, then the florist, and
+cancels the caterer if the florist falls through. Choreography is a **dance troupe** — nobody calls the moves;
+each dancer reacts to the others'.
 
 ```mermaid
 flowchart LR
@@ -136,6 +157,8 @@ semantically. (This is the same recovery model as the Step-21 Saga; here a singl
 Like a Saga it is **not isolated**: between steps a customer exists with no account, which is exactly what the
 compensation resolves.
 
+❓ **Knowledge-check:** why can't the orchestrator just roll back the CIF create when the account step fails? <details><summary>Answer</summary>Each step commits in its **own service's database** — there is no umbrella transaction spanning services to roll back. Recovery is a **compensating** action (`deactivate`) that semantically undoes the create.</details>
+
 ## 🌱 Under the Hood: identity propagation
 
 demand-account is a **secured** OAuth2 resource server (Step 17): it rejects unauthenticated calls. So the
@@ -161,6 +184,19 @@ first-class, tested part of the design — not an afterthought.
 
 # B→C bridge: 🌳 files we'll touch
 
+**What we're about to build:**
+
+```mermaid
+flowchart TD
+    P["POST /api/onboarding (Bearer token)"] --> OC["OnboardingController"]
+    OC --> OS["OnboardingService — the orchestrator"]
+    OS -->|"1 · create"| CC["CifClient (@HttpExchange)"]
+    CC --> CIF["CIF"]
+    OS -->|"2 · open, Authorization forwarded"| AC["AccountClient (@HttpExchange)"]
+    AC --> DA["demand-account (secured)"]
+    OS -.->|"open fails: deactivate (COMPENSATE) → 502"| CC
+```
+
 ```
 pom.xml                                  (edit) register services/onboarding
 services/onboarding/                     (NEW SERVICE, no DB)
@@ -176,6 +212,8 @@ services/cif/
 steps/step-23/{lesson.md, requests.http, smoke.sh}
 ```
 
+✋ **Stopping here?** You have 12 modules green and the target picture above. Next: C · Build, Sub-step 1 of 3 (the CIF compensation target); first action: open CIF's `CustomerService` and add `deactivate(id)`.
+
 <a id="build"></a>
 
 # C · 🛠️ Let's Build It — Step by Step
@@ -184,25 +222,49 @@ steps/step-23/{lesson.md, requests.http, smoke.sh}
 
 `step-23-start == step-22-end`: 12 modules green. We add a thin orchestrator + a CIF compensation endpoint.
 
-## Sub-step 1 — the CIF compensation target
+## Sub-step 1 of 3 — the CIF compensation target (~2h)
 
 🎯 Add `CustomerService.deactivate(id)` (KYC → REJECTED) and `POST /api/customers/{id}/deactivate` → 204. This is the real action the orchestrator's compensation calls.
 
-## Sub-step 2 — declarative clients
+✅ **Checkpoint (objective: apply compensation):** `./mvnw -pl services/cif test` is green with the new endpoint in place — the compensation target exists before anything calls it.
+
+📍 **You are here:** CIF can deactivate ✅ → clients ⬜ → orchestrator ⬜
+
+✋ **Stopping here?** You have the compensation target live in CIF. Next: Sub-step 2 of 3 (declarative clients); first action: create `services/onboarding/…/client/CifClient.java`.
+
+## Sub-step 2 of 3 — declarative clients (~2.5h)
 
 🎯 `CifClient` (`@PostExchange("/api/customers")` create, `@PostExchange("/api/customers/{id}/deactivate")` deactivate) and `AccountClient` (`@PostExchange("/api/accounts")` open, forwarding `@RequestHeader Authorization`). Response records carry `@JsonIgnoreProperties(ignoreUnknown = true)` so they tolerate the services' fuller payloads. A generic `HttpInterfaceClients.create(...)` factory (timeouts) + `ClientConfig` beans.
 
-## Sub-step 3 — the orchestrator
+❓ **Quick check:** why does each response record need `@JsonIgnoreProperties(ignoreUnknown = true)`? <details><summary>Answer</summary>The real services return **more fields** than the record declares; without it, deserialization fails on the first unknown property (see 🩺 Troubleshooting).</details>
+
+🔮 **Predict:** without connect/read timeouts, what happens to the orchestrator if demand-account hangs for 60 s? <details><summary>Answer</summary>The calling thread blocks for the whole hang — one slow dependency stalls the flow and can exhaust the orchestrator's threads. Timeouts make it **fail fast** (the Step-15 discipline).</details>
+
+✅ **Checkpoint (objective: declarative clients):** `services/onboarding` is registered in the root `pom.xml` (see the files tree) and compiles with both clients + `ClientConfig` wired.
+
+📍 **You are here:** CIF can deactivate ✅ → clients ✅ → orchestrator ⬜
+
+✋ **Stopping here?** You have both `@HttpExchange` clients and the factory compiling; nothing calls them yet. Next: Sub-step 3 of 3 (the orchestrator); first action: create `services/onboarding/…/service/OnboardingService.java`.
+
+## Sub-step 3 of 3 — the orchestrator (~2.5h)
 
 🎯 `OnboardingService.onboard(request, authorization)`: create customer → derive `DDA-<customerNumber>` → open account (forward token) → on failure, `deactivate(customerId)` + throw `OnboardingFailedException` (→ 502). NOT transactional — there's no shared transaction; compensation is the recovery.
 
 🔮 **Predict:** the account step fails after the customer is created — what does the caller get, and what state is CIF left in? <details><summary>Answer</summary>**502**, and the customer is **deactivated** (KYC REJECTED) — no half-onboarded active customer. Proven by the compensation test.</details>
 
+✅ **Checkpoint (objectives: orchestrator + token forwarding):** `./mvnw -pl services/onboarding test` is green (happy path + compensation, no Docker) — compare with the Verification Log in D.
+
 💾 **Commit:** `feat(onboarding,cif): Step 23 onboarding orchestration + compensation`
+
+📍 **You are here:** CIF can deactivate ✅ → clients ✅ → orchestrator ✅ — build done; live run + proof remain.
+
+✋ **Stopping here?** You have the full orchestrator committed. Next: 🎮 Play With It (the live 4-service flow); first action: open [`requests.http`](requests.http).
 
 ## 🎮 Play With It
 
 Run auth + cif + demand-account + onboarding, then (full flow in [`requests.http`](requests.http)):
+
+🔮 **Predict:** you onboard once successfully, then **stop demand-account** and onboard again — what status does the caller get, and what happens to the freshly created CIF customer?
 
 ```bash
 # POST /api/onboarding (Bearer token) → 201 {customerNumber, accountNumber, status:ONBOARDED}
@@ -211,9 +273,39 @@ Run auth + cif + demand-account + onboarding, then (full flow in [`requests.http
 
 🧪 **Little experiments:** point `ACCOUNT_URL` at a dead port → every onboarding compensates; watch the orchestrator log "created customer … → compensating (deactivate)".
 
+**The flow you built, end to end:**
+
+```mermaid
+sequenceDiagram
+    participant U as Caller (Bearer token)
+    participant O as onboarding
+    participant C as CIF
+    participant A as demand-account
+    U->>O: POST /api/onboarding
+    O->>C: create customer
+    C-->>O: customerNumber
+    O->>A: open account (Authorization forwarded)
+    alt open succeeds
+        A-->>O: accountNumber
+        O-->>U: 201 {customerNumber, accountNumber}
+    else open fails
+        O->>C: deactivate customer (COMPENSATE, KYC → REJECTED)
+        O-->>U: 502 (OnboardingFailedException)
+    end
+```
+
 ## 🏁 The Finished Result
 
-`step-23-end`: 13 modules; a working onboarding orchestrator with compensation and token forwarding. **✅ Definition of Done:** onboarding completes (or compensates), `./mvnw verify` is green, `bash steps/step-23/smoke.sh` passes, and you've committed/tagged `step-23-end`.
+`step-23-end`: 13 modules; a working onboarding orchestrator with compensation and token forwarding.
+
+**✅ Definition of Done:**
+
+- [ ] `POST /api/onboarding` returns **201** with `customerNumber` + `accountNumber` — and on a forced account-open failure returns **502** with the customer compensated (KYC REJECTED)
+- [ ] `./mvnw verify` is green (13 modules)
+- [ ] `bash steps/step-23/smoke.sh` passes
+- [ ] Committed and tagged `step-23-end`
+
+✋ **Stopping here?** You have the whole build done and playable. Next: D · Prove (~1.5h); first action: run `./mvnw -pl services/onboarding test` and compare against the Verification Log below.
 
 ---
 
@@ -263,11 +355,15 @@ is synchronous and not crash-recoverable mid-flow (durable workflows are a later
 
 # E · 🎓 Apply
 
+✋ **Re-entering here?** Your build is proven and `step-23-end` is tagged — E and F are depth + recap (~1.5h total); first action: the two Go Deeper fold-outs below.
+
 ## 🚀 Go Deeper (Optional)
 
-<details><summary>Orchestration vs choreography — how to choose</summary>Orchestration: a coordinator owns the flow — best for short, well-defined processes you want to see/trace/change in one place; the coordinator is a coupling point. Choreography: services react to events — best for decoupling and independent evolution; the flow is emergent and harder to trace. Many systems mix both.</details>
+<details><summary>Orchestration vs choreography — how to choose (+~5 min)</summary>Orchestration: a coordinator owns the flow — best for short, well-defined processes you want to see/trace/change in one place; the coordinator is a coupling point. Choreography: services react to events — best for decoupling and independent evolution; the flow is emergent and harder to trace. Many systems mix both.</details>
 
-<details><summary>Why isn't this crash-safe?</summary>The orchestrator holds the flow in memory and runs synchronously. If it crashes after creating the customer but before opening the account (or before compensating), you're left with a half-onboarded customer and no record of where you were. Durable orchestration (persisted saga state + retries, or a workflow engine) fixes that — a later step.</details>
+<details><summary>Why isn't this crash-safe? (+~5 min)</summary>The orchestrator holds the flow in memory and runs synchronously. If it crashes after creating the customer but before opening the account (or before compensating), you're left with a half-onboarded customer and no record of where you were. Durable orchestration (persisted saga state + retries, or a workflow engine) fixes that — a later step.</details>
+
+❓ **Knowledge-check:** how does the orchestrator's call to the secured demand-account service get authorized, and why does the CIF call need nothing? <details><summary>Answer</summary>It **forwards the caller's `Authorization` bearer token** (identity propagation / token relay) so the resource server can validate it; CIF has no auth yet (R-002), so no token is needed there.</details>
 
 ## 💼 Interview Prep
 
@@ -279,9 +375,11 @@ is synchronous and not crash-recoverable mid-flow (durable workflows are a later
 
 ## 🏋️ Your Turn: Practice & Challenges
 
-- **Quick:** add a third step — emit a `customer.onboarded` event (Step-20 Outbox/Kafka) so notification sends a welcome — and decide if its failure should compensate.
-- **Quick:** add a retry (with backoff) around the account-open call before compensating.
-- 🎯 **Stretch (reference solution in `solutions/step-23/`):** make onboarding **durable** — persist the saga state (which steps completed) so a restart can resume or compensate, instead of losing the flow on a crash. Compare with the in-memory orchestrator.
+- **Quick (+~30 min):** add a third step — emit a `customer.onboarded` event (Step-20 Outbox/Kafka) so notification sends a welcome — and decide if its failure should compensate.
+- **Quick (+~30 min):** add a retry (with backoff) around the account-open call before compensating.
+- 🎯 **Stretch (+~1–2h; reference solution in `solutions/step-23/`):** make onboarding **durable** — persist the saga state (which steps completed) so a restart can resume or compensate, instead of losing the flow on a crash. Compare with the in-memory orchestrator.
+
+✋ **Stopping here?** Only the recap remains. Next: F · Review (~30 min); first action: skim 🩺 Troubleshooting, then the recap.
 
 ---
 
@@ -300,7 +398,14 @@ is synchronous and not crash-recoverable mid-flow (durable workflows are a later
 ## 📚 Learn More & Glossary
 
 - Spring HTTP Interface clients (`@HttpExchange`); microservices.io: Saga / orchestration vs choreography; the "API composition" and "Saga" chapters of *Microservices Patterns*; token relay / OAuth2 in microservices.
-- **Glossary:** *orchestration*, *choreography*, *compensating transaction*, *declarative HTTP client (`@HttpExchange`)*, *identity propagation / token relay*, *idempotency*, *durable workflow*.
+- **Glossary:**
+  - *orchestration* — a central coordinator calls each service in order and owns the failure handling; the flow lives in one place.
+  - *choreography* — no coordinator: each service reacts to events and emits the next (Steps 20/21); the flow is implicit across handlers.
+  - *compensating transaction* — a new forward action that semantically undoes a previously committed step (deactivate undoes create), used because committed remote steps cannot be rolled back.
+  - *declarative HTTP client (`@HttpExchange`)* — an annotated interface Spring implements over `RestClient` (with timeouts); no hand-written HTTP (Step 15).
+  - *identity propagation / token relay* — forwarding the caller's bearer token on downstream calls so the secured resource server can still authorize.
+  - *idempotency* — an operation that is safe to repeat: applying it again doesn't change the outcome beyond the first application.
+  - *durable workflow* — workflow state persisted outside memory so a crashed flow can resume or compensate (a later step; ADR-0014).
 
 ## 🏆 Recap & Study Notes
 
@@ -316,7 +421,14 @@ is synchronous and not crash-recoverable mid-flow (durable workflows are a later
 
 **(f) ✅ You can now:** orchestrate a multi-service workflow · compensate on failure · forward identity downstream · choose orchestration vs choreography.
 
-**(g) 🃏 Flashcards** appended to `docs/flashcards.md` · 🔁 revisit orchestration + compensation at the Phase-D capstone (Step 24) and durable workflows (Step 52).
+**(g) 🃏 Flashcards** (also appended to `docs/flashcards.md`):
+
+- **Q:** Orchestration vs choreography? → **A:** A coordinator drives the steps and compensations (explicit, traceable) vs services reacting to events with no coordinator (decoupled, implicit).
+- **Q:** Why compensation instead of rollback? → **A:** Each step commits in its own service's database — no umbrella transaction exists, so you semantically undo (deactivate undoes create).
+- **Q:** How does the orchestrator authenticate to demand-account? → **A:** It forwards the caller's `Authorization` bearer token (identity propagation / token relay); the resource server validates it.
+- **Q:** Why isn't the synchronous orchestrator crash-safe? → **A:** The flow lives in memory — a mid-flow crash loses its position and can leave a half-onboarded customer; durability needs persisted workflow state.
+
+🔁 revisit orchestration + compensation at the Phase-D capstone (Step 24) and durable workflows (Step 52).
 
 **(h) ✍️ One-line reflection:** *Which of the bank's flows should be orchestrated, and which should be choreographed — and why?*
 

@@ -12,14 +12,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | the Java Memory Model: atomicity, visibility, ordering, happens-before |
-| **C** | [🛠️ Build](#build) | the `concurrency-lab`: a deterministic lost-update race, then three fixes, plus the j.u.c toolkit |
-| **D** | [🔬 Prove](#prove) | the Verification Log — 8 lab tests green, the race quantified, the §12.3 mutation check |
-| **E** | [🎓 Apply](#apply) | go deeper (JCStress) · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1.5 h |
+| **B** | [🧠 Understand](#understand) | the Java Memory Model: atomicity, visibility, ordering, happens-before | ~4 h |
+| **C** | [🛠️ Build](#build) | the `concurrency-lab`: a deterministic lost-update race, then three fixes, plus the j.u.c toolkit | ~8 h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — 8 lab tests green, the race quantified, the §12.3 mutation check | ~1.5 h |
+| **E** | [🎓 Apply](#apply) | go deeper (JCStress) · interview prep · your-turn challenges | ~3 h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~2 h |
 
 ---
 
@@ -33,7 +33,7 @@
 |---|---|
 | **Title** | Concurrency & Thread Safety in Java — the Java Memory Model, races, locks, atomics, and virtual threads |
 | **Step** | 11 of 67 · **Phase B — Data, Databases, Concurrency & Transactions** 🟣 |
-| **Effort** | ≈ 20 hours focused. Concurrency is the single most feared backend interview topic and the source of the nastiest production bugs — and this is where you stop fearing it. Experienced concurrency hands can skip-test and skim to ~4h. |
+| **Effort** | ≈ 20 hours focused — split into 8 sittings in the [🗓️ Session Plan](#session-plan) below. Concurrency is the single most feared backend interview topic and the source of the nastiest production bugs — and this is where you stop fearing it. Experienced concurrency hands can skip-test and skim to ~4h. |
 | **What you'll run this step** | **JVM + Maven only** — no Docker, no database. One command: `./mvnw -pl playground/concurrency-lab test`. The proofs are pure-JVM tests. |
 | **Buildable artifact** | A new **`playground/concurrency-lab`** module: a `Balance` shared across many threads, with four implementations — **`UnsafeBalance`** (broken), **`SynchronizedBalance`**, **`AtomicBalance`**, **`LongAdderBalance`** — and two test classes: `LostUpdateRaceTest` (a *deterministic* lost update + high-contention proofs the fixes are exact) and `ConcurrencyToolsTest` (executors, `CompletableFuture`, **virtual threads**, `Semaphore`). 8 tests. `step-11-start == step-10-end`. |
 | **Verification tier** | 🔴 **Full** — a concurrency/correctness path. `./mvnw verify` green + all **8** lab tests + the race **quantified** (a deterministic lost update; hundreds of thousands of deposits lost under contention) + the **§12.3 mutation sanity-check** (remove `synchronized` → the "exact" test fails → revert) + clean-room + `smoke.sh`. |
@@ -121,6 +121,24 @@ Concurrency bugs are the ones that pass every test on your laptop and corrupt a 
 
 > **Depends on: Step 10** (and 9 conceptually).
 
+<a id="session-plan"></a>
+## 🗓️ Session Plan
+
+≈ 20 hours doesn't mean one heroic sitting — it means about **eight** of ~2-3 h, each ending at a real save point (a commit or a movement boundary):
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| **S1** | A · Orient (skip-test, cheat card, why-it-matters) + B · 🧠 The Big Idea | ~2 h | end of The Big Idea |
+| **S2** | B · 🧩 Pattern Spotlight + 🌱 Under the Hood + 🛡️ Security Lens + 🕰️ Then vs. Now | ~2.5 h | end of movement B |
+| **S3** | C · Sub-steps 1-2 (module `pom.xml` + `Balance` & four implementations) | ~2.5 h | Sub-step 2 💾 commit |
+| **S4** | C · Sub-step 3 (`LostUpdateRaceTest` — the deterministic race + three exact fixes) | ~3 h | Sub-step 3 💾 commit |
+| **S5** | C · Sub-step 4 (`ConcurrencyToolsTest`) + 🎮 Play with it + Definition of Done | ~2.5 h | Sub-step 4 💾 commit |
+| **S6** | D · Prove (8 tests, race quantified, §12.3 mutation check, `smoke.sh`, tag `step-11-end`) | ~1.5 h | end of movement D |
+| **S7** | E · Interview prep + Your Turn exercises 1-3 | ~3 h | end of Your Turn 3 |
+| **S8** | E · Stretch exercises 4-5 + F · Review, Test Yourself, flashcards, reflection | ~3 h | sign-off 🎉 |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can compress the whole step to a ~4 h skim; the Go Deeper asides cost +~20 min (① JCStress) and +~5 min each (② deadlock, ③ `ConcurrentHashMap`) whenever you choose to take them.
+
 ---
 
 <a id="understand"></a>
@@ -178,15 +196,37 @@ The whole step is: **see the three failures, then create happens-before to fix t
 
 **Why `balance += amount` loses updates.** It compiles to roughly: `getfield balance` → `ladd` → `putfield balance`. Three bytecodes, not one. Two threads can both execute `getfield` (both read 100), both `ladd` (both compute 150), both `putfield` (both write 150). One increment is gone. We prove this **deterministically** in the lab with a `CyclicBarrier` that forces both threads to read *before* either writes — so a lost update happens on *every* run, not just "sometimes."
 
-**Long/double word-tearing (a JLS subtlety).** The JLS only guarantees that reads/writes of `int`, references, and smaller types are atomic; for non-`volatile` `long`/`double`, a 32-bit JVM may write the two halves separately ("word tearing"). On 64-bit JVMs they're effectively atomic, but the spec only promises it if the field is `volatile`. (Our race is about the read-modify-write, not tearing — but it's worth knowing.)
+<details>
+<summary>🌿 Optional (+~2 min): long/double word-tearing — a JLS subtlety</summary>
+
+**Long/double word-tearing.** The JLS only guarantees that reads/writes of `int`, references, and smaller types are atomic; for non-`volatile` `long`/`double`, a 32-bit JVM may write the two halves separately ("word tearing"). On 64-bit JVMs they're effectively atomic, but the spec only promises it if the field is `volatile`. (Our race is about the read-modify-write, not tearing — but it's worth knowing.)
+</details>
 
 **What `synchronized` actually does.** Entering a `synchronized` method/block acquires the object's **monitor** (intrinsic lock); only one thread holds it at a time (atomicity for the whole block), and the JMM says the previous holder's release **happens-before** your acquire — so you see all its writes (visibility) in order (ordering). It fixes all three failures at once. Cost: threads contend and block on the monitor; under heavy contention that serialization is the bottleneck.
 
 **What `volatile` does — and doesn't.** A `volatile` field gives **visibility** (a write is immediately visible to other threads' reads) and **ordering** (it's a memory barrier — no reordering across it), and reads/writes of it are atomic (even for `long`/`double`). But it does **not** make a compound action atomic: `volatileCounter++` still loses updates, because the increment is still read-modify-write. Use `volatile` for a **flag** (one thread writes, others read — e.g. a `stop` signal), not for a counter.
 
+❓ **Quick check:** `volatile long counter; counter++` — thread-safe or not? <details><summary>answer</summary>Not safe. `volatile` makes each read and each write atomic and visible, but `++` is still three steps (read → add → write) — two threads can still read the same value and lose an update. You'll prove exactly this in Your Turn exercise 2.</details>
+
 **`AtomicLong` (CAS) vs `LongAdder` (striping).** `AtomicLong` holds one `volatile long` and CASes it; correct and fast at low contention, but a hot field means many threads CAS the same cache line (retries + false sharing). `LongAdder` keeps a `base` plus an array of `Cell`s; each thread hashes to a cell and adds there, so concurrent adds usually hit *different* cells (no contention); `sum()` adds `base` + all cells. Trade-off: faster writes under contention, but `sum()` is an aggregate (slightly stale if reads race writes) — ideal for counters/metrics where writes vastly outnumber reads.
 
+| | Mechanism | Best at | Cost |
+|---|---|---|---|
+| `synchronized` | monitor lock: mutual exclusion + happens-before | multi-field invariants; any contention | threads block; serializes under load |
+| `AtomicLong` | lock-free CAS retry on one field | single counter, low/medium contention | hot-field CAS retries + false sharing when contended |
+| `LongAdder` | striped cells, summed on read | single counter, high write contention | `sum()` is an aggregate (slightly stale under racing reads) |
+
 **Virtual threads (JEP 444, stable since Java 21).** A **platform thread** maps 1:1 to an OS thread — expensive (~1MB stack), so you pool them. A **virtual thread** is a lightweight thread the JVM schedules onto a small pool of **carrier** (platform) threads. When a virtual thread runs, it **mounts** a carrier; when it **blocks** (I/O, `sleep`, most `java.util.concurrent` waits), it **unmounts**, freeing the carrier to run another virtual thread. So you can have *millions* of virtual threads and write simple blocking code — `Executors.newVirtualThreadPerTaskExecutor()` gives one per task. **Crucial:** virtual threads make *blocking cheap*; they do **not** change the memory model and do **not** make racy code safe — `UnsafeBalance` is just as broken on virtual threads. *(Caveat: older JDKs "pinned" the carrier inside `synchronized` blocks; recent JDKs greatly reduced that — verify for your JDK; prefer `ReentrantLock` over `synchronized` around blocking calls if pinning matters to you.)*
+
+```mermaid
+flowchart LR
+    vt1["virtual thread 1<br/>(blocked on I/O) — unmounted"] -.->|will remount when ready| c1
+    vt2["virtual thread 2 (running)"] -->|mounted| c1["carrier (platform) thread 1"]
+    vt3["virtual thread 3 (running)"] -->|mounted| c2["carrier (platform) thread 2"]
+    vt4["virtual threads 4…1,000,000<br/>(waiting)"] -.-> c2
+```
+
+*Alt-text: many virtual threads share two carrier (platform) threads. Running virtual threads are mounted on a carrier; a virtual thread blocked on I/O is unmounted (freeing its carrier) and remounts when ready; the remaining virtual threads — up to millions — wait their turn.*
 
 **ExecutorService is `AutoCloseable` (Java 19+).** `try (var ex = Executors.new...()) { ex.submit(...); }` — `close()` does an orderly shutdown that **waits** for submitted tasks to finish, so the lab can assert all 10,000 ran. `CompletableFuture` composes async steps (`thenCombine`, `thenCompose`, `allOf`) without manual thread juggling. `Semaphore(n)` hands out `n` permits — a clean way to **bound concurrency** (e.g. limit in-flight calls to a downstream service).
 
@@ -229,61 +269,85 @@ This **is** the thread-safety step — the one the whole course's 🧵 notes poi
 
 You're at **`step-11-start`** (== `step-10-end`). The repo builds with 5 modules. This step adds a 6th — `playground/concurrency-lab` — a pure-JUnit module (no Spring, no Docker), following the `playground/*` convention (ADR-0003) for non-service learning code.
 
-Confirm the start builds:
+Confirm you're at the right start — fast and Docker-free, keeping this step's "JVM + Maven only" promise:
 ```bash
-./mvnw -q -pl services/cif -am verify   # still green from Step 10
+git describe --tags   # expect step-11-start (== step-10-end)
+./mvnw -q validate    # reactor wiring is sane; runs no tests, needs no Docker
 ```
+(The full `./mvnw verify` — which *does* need Docker for cif's Testcontainers tests — is deferred to the 🔬 Prove movement.)
 
 ## 🛠️ Let's Build It — Step by Step
 
 ```mermaid
 flowchart TB
-    p["0 · module pom + aggregator entry"] --> b["1 · Balance interface + 4 implementations<br/>Unsafe / Synchronized / Atomic / LongAdder"]
-    b --> r["2 · LostUpdateRaceTest<br/>deterministic lost update + contention proofs"]
-    r --> t["3 · ConcurrencyToolsTest<br/>virtual threads · CompletableFuture · Semaphore"]
+    p["1 · module pom + aggregator entry"] --> b["2 · Balance interface + 4 implementations<br/>Unsafe / Synchronized / Atomic / LongAdder"]
+    b --> r["3 · LostUpdateRaceTest<br/>deterministic lost update + contention proofs"]
+    r --> t["4 · ConcurrencyToolsTest<br/>virtual threads · CompletableFuture · Semaphore"]
 ```
 
 🌳 **Files we'll touch** (all new):
 ```
 playground/concurrency-lab/
-├── pom.xml                                              # 0 · pure JUnit 5 + AssertJ module
+├── pom.xml                                              # 1 · pure JUnit 5 + AssertJ module
 └── src/
     ├── main/java/com/buildabank/concurrency/
-    │   ├── Balance.java                                 # 1 · the shared-balance interface
+    │   ├── Balance.java                                 # 2 · the shared-balance interface
     │   ├── UnsafeBalance.java                           #     broken: balance += amount
     │   ├── SynchronizedBalance.java                     #     fix A: mutual exclusion
     │   ├── AtomicBalance.java                           #     fix B: AtomicLong CAS
     │   └── LongAdderBalance.java                        #     fix C: LongAdder striping
     └── test/java/com/buildabank/concurrency/
-        ├── LostUpdateRaceTest.java                      # 2 · the race, deterministic + at scale
-        └── ConcurrencyToolsTest.java                    # 3 · executors, futures, virtual threads
+        ├── LostUpdateRaceTest.java                      # 3 · the race, deterministic + at scale
+        └── ConcurrencyToolsTest.java                    # 4 · executors, futures, virtual threads
 pom.xml                                                  # + <module>playground/concurrency-lab</module>
 steps/step-11/smoke.sh
 ```
 
 ---
 
-### Sub-step 0 of 3 — The module 🧭 *(you are here: **module** → balances → race test → tools test)*
+### Sub-step 1 of 4 — The module 🧭 *(you are here: **module** → balances → race test → tools test)*
 
 🎯 **Goal:** a new pure-JUnit Maven module for the concurrency labs.
 
 📁 **Location:** new file → `playground/concurrency-lab/pom.xml`, and add one line to the root `pom.xml`.
 
-⌨️ **Code** (`playground/concurrency-lab/pom.xml`):
+⌨️ **Code** — the complete file:
 ```xml
-<project xmlns="http://maven.apache.org/POM/4.0.0" ...>
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- playground/concurrency-lab/pom.xml -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      concurrency-lab — the Step 11 concurrency & thread-safety primer (plain Java, no Spring).
+      Banking-flavoured examples (a shared account balance) that prove the Java Memory Model the hard way:
+      a lost-update race shown FAILING, then fixed with synchronized / AtomicLong / LongAdder and proven
+      correct under heavy contention. Pure JUnit 5 + AssertJ; everything runs in `./mvnw verify`.
+    -->
     <parent>
         <groupId>com.buildabank</groupId>
         <artifactId>build-a-bank-parent</artifactId>
         <version>0.1.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
+
     <artifactId>concurrency-lab</artifactId>
     <name>Build-a-Bank :: Playground :: Concurrency Lab</name>
+    <description>Concurrency and thread safety — JMM, races, atomics, executors, virtual threads (Step 11).</description>
+
     <dependencies>
-        <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
-        <dependency><groupId>org.assertj</groupId><artifactId>assertj-core</artifactId><scope>test</scope></dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
 ```
@@ -292,7 +356,7 @@ And in the root `pom.xml` `<modules>` block, add:
 <module>playground/concurrency-lab</module>
 ```
 
-🔍 **Line-by-line:** inherits the Spring Boot **parent** purely for managed JUnit/AssertJ versions (no Spring runtime). `<scope>test</scope>` keeps the test libraries out of any (empty) jar. The `<module>` line wires it into the reactor so `./mvnw verify` builds it.
+🔍 **Line-by-line:** inherits the Spring Boot **parent** purely for managed JUnit/AssertJ versions (no Spring runtime). `<scope>test</scope>` keeps the test libraries out of any (empty) jar. The `<module>` line wires it into the reactor so `./mvnw verify` builds it. Note the `<description>` says "Concurrency **and** thread safety" — see the pitfall below.
 
 ⚠️ **Pitfall:** an `&` inside `<description>` is invalid XML — write `and` or `&amp;`. (Ask me how I know.)
 
@@ -300,91 +364,266 @@ And in the root `pom.xml` `<modules>` block, add:
 
 ---
 
-### Sub-step 1 of 3 — `Balance` and its four implementations 🧭 *(module ✅ → **balances** → race test → tools test)*
+### Sub-step 2 of 4 — `Balance` and its four implementations 🧭 *(module ✅ → **balances** → race test → tools test)*
 
 🎯 **Goal:** one interface, four implementations spanning broken → correct, so a single test can hammer each and compare.
 
 📁 **Location:** `playground/concurrency-lab/src/main/java/com/buildabank/concurrency/`
 
-⌨️ **Code** — the interface and the broken one (the three fixes follow the same shape; full files in the repo):
+⌨️ **Code** — five files, each complete. First the interface and the broken one:
 ```java
-// Balance.java
-public interface Balance {
-    void deposit(long amount);   // read-modify-write: read balance, add, write back
-    long get();
-}
+// playground/concurrency-lab/src/main/java/com/buildabank/concurrency/Balance.java
+package com.buildabank.concurrency;
 
-// UnsafeBalance.java — BROKEN on purpose
-public class UnsafeBalance implements Balance {
-    private long balance;
-    @Override public void deposit(long amount) { balance += amount; }   // NOT atomic
-    @Override public long get() { return balance; }
+/**
+ * A shared, mutable account balance hammered by many threads at once — the simplest possible model of the
+ * bank's central thread-safety problem. Four implementations show the spectrum from broken to correct:
+ * {@link UnsafeBalance}, {@link SynchronizedBalance}, {@link AtomicBalance}, {@link LongAdderBalance}.
+ *
+ * <p>{@code deposit} is a read-modify-write ("read the balance, add, write it back") — the classic
+ * operation that loses updates when two threads interleave without coordination.
+ */
+public interface Balance {
+
+    /** Add {@code amount} minor units to the balance. */
+    void deposit(long amount);
+
+    /** The current balance in minor units. */
+    long get();
 }
 ```
 ```java
-// SynchronizedBalance.java — fix A: mutual exclusion
-public class SynchronizedBalance implements Balance {
+// playground/concurrency-lab/src/main/java/com/buildabank/concurrency/UnsafeBalance.java
+package com.buildabank.concurrency;
+
+/**
+ * BROKEN on purpose. {@code balance += amount} looks atomic but is three steps under the hood — read the
+ * field, add, write it back. Two threads can both read the same old value and both write back, so one
+ * deposit is silently lost. The field isn't even {@code volatile}, so updates may also be invisible across
+ * threads. This is the bug we prove, then fix.
+ */
+public class UnsafeBalance implements Balance {
+
     private long balance;
-    @Override public synchronized void deposit(long amount) { balance += amount; }
-    @Override public synchronized long get() { return balance; }
-}
 
-// AtomicBalance.java — fix B: lock-free CAS
+    @Override
+    public void deposit(long amount) {
+        balance += amount;   // read-modify-write — NOT atomic
+    }
+
+    @Override
+    public long get() {
+        return balance;
+    }
+}
+```
+Then the three fixes:
+```java
+// playground/concurrency-lab/src/main/java/com/buildabank/concurrency/SynchronizedBalance.java
+package com.buildabank.concurrency;
+
+/**
+ * Correct via <strong>mutual exclusion</strong>. {@code synchronized} makes the whole read-modify-write
+ * happen under the object's intrinsic lock, so only one thread is inside {@code deposit} at a time
+ * (atomicity) and the lock's release/acquire establishes a <strong>happens-before</strong> edge, so each
+ * thread sees the previous one's write (visibility). Simple and correct; the cost is that threads serialize
+ * on the lock under contention.
+ */
+public class SynchronizedBalance implements Balance {
+
+    private long balance;
+
+    @Override
+    public synchronized void deposit(long amount) {
+        balance += amount;
+    }
+
+    @Override
+    public synchronized long get() {
+        return balance;
+    }
+}
+```
+```java
+// playground/concurrency-lab/src/main/java/com/buildabank/concurrency/AtomicBalance.java
+package com.buildabank.concurrency;
+
+import java.util.concurrent.atomic.AtomicLong;
+
+/**
+ * Correct via <strong>lock-free</strong> atomics. {@link AtomicLong#addAndGet} is a single hardware
+ * compare-and-swap (CAS) loop: read the value, compute the new one, and atomically swap it in only if it
+ * hasn't changed — retrying if it has. No lock is held, so threads don't block each other; under very high
+ * contention the CAS retries can spin (that's what {@link LongAdderBalance} improves on).
+ */
 public class AtomicBalance implements Balance {
-    private final java.util.concurrent.atomic.AtomicLong balance = new java.util.concurrent.atomic.AtomicLong();
-    @Override public void deposit(long amount) { balance.addAndGet(amount); }
-    @Override public long get() { return balance.get(); }
-}
 
-// LongAdderBalance.java — fix C: striped, contention-friendly
+    private final AtomicLong balance = new AtomicLong();
+
+    @Override
+    public void deposit(long amount) {
+        balance.addAndGet(amount);   // atomic CAS — no lock
+    }
+
+    @Override
+    public long get() {
+        return balance.get();
+    }
+}
+```
+```java
+// playground/concurrency-lab/src/main/java/com/buildabank/concurrency/LongAdderBalance.java
+package com.buildabank.concurrency;
+
+import java.util.concurrent.atomic.LongAdder;
+
+/**
+ * Correct and <strong>contention-friendly</strong>. {@link LongAdder} spreads the count across multiple
+ * internal cells, so concurrent threads usually update <em>different</em> cells (no CAS contention, no
+ * false sharing of one hot field); {@link LongAdder#sum} adds the cells when you read. The trade-off vs
+ * {@link AtomicLong}: faster writes under heavy contention, but {@code sum()} is a (still cheap) aggregate
+ * rather than a single read — ideal for high-throughput counters/metrics where reads are rare.
+ */
 public class LongAdderBalance implements Balance {
-    private final java.util.concurrent.atomic.LongAdder balance = new java.util.concurrent.atomic.LongAdder();
-    @Override public void deposit(long amount) { balance.add(amount); }
-    @Override public long get() { return balance.sum(); }
+
+    private final LongAdder balance = new LongAdder();
+
+    @Override
+    public void deposit(long amount) {
+        balance.add(amount);
+    }
+
+    @Override
+    public long get() {
+        return balance.sum();
+    }
 }
 ```
 
 🔍 **Line-by-line:** `UnsafeBalance.deposit` is the three-step read-modify-write — the bug. `SynchronizedBalance` wraps it in the monitor (atomicity + happens-before). `AtomicBalance` uses a CAS loop (lock-free). `LongAdderBalance` spreads the count across cells (`get()` is `sum()`).
 
-💭 **Under the hood:** `synchronized` on `get()` too isn't paranoia — without it, a reader could see a stale `balance` (visibility). The atomic/adder reads are already safe.
+🔮 **Predict** (before reading on): if you dropped `synchronized` from `SynchronizedBalance.get()` — keeping it on `deposit` — which JMM property breaks: atomicity or visibility?
+
+💭 **Under the hood (the answer):** visibility. `synchronized` on `get()` too isn't paranoia — deposits would still happen one at a time (atomicity intact), but without the monitor's happens-before edge a reader could see a stale `balance`. The atomic/adder reads are already safe.
+
+❓ **Quick check** — cover the code above: which implementation is lock, which is CAS, which is striped, which is broken? <details><summary>answer</summary>`SynchronizedBalance` = lock (the monitor), `AtomicBalance` = CAS (`addAndGet` retry loop), `LongAdderBalance` = striped cells (`sum()` on read), `UnsafeBalance` = broken (`+=` is a non-atomic read-modify-write).</details>
 
 ✋ **Checkpoint:** five files compile (`./mvnw -pl playground/concurrency-lab -am compile`).
 
 💾 **Commit:** `git add playground/concurrency-lab/src/main && git commit -m "feat(concurrency-lab): Balance + Unsafe/Synchronized/Atomic/LongAdder"`
 
+🪫 **Stopping here?** You have the module wired into the reactor and five compiled classes, all committed. Next: **Sub-step 3 — `LostUpdateRaceTest`**; first action: create `playground/concurrency-lab/src/test/java/com/buildabank/concurrency/LostUpdateRaceTest.java`.
+
 ---
 
-### Sub-step 2 of 3 — `LostUpdateRaceTest`: force the race, then prove the fixes 🧭 *(module ✅ → balances ✅ → **race test** → tools test)*
+### Sub-step 3 of 4 — `LostUpdateRaceTest`: force the race, then prove the fixes 🧭 *(module ✅ → balances ✅ → **race test** → tools test)*
 
 🎯 **Goal:** make a lost update happen on **every** run (no flakiness), then prove `synchronized`/`AtomicLong`/`LongAdder` are exactly correct under heavy contention.
 
 📁 **Location:** `playground/concurrency-lab/src/test/java/com/buildabank/concurrency/LostUpdateRaceTest.java`
 
-⌨️ **Code** — the deterministic proof (full file in the repo):
+⌨️ **Code** — the complete file: the deterministic proof, the contention proofs (8 threads × 100,000 deposits), and the `hammer`/`awaitQuietly` helpers:
 ```java
-@Test
-void lostUpdate_isDeterministic_whenReadAndWriteAreNotAtomic() throws Exception {
-    long[] balance = {0};
-    CyclicBarrier bothHaveRead = new CyclicBarrier(2);
-    Runnable depositOne = () -> {
-        long seen = balance[0];          // 1) both threads read the SAME old value (0)
-        awaitQuietly(bothHaveRead);      // 2) wait until BOTH have read before either writes
-        balance[0] = seen + 1;           // 3) both write back 1 → one deposit is lost
-    };
-    Thread a = new Thread(depositOne), b = new Thread(depositOne);
-    a.start(); b.start(); a.join(); b.join();
-    assertThat(balance[0]).isEqualTo(1L);   // NOT 2 — a deterministic lost update
+// playground/concurrency-lab/src/test/java/com/buildabank/concurrency/LostUpdateRaceTest.java
+package com.buildabank.concurrency;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.concurrent.CyclicBarrier;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Proves the <strong>lost-update race</strong> the hard way, then proves the three fixes.
+ *
+ * <p>The headline test forces the race <em>deterministically</em> with a {@link CyclicBarrier}: two threads
+ * both read the balance (0), wait until both have read, then both write back (1) — so one of two +1 deposits
+ * is silently lost, <em>every single run</em>. No flakiness, no "run it 1000 times and hope." The contention
+ * tests then show {@link UnsafeBalance} can lose deposits at scale while {@code synchronized}, {@link
+ * AtomicBalance}, and {@link LongAdderBalance} are exactly correct.
+ */
+class LostUpdateRaceTest {
+
+    private static final int THREADS = 8;
+    private static final int DEPOSITS_PER_THREAD = 100_000;
+    private static final long EXPECTED = (long) THREADS * DEPOSITS_PER_THREAD;
+
+    @Test
+    void lostUpdate_isDeterministic_whenReadAndWriteAreNotAtomic() throws Exception {
+        long[] balance = {0};                       // shared mutable state (array so it's effectively final)
+        CyclicBarrier bothHaveRead = new CyclicBarrier(2);
+
+        Runnable depositOne = () -> {
+            long seen = balance[0];                 // 1) both threads read the SAME old value (0)
+            awaitQuietly(bothHaveRead);             // 2) wait until BOTH have read before either writes
+            balance[0] = seen + 1;                  // 3) both write back 1 → one deposit is lost
+        };
+
+        Thread a = new Thread(depositOne, "depositor-A");
+        Thread b = new Thread(depositOne, "depositor-B");
+        a.start();
+        b.start();
+        a.join();
+        b.join();
+
+        System.out.println("[race] two +1 deposits, interleaved read-modify-write → balance = " + balance[0]);
+        assertThat(balance[0])
+                .as("two deposits of 1, but the read-modify-write interleaved → exactly one was lost")
+                .isEqualTo(1L);                     // NOT 2 — a deterministic lost update
+    }
+
+    @Test
+    void unsafeBalance_canLoseDepositsUnderContention() throws Exception {
+        long result = hammer(new UnsafeBalance());
+        System.out.println("[race] UnsafeBalance under " + THREADS + "×" + DEPOSITS_PER_THREAD
+                + ": expected=" + EXPECTED + " actual=" + result + "  (lost " + (EXPECTED - result) + ")");
+        // Deterministic, never-flaky assertion: an unsynchronized counter can only LOSE updates, never invent
+        // them — so it is always <= EXPECTED. (Run it and watch `actual` fall short of `expected`.)
+        assertThat(result).isLessThanOrEqualTo(EXPECTED);
+    }
+
+    @Test
+    void synchronizedBalance_isExact() throws Exception {
+        assertThat(hammer(new SynchronizedBalance())).isEqualTo(EXPECTED);
+    }
+
+    @Test
+    void atomicBalance_isExact() throws Exception {
+        assertThat(hammer(new AtomicBalance())).isEqualTo(EXPECTED);
+    }
+
+    @Test
+    void longAdderBalance_isExact() throws Exception {
+        assertThat(hammer(new LongAdderBalance())).isEqualTo(EXPECTED);
+    }
+
+    /** Run THREADS threads, each depositing 1 a fixed number of times; join (which publishes the result). */
+    private static long hammer(Balance balance) throws InterruptedException {
+        Thread[] threads = new Thread[THREADS];
+        for (int i = 0; i < THREADS; i++) {
+            threads[i] = new Thread(() -> {
+                for (int j = 0; j < DEPOSITS_PER_THREAD; j++) {
+                    balance.deposit(1);
+                }
+            });
+        }
+        for (Thread t : threads) {
+            t.start();
+        }
+        for (Thread t : threads) {
+            t.join();   // join establishes happens-before, so get() below sees all writes
+        }
+        return balance.get();
+    }
+
+    private static void awaitQuietly(CyclicBarrier barrier) {
+        try {
+            barrier.await();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
-```
-and the contention proofs (8 threads × 100,000 deposits):
-```java
-@Test void unsafeBalance_canLoseDepositsUnderContention() throws Exception {
-    long result = hammer(new UnsafeBalance());            // prints how many were lost
-    assertThat(result).isLessThanOrEqualTo(EXPECTED);     // deterministic: it can only LOSE, never invent
-}
-@Test void synchronizedBalance_isExact() throws Exception { assertThat(hammer(new SynchronizedBalance())).isEqualTo(EXPECTED); }
-@Test void atomicBalance_isExact()       throws Exception { assertThat(hammer(new AtomicBalance())).isEqualTo(EXPECTED); }
-@Test void longAdderBalance_isExact()    throws Exception { assertThat(hammer(new LongAdderBalance())).isEqualTo(EXPECTED); }
 ```
 
 🔍 **Line-by-line:**
@@ -413,45 +652,112 @@ and the contention proofs (8 threads × 100,000 deposits):
 
 ⚠️ **Pitfall:** asserting "the unsafe counter *must* be < expected" would be **flaky** (it usually loses, but not guaranteed). We assert `<= expected` and rely on the deterministic barrier test for the proof. Never write a flaky assertion (§12.5).
 
+🪫 **Stopping here?** You have 5 green race tests committed — the lost update proven deterministically and fixed three ways. Next: **Sub-step 4 — `ConcurrencyToolsTest`**; first action: create `ConcurrencyToolsTest.java` next to `LostUpdateRaceTest.java`.
+
 ---
 
-### Sub-step 3 of 3 — `ConcurrencyToolsTest`: the modern toolkit 🧭 *(module ✅ → balances ✅ → race test ✅ → **tools test**)*
+### Sub-step 4 of 4 — `ConcurrencyToolsTest`: the modern toolkit 🧭 *(module ✅ → balances ✅ → race test ✅ → **tools test**)*
 
 🎯 **Goal:** use `ExecutorService` (virtual threads), `CompletableFuture`, and `Semaphore` the way the bank will.
 
 📁 **Location:** `playground/concurrency-lab/src/test/java/com/buildabank/concurrency/ConcurrencyToolsTest.java`
 
-⌨️ **Code** (excerpt; full file in the repo):
+⌨️ **Code** — the complete file, three tests. The scaffold fades here: the `Semaphore` lambda body is **yours to write** from the invariant in the ✍️ comment (solution collapsed below — try before you peek):
 ```java
-@Test
-void virtualThreads_runManyTasksConcurrently() throws Exception {
-    int tasks = 10_000;
-    LongAdder completed = new LongAdder();
-    try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-        for (int i = 0; i < tasks; i++) executor.submit(completed::increment);
-    } // close() waits for all tasks (ExecutorService is AutoCloseable, Java 19+)
-    assertThat(completed.sum()).isEqualTo(tasks);
-}
+// playground/concurrency-lab/src/test/java/com/buildabank/concurrency/ConcurrencyToolsTest.java
+package com.buildabank.concurrency;
 
-@Test
-void semaphore_capsConcurrentAccess() throws Exception {
-    int permits = 3;
-    Semaphore limiter = new Semaphore(permits);
-    AtomicInteger inFlight = new AtomicInteger(), maxObserved = new AtomicInteger();
-    try (ExecutorService ex = Executors.newVirtualThreadPerTaskExecutor()) {
-        for (int i = 0; i < 100; i++) ex.submit(() -> {
-            try { limiter.acquire();
-                  maxObserved.accumulateAndGet(inFlight.incrementAndGet(), Math::max);
-                  Thread.sleep(1); inFlight.decrementAndGet();
-            } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            finally { limiter.release(); }
-        });
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * The modern {@code java.util.concurrent} toolkit — used the way the bank will: an {@link ExecutorService}
+ * (here backed by <strong>virtual threads</strong>, JDK 21+/stable in 25), {@link CompletableFuture}
+ * composition, and a {@link Semaphore} bounding concurrency (e.g. limiting calls to a downstream service).
+ */
+class ConcurrencyToolsTest {
+
+    @Test
+    void virtualThreads_runManyTasksConcurrently() throws Exception {
+        int tasks = 10_000;
+        LongAdder completed = new LongAdder();
+
+        // newVirtualThreadPerTaskExecutor: one lightweight virtual thread per task — 10k is trivial.
+        // ExecutorService is AutoCloseable (Java 19+): close() waits for all tasks to finish.
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (int i = 0; i < tasks; i++) {
+                executor.submit(completed::increment);
+            }
+        }
+
+        System.out.println("[tools] virtual threads completed " + completed.sum() + " / " + tasks + " tasks");
+        assertThat(completed.sum()).isEqualTo(tasks);
     }
-    assertThat(maxObserved.get()).isLessThanOrEqualTo(permits);   // never more than `permits` at once
+
+    @Test
+    void completableFuture_composesAsyncWork() throws Exception {
+        CompletableFuture<Long> fees = CompletableFuture.supplyAsync(() -> 100L);
+        CompletableFuture<Long> interest = CompletableFuture.supplyAsync(() -> 50L);
+
+        long total = fees.thenCombine(interest, Long::sum).get();   // run both, then combine
+
+        assertThat(total).isEqualTo(150L);
+    }
+
+    @Test
+    void semaphore_capsConcurrentAccess() throws Exception {
+        int permits = 3;
+        Semaphore limiter = new Semaphore(permits);
+        AtomicInteger inFlight = new AtomicInteger();
+        AtomicInteger maxObserved = new AtomicInteger();
+
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (int i = 0; i < 100; i++) {
+                executor.submit(() -> {
+                    // ✍️ YOUR TURN (~8 lines) — enforce the invariant "at most `permits` tasks in flight":
+                    //   acquire a permit → record inFlight.incrementAndGet() into maxObserved (Math::max)
+                    //   → Thread.sleep(1) to hold the permit briefly → decrement inFlight
+                    //   → on InterruptedException, restore the interrupt flag
+                    //   → ALWAYS release the permit (finally).
+                });
+            }
+        }
+
+        System.out.println("[tools] semaphore(" + permits + ") capped concurrency at " + maxObserved.get());
+        assertThat(maxObserved.get()).isLessThanOrEqualTo(permits);   // never more than `permits` at once
+    }
 }
 ```
 
-🔍 **Line-by-line:** `newVirtualThreadPerTaskExecutor()` gives one virtual thread per task — 10,000 is trivial. The try-with-resources `close()` waits for completion, so the `LongAdder` is complete when we assert. The `Semaphore(3)` lets at most 3 tasks into the critical section at once; `maxObserved` can never exceed 3 — a deterministic invariant (great for "limit calls to a downstream service").
+<details>
+<summary>✅ The Semaphore lambda body (compare after you've written yours — the Run & See below assumes the finished body)</summary>
+
+```java
+                    try {
+                        limiter.acquire();
+                        int now = inFlight.incrementAndGet();
+                        maxObserved.accumulateAndGet(now, Math::max);
+                        Thread.sleep(1);                 // hold the permit briefly
+                        inFlight.decrementAndGet();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        limiter.release();
+                    }
+```
+</details>
+
+🔍 **Line-by-line:** `newVirtualThreadPerTaskExecutor()` gives one virtual thread per task — 10,000 is trivial. The try-with-resources `close()` waits for completion, so the `LongAdder` is complete when we assert. `thenCombine` runs both suppliers async and applies `Long::sum` once **both** complete (its sibling `allOf` waits on any number of futures; `thenCompose` chains a future-returning step) — no manual thread juggling. The `Semaphore(3)` lets at most 3 tasks into the critical section at once; `maxObserved` can never exceed 3 — a deterministic invariant (great for "limit calls to a downstream service").
+
+🔮 **Predict:** can the combined `fees.thenCombine(interest, ...)` future ever complete *before* both input futures have? (Run it — `thenCombine` fires only after **both** inputs complete; that's the whole point.)
 
 ▶️ **Run & See:**
 ```bash
@@ -469,6 +775,20 @@ void semaphore_capsConcurrentAccess() throws Exception {
 💾 **Commit:** `git add .../ConcurrencyToolsTest.java && git commit -m "test(concurrency-lab): executors, CompletableFuture, virtual threads, Semaphore"`
 
 ⚠️ **Pitfall:** virtual threads make blocking cheap but do **not** make racy code safe — `UnsafeBalance` is just as broken on them. Concurrency correctness still needs synchronization.
+
+❓ **Quick check:** the virtual-threads test submits 10,000 tasks with no explicit `awaitTermination` — why is it safe to assert `completed.sum()` right after the try-with-resources block? <details><summary>answer</summary>`ExecutorService` is `AutoCloseable` (Java 19+): `close()` at the end of the try block performs an orderly shutdown that **waits** for all submitted tasks to finish — so by the time the assertion runs, every increment has happened (and been published).</details>
+
+🪫 **Stopping here?** You have all 8 lab tests green and committed. Next: **🎮 Play with it**, then movement **D · Prove**; first action: rerun `./mvnw -pl playground/concurrency-lab test`.
+
+---
+
+### 🎮 Play with it (10-15 min)
+
+No new files — twiddle what you just built, and **predict before every run**:
+
+1. **Crank the contention.** In `LostUpdateRaceTest`, set `DEPOSITS_PER_THREAD = 1_000_000`. Predict: does `UnsafeBalance` lose *more* deposits, or about the same fraction? Rerun `-Dtest=LostUpdateRaceTest` and read the `[race]` line. (Set it back to `100_000`.)
+2. **Break the barrier.** Change `new CyclicBarrier(2)` to `new CyclicBarrier(3)`. Predict what happens, then run. When it hangs, Ctrl-C and explain: the barrier waits for a third `await()` that never comes — exactly the "test hangs" row in the troubleshooting table. (Revert.)
+3. **Squeeze the semaphore.** Change `new Semaphore(permits)` to `new Semaphore(1)`. Predict `maxObserved`, rerun `-Dtest=ConcurrencyToolsTest`, and check the `[tools]` line. (Revert.)
 
 ---
 
@@ -556,7 +876,7 @@ Reverted; the suite is green again. The "exact" assertions genuinely depend on t
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① JCStress — the right tool for memory-model bugs (verify-adjacent)</summary>
+<summary>① JCStress — the right tool for memory-model bugs (verify-adjacent) · +~20 min read (a real run takes longer)</summary>
 
 Our `CyclicBarrier` trick forces a lost update deterministically, but it can't probe *visibility/ordering* bugs (which depend on hardware memory models and only appear sometimes). **JCStress** (the OpenJDK Java Concurrency Stress harness) is built for exactly that: it runs a tiny "actor" method on each of several threads millions of times across many forks and JIT modes, and records *every* observed outcome — flagging `FORBIDDEN`/`ACCEPTABLE_INTERESTING` results that reveal a race.
 
@@ -586,13 +906,13 @@ java -jar target/jcstress.jar -t PlusPlusStress
 </details>
 
 <details>
-<summary>② Deadlock and the lock-ordering fix</summary>
+<summary>② Deadlock and the lock-ordering fix · +~5 min</summary>
 
 Two transfers — A→B and B→A — that lock the *from* account then the *to* account can deadlock: transfer 1 holds A waiting for B, transfer 2 holds B waiting for A. The fix is a **global lock order**: always lock the account with the smaller id first (or use `tryLock` with a timeout and retry). You'll apply exactly this in Step 12's ledger.
 </details>
 
 <details>
-<summary>③ Why `ConcurrentHashMap` beats `synchronized(map)`</summary>
+<summary>③ Why `ConcurrentHashMap` beats `synchronized(map)` · +~5 min</summary>
 
 `Collections.synchronizedMap` takes one lock for every operation — all threads serialize. `ConcurrentHashMap` uses fine-grained locking/CAS so reads are mostly lock-free and writes contend only on the affected bin, and it offers **atomic** compound ops (`computeIfAbsent`, `merge`, `putIfAbsent`) that eliminate check-then-act races. Use it for shared caches/registries.
 </details>

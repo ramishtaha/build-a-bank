@@ -11,14 +11,16 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | the gateway pattern · sync vs async comms · declarative HTTP + timeouts |
-| **C** | [🛠️ Build](#build) | a `gateway/` module routing to the services · a declarative `CifClient` with timeouts |
-| **D** | [🔬 Prove](#prove) | the Verification Log — gateway routing, client deserialize + timeout, §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1h |
+| **B** | [🧠 Understand](#understand) | the gateway pattern · sync vs async comms · declarative HTTP + timeouts | ~2h |
+| **C** | [🛠️ Build](#build) | a `gateway/` module routing to the services · a declarative `CifClient` with timeouts | ~9h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — gateway routing, client deserialize + timeout, §12.3 mutation | ~1.5h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~3h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~1.5h |
+
+*(≈ 18 h total at a careful beginner pace — see the 🗓️ Session Plan below for how to slice it into sittings.)*
 
 ---
 
@@ -66,6 +68,8 @@ If you can confidently do **all** of this, skim the 🧩 Pattern Spotlight and j
 # Run the whole front-to-back path locally (3 terminals): cif (8081), demand-account (8082), gateway (8080)
 ./mvnw -pl services/cif spring-boot:run
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run
+#   (the VAR=value prefix is bash-only; PowerShell equivalent:
+#    $env:SPRING_DATASOURCE_URL='jdbc:postgresql://localhost:5433/demand_account'; .\mvnw.cmd -pl services/demand-account spring-boot:run)
 ./mvnw -pl gateway spring-boot:run
 #   → everything through http://localhost:8080  (e.g. GET /cif/api/customers/1, POST /bank/api/v1/transfers)
 
@@ -112,6 +116,23 @@ Every microservices diagram has a box at the top labelled "API Gateway" — it's
 
 > **Depends on: Steps 14, 13, 8.**
 
+## 🗓️ Session Plan
+
+≈ 18 hours doesn't fit in one chair. Slice it into **8 sittings** of ~1.5–3 h, each ending at a real save point (a commit or a green test) — stop mid-sitting and you'll pay a re-orientation tax; stop at a save point and the re-entry line at each ✋ checkpoint tells you exactly where to resume.
+
+| # | Sitting | Covers | ~time | Ends at (save point) |
+|---|---|---|---|---|
+| 1 | The map | A · Orient + all of B · Understand (Big Idea → Thread-safety note) | ~3h | you can draw the gateway diagram + explain servlet-vs-reactive from memory |
+| 2 | Module + routes | Build sub-steps 0–1 (gateway POM, `GatewayApplication`, `application.yml`) | ~2h | sub-step 1 commit — routes defined |
+| 3 | Prove the routing | Sub-step 2 (`GatewayRoutingTest` + the break-it mutation) | ~2.5h | routing test green + commit |
+| 4 | The typed client | Sub-steps 3–4 (`CifClient` interface/DTO, factory + config with timeouts) | ~2h | sub-step 4 commit — timeout-bounded bean |
+| 5 | Client tests + play | Sub-step 5 (`CifClientTest`) + 🎮 Play With It (3-terminal full path) | ~2.5h | both client tests green; requests through :8080 |
+| 6 | Prove + close | D · Prove (mutation, `smoke.sh`, clean-room) + ✅ Definition of Done | ~1.5h | `step-15-end` committed and tagged |
+| 7 | Apply | E · Go Deeper, Interview Prep, Your Turn challenges 1–3 | ~3h | challenge code committed |
+| 8 | Review | F · Troubleshooting scan, glossary, recap, Test Yourself, flashcards | ~1.5h | all 6 Test Yourself answered cold |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can compress the whole step to a ~3h skim for experienced learners; each 🚀 Go Deeper aside is +~10 min; Your Turn stretches 4–5 are +~1h and can be dropped without losing the spine.
+
 ---
 
 <a id="understand"></a>
@@ -146,6 +167,8 @@ flowchart TB
 ```
 
 *Alt-text: clients enter through the gateway, which holds routes (/cif/** → cif, /bank/** → demand-account) and filters (StripPrefix, headers, later auth/rate-limit). The gateway forwards to the cif and demand-account services. Separately, demand-account calls cif synchronously over HTTP with a declarative client and timeout; asynchronous Kafka events (Step 20) are the decoupled alternative.*
+
+❓ **Knowledge-check:** why did we pick the **servlet** gateway variant over the reactive one for this platform? <details><summary>answer</summary>The whole stack is Spring MVC + virtual threads — the servlet gateway stays on the same stack, and its blocking forwards scale fine on virtual threads, so the reactive model adds complexity for no benefit here.</details>
 
 ## 🧩 Pattern Spotlight — API Gateway / BFF
 
@@ -246,21 +269,80 @@ pom.xml (+ <module>gateway</module>) · steps/step-15/{requests.http,smoke.sh} �
 
 ---
 
-### Sub-step 0 of 5 — The gateway module 🧭 *(you are here: **module** → routes → routing test → client → factory → client test)*
+### Sub-step 0 of 6 — The gateway module 🧭 *(you are here: **module** → routes → routing test → client → factory → client test)*
 
-🎯 **Goal:** a new module with the servlet gateway dependency (BOM-managed).
+🎯 **Goal:** a new module with the servlet gateway dependency (BOM-managed). *(⏱️ ~45 min)*
 
 📁 **Location:** `gateway/pom.xml` + add `<module>gateway</module>` to the root `pom.xml`.
 
-⌨️ **Code** (the key dependency):
+⌨️ **Code** — the complete module POM:
 ```xml
-<dependency>
-    <groupId>org.springframework.cloud</groupId>
-    <artifactId>spring-cloud-starter-gateway-server-webmvc</artifactId>   <!-- servlet variant; BOM-managed -->
-</dependency>
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- file: gateway/pom.xml -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      gateway — the API Gateway / BFF (single front door). Built on Spring Cloud Gateway Server WebMVC
+      (the SERVLET variant) to stay on the project's Spring MVC + virtual-threads stack — NOT the reactive
+      (WebFlux/Netty) gateway. Routes external traffic to the cif and demand-account services. (Step 15.)
+    -->
+    <parent>
+        <groupId>com.buildabank</groupId>
+        <artifactId>build-a-bank-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>gateway</artifactId>
+    <name>Build-a-Bank :: Gateway</name>
+    <description>API Gateway / BFF — Spring Cloud Gateway Server WebMVC routing to the services (Step 15).</description>
+
+    <dependencies>
+        <!-- The SERVLET-based gateway (Spring MVC), version managed by the Spring Cloud BOM (2025.1.1). -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway-server-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+…and register the module in the root POM (the reactor grows from 7 modules to 8):
+```xml
+<!-- file: pom.xml (root) — inside the existing <modules> block -->
+<modules>
+    <module>services/hello</module>
+    <module>services/cif</module>
+    <module>services/demand-account</module>
+    <module>gateway</module>                       <!-- NEW: Step 15 -->
+    <module>playground/java-basics</module>
+    <module>playground/spring-lab</module>
+    <module>playground/concurrency-lab</module>
+</modules>
 ```
 
-🔍 **Line-by-line:** `spring-cloud-starter-gateway-server-webmvc` is the **servlet** gateway (Spring MVC), not the reactive one — chosen to stay on our MVC + virtual-threads stack (ADR-0007). No `<version>` — the Spring Cloud 2025.1.1 BOM (in the parent POM) manages it.
+🔍 **Line-by-line:** `spring-cloud-starter-gateway-server-webmvc` is the **servlet** gateway (Spring MVC), not the reactive one — chosen to stay on our MVC + virtual-threads stack (ADR-0007). No `<version>` — the Spring Cloud 2025.1.1 BOM (in the parent POM) manages it. `spring-boot-starter-actuator` powers the `/actuator/gateway/routes` endpoint you'll use in 🎮 Play With It (exposure is configured in sub-step 1). `<parent>` pulls in the shared plugin/BOM setup; the boot plugin makes the module runnable with `spring-boot:run`.
 
 💭 **Under the hood:** this starter brings the gateway auto-configuration that reads `spring.cloud.gateway.server.webmvc.routes` and wires the route/filter chain onto the servlet `DispatcherServlet`.
 
@@ -270,17 +352,43 @@ pom.xml (+ <module>gateway</module>) · steps/step-15/{requests.http,smoke.sh} �
 
 ⚠️ **Pitfall:** grabbing `spring-cloud-starter-gateway` (the reactive one) instead drags WebFlux/Netty into an MVC app — use the `-server-webmvc` artifact.
 
+> 🔁 **Stopping here?** You have a gateway module that resolves on the BOM, committed. Next: sub-step 1 (routes); first action: create `gateway/src/main/java/com/buildabank/gateway/GatewayApplication.java`.
+
 ---
 
-### Sub-step 1 of 5 — Routes 🧭 *(module ✅ → **routes** → routing test → client → factory → client test)*
+### Sub-step 1 of 6 — Routes 🧭 *(module ✅ → **routes** → routing test → client → factory → client test)*
 
-🎯 **Goal:** route `/cif/**` → cif and `/bank/**` → demand-account, stripping the prefix and adding a header.
+🎯 **Goal:** route `/cif/**` → cif and `/bank/**` → demand-account, stripping the prefix and adding a header. *(⏱️ ~1.5h)*
 
-📁 **Location:** `gateway/src/main/java/.../GatewayApplication.java` (a plain `@SpringBootApplication`) + `gateway/src/main/resources/application.yml`.
+📁 **Location:** `gateway/src/main/java/com/buildabank/gateway/GatewayApplication.java` + `gateway/src/main/resources/application.yml`.
 
-⌨️ **Code** (`application.yml`):
+⌨️ **Code** — first the application class (a plain `@SpringBootApplication`; all the gateway behaviour comes from config):
+```java
+// file: gateway/src/main/java/com/buildabank/gateway/GatewayApplication.java
+package com.buildabank.gateway;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+/** The API Gateway / BFF — the single front door routing to the bank's services (Step 15). */
+@SpringBootApplication
+public class GatewayApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(GatewayApplication.class, args);
+    }
+}
+```
+…then the routes:
 ```yaml
+# file: gateway/src/main/resources/application.yml
+# Spring Cloud Gateway Server WebMVC (servlet) — the single front door. Routes by a service prefix and
+# strips it before forwarding, so external /cif/api/customers/1 → cif's /api/customers/1.
+# (Config prefix is spring.cloud.gateway.server.webmvc.* since Spring Cloud 2025; the old
+#  spring.cloud.gateway.mvc.* is deprecated.)
 spring:
+  application:
+    name: gateway
   cloud:
     gateway:
       server:
@@ -298,10 +406,21 @@ spring:
               predicates:
                 - Path=/bank/**
               filters:
-                - StripPrefix=1
+                - StripPrefix=1                          # /bank/api/v1/transfers → /api/v1/transfers
                 - AddResponseHeader=X-Gateway, build-a-bank
+
 server:
   port: 8080                                             # the gateway is the front door
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway                     # /actuator/gateway lists the routes
+
+logging:
+  level:
+    com.buildabank.gateway: INFO
 ```
 
 🔍 **Line-by-line:**
@@ -310,6 +429,7 @@ server:
 - `StripPrefix=1` — drop the first path segment before forwarding, so the downstream gets *its own* path.
 - `AddResponseHeader=X-Gateway, build-a-bank` — tag every response (proves a filter ran; later this slot holds auth/rate-limit).
 - `server.port: 8080` — the single public address.
+- `management.endpoints.web.exposure.include: health,info,gateway` — exposes the `gateway` actuator endpoint that lists routes (🎮 Play With It item 3). It leaks topology — gate it in production (🛡️ Security Lens).
 
 💭 **Under the hood:** Spring Cloud Gateway compiles these into route handlers; on a request it finds the first matching route, applies the filters, and forwards to the `uri` with a blocking HTTP client (scales on virtual threads).
 
@@ -321,41 +441,103 @@ server:
 
 ⚠️ **Pitfall:** the config prefix is `spring.cloud.gateway.server.webmvc.routes` (2025+); the old `spring.cloud.gateway.mvc.routes` is deprecated and silently won't bind.
 
+> 🔁 **Stopping here?** You have routes defined and committed (not yet proven). Next: sub-step 2 (`GatewayRoutingTest`); first action: create `gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java`.
+
 ---
 
-### Sub-step 2 of 5 — `GatewayRoutingTest` 🧭 *(… → **routing test** → …)*
+### Sub-step 2 of 6 — `GatewayRoutingTest` 🧭 *(… → **routing test** → …)*
 
-🎯 **Goal:** prove the gateway forwards, strips the prefix, and adds the header — against an in-test stub (no real services).
+🎯 **Goal:** prove the gateway forwards, strips the prefix, and adds the header — against an in-test stub (no real services). *(⏱️ ~2.5h)*
 
-📁 **Location:** `gateway/src/test/java/.../GatewayRoutingTest.java`
+📁 **Location:** `gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java`
 
-⌨️ **Code** (the essence; full file in the repo):
+⌨️ **Code** — the complete test file:
 ```java
-@SpringBootTest(webEnvironment = RANDOM_PORT)
+// file: gateway/src/test/java/com/buildabank/gateway/GatewayRoutingTest.java
+package com.buildabank.gateway;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.concurrent.atomic.AtomicReference;
+
+import com.sun.net.httpserver.HttpServer;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
+/**
+ * Proves the gateway routes to a downstream service: it forwards a request, strips the route prefix, and
+ * applies the response-header filter — verified against an in-test stub HTTP server (no real services
+ * needed). The route's target URI is pointed at the stub via {@code @DynamicPropertySource}.
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class GatewayRoutingTest {
+
     private static HttpServer stub;
     private static final AtomicReference<String> receivedPath = new AtomicReference<>();
-    @LocalServerPort int gatewayPort;
+
+    @LocalServerPort
+    int gatewayPort;
+
+    private final HttpClient http = HttpClient.newHttpClient();
 
     @DynamicPropertySource
-    static void downstream(DynamicPropertyRegistry registry) throws ... {
-        stub = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        stub.createContext("/", ex -> { receivedPath.set(ex.getRequestURI().getPath()); /* respond 200 {"ok":true} */ });
+    static void downstream(DynamicPropertyRegistry registry) {
+        try {
+            stub = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        stub.createContext("/", exchange -> {
+            receivedPath.set(exchange.getRequestURI().getPath());   // record what the downstream actually got
+            byte[] body = "{\"ok\":true}".getBytes(UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
         stub.start();
         String stubUri = "http://localhost:" + stub.getAddress().getPort();
-        registry.add("services.cif.uri", () -> stubUri);          // point the route at the stub
+        registry.add("services.cif.uri", () -> stubUri);
+        registry.add("services.demand-account.uri", () -> stubUri);
     }
 
-    @Test void routesToDownstream_stripsPrefix_andAddsGatewayHeader() throws ... {
-        var response = http.send(GET("http://localhost:" + gatewayPort + "/cif/api/customers/1"), ofString());
+    @AfterAll
+    static void stopStub() {
+        if (stub != null) {
+            stub.stop(0);
+        }
+    }
+
+    @Test
+    void routesToDownstream_stripsPrefix_andAddsGatewayHeader() throws Exception {
+        HttpResponse<String> response = http.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/cif/api/customers/1"))
+                        .GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(receivedPath.get()).isEqualTo("/api/customers/1");                  // StripPrefix worked
-        assertThat(response.headers().firstValue("X-Gateway")).hasValue("build-a-bank"); // filter ran
+        assertThat(response.body()).contains("\"ok\":true");                       // downstream's body returned
+        assertThat(receivedPath.get()).isEqualTo("/api/customers/1");               // StripPrefix removed "/cif"
+        assertThat(response.headers().firstValue("X-Gateway")).hasValue("build-a-bank");   // gateway filter ran
     }
 }
 ```
 
-🔍 **Line-by-line:** `@DynamicPropertySource` starts a stub HTTP server and points the `cif` route's `uri` at it *before* the context starts. The test calls the gateway; the stub records the path it actually received (`/api/customers/1` → StripPrefix worked); the response carries the gateway's `X-Gateway` header (filter worked).
+🔍 **Line-by-line:** `@DynamicPropertySource` starts a stub HTTP server and points both routes' `uri` at it *before* the context starts. The test calls the gateway; the stub records the path it actually received (`/api/customers/1` → StripPrefix worked); the response carries the gateway's `X-Gateway` header (filter worked). Note the stub's response-writing dance: set headers → `sendResponseHeaders(200, body.length)` → write the body → `exchange.close()`. **Skip `close()` (or the header/body order) and the forward hangs** — the gateway waits on a response the stub never finishes.
+
+🔮 **Predict:** if the stub returned 500 instead of 200, what status would the test's HTTP client see through the gateway? <details><summary>answer</summary>500 — the gateway streams the downstream's response back, status included; it doesn't rewrite errors (a fallback route would — Your Turn #5).</details>
 
 ▶️ **Run & See:**
 ```bash
@@ -375,20 +557,43 @@ class GatewayRoutingTest {
 
 ⚠️ **Pitfall:** starting the stub *inside* `@DynamicPropertySource` (static, before context) is required — a `@BeforeEach` stub starts too late for the route uri to be set.
 
+> 🔁 **Stopping here?** You have gateway routing proven green and committed. Next: sub-step 3 (`CifClient`); first action: create `services/demand-account/src/main/java/com/buildabank/account/client/CifCustomer.java`.
+
 ---
 
-### Sub-step 3 of 5 — `CifClient` (declarative HTTP interface) 🧭 *(… → **client** → …)*
+### Sub-step 3 of 6 — `CifClient` (declarative HTTP interface) 🧭 *(… → **client** → …)*
 
-🎯 **Goal:** a type-safe interface for calling cif.
+🎯 **Goal:** a type-safe interface for calling cif. *(⏱️ ~45 min)*
 
 📁 **Location:** `services/demand-account/src/main/java/com/buildabank/account/client/{CifCustomer,CifClient}.java`
 
-⌨️ **Code:**
+⌨️ **Code** — two small files, complete:
 ```java
-public record CifCustomer(String customerNumber, String firstName, String lastName, String kycStatus) {}
+// file: services/demand-account/src/main/java/com/buildabank/account/client/CifCustomer.java
+package com.buildabank.account.client;
 
+/** The slice of a CIF customer this service cares about (a client-side DTO, decoupled from CIF's entity). */
+public record CifCustomer(String customerNumber, String firstName, String lastName, String kycStatus) {
+}
+```
+```java
+// file: services/demand-account/src/main/java/com/buildabank/account/client/CifClient.java
+package com.buildabank.account.client;
+
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.service.annotation.GetExchange;
+import org.springframework.web.service.annotation.HttpExchange;
+
+/**
+ * A <strong>declarative HTTP interface</strong> for calling the CIF service. You declare the calls as
+ * annotated methods; Spring generates the implementation (an {@code HttpServiceProxyFactory} proxy backed by
+ * a {@code RestClient}) — no hand-written HTTP plumbing. This is the modern, type-safe successor to writing
+ * {@code RestTemplate} calls by hand (and to Spring Cloud OpenFeign for in-Spring use).
+ */
 @HttpExchange("/api/customers")
 public interface CifClient {
+
+    /** GET /api/customers/by-number/{customerNumber} → the customer, or an error status mapped to an exception. */
     @GetExchange("/by-number/{customerNumber}")
     CifCustomer getByNumber(@PathVariable String customerNumber);
 }
@@ -398,42 +603,98 @@ public interface CifClient {
 
 💭 **Under the hood:** at runtime `HttpServiceProxyFactory` creates a proxy implementing `CifClient`; each method call becomes an HTTP request via the backing `RestClient`, with response bodies deserialized by its message converters.
 
+❓ **Knowledge-check:** `CifClient` is just an interface with no implementation anywhere in the codebase — who provides the implementation, and when? <details><summary>answer</summary>Spring generates it at runtime: `HttpServiceProxyFactory` builds a dynamic proxy that turns each annotated method call into an HTTP request via the backing `RestClient`.</details>
+
 ✋ **Checkpoint:** interface + DTO compile.
 
 💾 **Commit:** `git add services/demand-account/src/main/java/com/buildabank/account/client/CifCustomer.java services/demand-account/src/main/java/com/buildabank/account/client/CifClient.java && git commit -m "feat(demand-account): declarative CifClient (@HttpExchange)"`
 
 ⚠️ **Pitfall:** the path-variable name in `{...}` must match the parameter (or `@PathVariable("name")`).
 
+> 🔁 **Stopping here?** You have a compiling `CifClient` interface + DTO, committed. Next: sub-step 4 (factory + timeouts); first action: create `CifClientFactory.java` in the same `client/` package.
+
 ---
 
-### Sub-step 4 of 5 — `CifClientFactory` (RestClient + timeouts) + config 🧭 *(… → **factory** → client test)*
+### Sub-step 4 of 6 — `CifClientFactory` (RestClient + timeouts) + config 🧭 *(… → **factory** → client test)*
 
-🎯 **Goal:** build the client with connect/read timeouts so a slow cif fails fast.
+🎯 **Goal:** build the client with connect/read timeouts so a slow cif fails fast. *(⏱️ ~1.5h)*
 
 📁 **Location:** `client/CifClientFactory.java` + `client/CifClientConfig.java`
 
-⌨️ **Code** (the factory):
+⌨️ **Code** — the factory, complete:
 ```java
-public static CifClient create(String baseUrl, Duration connectTimeout, Duration readTimeout) {
-    HttpClient jdk = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
-    JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(jdk);
-    requestFactory.setReadTimeout(readTimeout);                              // slow response → fail fast
-    RestClient restClient = RestClient.builder().baseUrl(baseUrl).requestFactory(requestFactory).build();
-    return HttpServiceProxyFactory.builderFor(RestClientAdapter.create(restClient))
-            .build().createClient(CifClient.class);
+// file: services/demand-account/src/main/java/com/buildabank/account/client/CifClientFactory.java
+package com.buildabank.account.client;
+
+import java.net.http.HttpClient;
+import java.time.Duration;
+
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.support.RestClientAdapter;
+import org.springframework.web.service.invoker.HttpServiceProxyFactory;
+
+/**
+ * Builds a {@link CifClient} from a {@link RestClient} with explicit <strong>connect and read timeouts</strong>
+ * — a service-to-service call must never hang forever on a slow dependency (that's how one slow service takes
+ * the whole system down). A static factory so both the Spring config and the tests build it the same way.
+ */
+public final class CifClientFactory {
+
+    private CifClientFactory() {
+    }
+
+    public static CifClient create(String baseUrl, Duration connectTimeout, Duration readTimeout) {
+        HttpClient jdk = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(jdk);
+        requestFactory.setReadTimeout(readTimeout);   // a slow response → fail fast instead of hanging
+
+        RestClient restClient = RestClient.builder()
+                .baseUrl(baseUrl)
+                .requestFactory(requestFactory)
+                .build();
+
+        HttpServiceProxyFactory proxyFactory = HttpServiceProxyFactory
+                .builderFor(RestClientAdapter.create(restClient))
+                .build();
+        return proxyFactory.createClient(CifClient.class);
+    }
 }
 ```
-and the Spring bean (config-driven URL + timeouts):
+…and the Spring config that registers the bean (config-driven URL + timeouts), complete:
 ```java
-@Bean CifClient cifClient(
-        @Value("${services.cif.url:http://localhost:8081}") String baseUrl,
-        @Value("${services.cif.connect-timeout-ms:2000}") long connectMs,
-        @Value("${services.cif.read-timeout-ms:2000}") long readMs) {
-    return CifClientFactory.create(baseUrl, Duration.ofMillis(connectMs), Duration.ofMillis(readMs));
+// file: services/demand-account/src/main/java/com/buildabank/account/client/CifClientConfig.java
+package com.buildabank.account.client;
+
+import java.time.Duration;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * Registers the {@link CifClient} bean, built from config (base URL + timeouts). In a full deployment the
+ * base URL points at the CIF service (or, behind the gateway, at the gateway); the timeouts come from config
+ * so ops can tune them per environment.
+ */
+@Configuration
+public class CifClientConfig {
+
+    @Bean
+    public CifClient cifClient(
+            @Value("${services.cif.url:http://localhost:8081}") String baseUrl,
+            @Value("${services.cif.connect-timeout-ms:2000}") long connectMs,
+            @Value("${services.cif.read-timeout-ms:2000}") long readMs) {
+        return CifClientFactory.create(baseUrl, Duration.ofMillis(connectMs), Duration.ofMillis(readMs));
+    }
 }
 ```
 
 🔍 **Line-by-line:** a JDK `HttpClient` with a **connect timeout**; a `JdkClientHttpRequestFactory` with a **read timeout**; a `RestClient` on that factory; and the `HttpServiceProxyFactory` proxy. The `@Bean` reads the base URL + timeouts from config so ops tune them per environment. A static factory means tests build the client the same way (pointed at a stub).
+
+> ⚠️ **Spelling watch:** the gateway names its property `services.cif.uri` (sub-step 1); this client reads `services.cif.url`. Same concept, two spellings — they live in **different modules**, so both work, but set the right key in the right module.
+
+🔮 **Predict:** the `cifClient` bean is created at startup — does creating it open a connection to cif? <details><summary>answer</summary>No — it only builds a dynamic proxy; the first HTTP connection happens on the first method call. That's why the app boots fine even with cif down.</details>
 
 💭 **Under the hood:** the read timeout maps to the JDK `HttpClient`'s request timeout; when it fires, Spring surfaces it as `ResourceAccessException` (a transport error), not a hang.
 
@@ -443,32 +704,106 @@ and the Spring bean (config-driven URL + timeouts):
 
 ⚠️ **Pitfall:** building the proxy at startup is fine (no connection); but a missing timeout means a slow cif hangs the caller — always set both.
 
+> 🔁 **Stopping here?** You have a timeout-bounded `cifClient` bean, committed. Next: sub-step 5 (`CifClientTest`); first action: create `services/demand-account/src/test/java/com/buildabank/account/client/CifClientTest.java`.
+
 ---
 
-### Sub-step 5 of 5 — `CifClientTest` (deserialize + timeout) 🧭 *(… → **client test**)*
+### Sub-step 5 of 6 — `CifClientTest` (deserialize + timeout) 🧭 *(… → **client test**)*
 
-🎯 **Goal:** prove the client deserializes a response and trips the read timeout on a slow dependency.
+🎯 **Goal:** prove the client deserializes a response and trips the read timeout on a slow dependency. *(⏱️ ~1.5h)*
 
-📁 **Location:** `services/demand-account/src/test/java/.../client/CifClientTest.java`
+📁 **Location:** `services/demand-account/src/test/java/com/buildabank/account/client/CifClientTest.java`
 
-⌨️ **Code** (the essence; full file in the repo):
+⌨️ **Code** — the stub setup and the first test, complete (this compiles and runs as shown; you'll write the second test yourself below):
 ```java
-@Test void deserializesTheCustomer() {
-    CifClient client = CifClientFactory.create(baseUrl, ofMillis(500), ofMillis(500));
-    CifCustomer c = client.getByNumber("CIF-1");
-    assertThat(c.customerNumber()).isEqualTo("CIF-1");
-    assertThat(c.kycStatus()).isEqualTo("VERIFIED");
-}
-@Test void failsFastWhenTheDependencyIsSlow() {
-    CifClient client = CifClientFactory.create(baseUrl, ofMillis(500), ofMillis(400));   // 400ms read timeout
-    assertThatThrownBy(() -> client.getByNumber("slow"))      // stub sleeps 1.5s for "/slow"
-            .isInstanceOf(ResourceAccessException.class);
+// file: services/demand-account/src/test/java/com/buildabank/account/client/CifClientTest.java
+package com.buildabank.account.client;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.net.InetSocketAddress;
+import java.time.Duration;
+
+import com.sun.net.httpserver.HttpServer;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.web.client.ResourceAccessException;
+
+/**
+ * Tests the declarative {@link CifClient} against an in-test stub HTTP server (no Spring context, no real
+ * CIF): a normal call deserializes the JSON into a {@link CifCustomer}, and a slow dependency trips the
+ * <strong>read timeout</strong> (fail fast) instead of hanging.
+ */
+class CifClientTest {
+
+    private HttpServer stub;
+    private String baseUrl;
+
+    @BeforeEach
+    void startStub() throws Exception {
+        stub = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        stub.createContext("/api/customers/by-number/", exchange -> {
+            if (exchange.getRequestURI().getPath().endsWith("/slow")) {
+                try {
+                    Thread.sleep(1500);   // longer than the client's read timeout → should time out
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            byte[] body = ("{\"customerNumber\":\"CIF-1\",\"firstName\":\"Ada\","
+                    + "\"lastName\":\"Lovelace\",\"kycStatus\":\"VERIFIED\"}").getBytes(UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        stub.start();
+        baseUrl = "http://localhost:" + stub.getAddress().getPort();
+    }
+
+    @AfterEach
+    void stopStub() {
+        stub.stop(0);
+    }
+
+    @Test
+    void deserializesTheCustomer() {
+        CifClient client = CifClientFactory.create(baseUrl, Duration.ofMillis(500), Duration.ofMillis(500));
+
+        CifCustomer customer = client.getByNumber("CIF-1");
+
+        assertThat(customer.customerNumber()).isEqualTo("CIF-1");
+        assertThat(customer.firstName()).isEqualTo("Ada");
+        assertThat(customer.kycStatus()).isEqualTo("VERIFIED");
+    }
 }
 ```
 
+✍️ **Now you write the timeout test** (the stub already sleeps 1.5 s for any path ending `/slow`). Using the sub-step 4 concepts: build a client with a **400 ms read timeout**, call `getByNumber("slow")`, and assert it throws `ResourceAccessException` (`assertThatThrownBy` is already imported). Then compare:
+
+<details><summary>solution — <code>failsFastWhenTheDependencyIsSlow</code></summary>
+
+```java
+    @Test
+    void failsFastWhenTheDependencyIsSlow() {
+        CifClient client = CifClientFactory.create(baseUrl, Duration.ofMillis(500), Duration.ofMillis(400));
+
+        // The stub sleeps 1.5s for "/slow"; the 400ms read timeout fires first → a transport exception, not a hang.
+        assertThatThrownBy(() -> client.getByNumber("slow"))
+                .isInstanceOf(ResourceAccessException.class);
+    }
+```
+</details>
+
 🔍 **Line-by-line:** the stub returns a customer JSON (the client deserializes it into `CifCustomer`); for the `/slow` path the stub sleeps 1.5s, so the 400 ms read timeout fires first → `ResourceAccessException` (fail fast), not a hang.
 
-▶️ **Run & See:**
+🔮 **Predict:** swap the two durations — stub sleeps 400 ms, read timeout 1.5 s. Which test fails, and why? <details><summary>answer</summary>`failsFastWhenTheDependencyIsSlow` — the response now arrives *before* the timeout, so nothing is thrown and `assertThatThrownBy` fails. `deserializesTheCustomer` still passes.</details>
+
+▶️ **Run & See** (with both tests in place):
 ```bash
 ./mvnw -pl services/demand-account test -Dtest=CifClientTest
 ```
@@ -483,6 +818,8 @@ and the Spring bean (config-driven URL + timeouts):
 💾 **Commit:** `git add services/demand-account/src/test/java/com/buildabank/account/client/CifClientTest.java && git commit -m "test(demand-account): CifClient deserialize + read-timeout"`
 
 ⚠️ **Pitfall:** if deserialization fails, ensure the stub sets `Content-Type: application/json` and the DTO fields match the JSON keys.
+
+> 🔁 **Stopping here?** You have both client tests green and committed — the build is done. Next: 🎮 Play With It, then D · Prove; first action: open `steps/step-15/requests.http` and start the 3 terminals from the 📇 Cheat Card.
 
 ---
 
@@ -573,22 +910,24 @@ Fresh `git clone` at `step-15-end` → `make doctor` + `./mvnw verify` → **BUI
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① Gateway routes in Java (RouterFunction DSL)</summary>
+<summary>① Gateway routes in Java (RouterFunction DSL) (+~10 min)</summary>
 
 Besides YAML, the MVC gateway has a Java DSL: `GatewayRouterFunctions.route("cif").route(path("/cif/**"), http()).before(uri("http://localhost:8081")).filter(stripPrefix(1))...` as a `RouterFunction<ServerResponse>` bean. Java config gives you conditionals, loops, and custom filter functions — handy when routes are dynamic or numerous. YAML is cleaner for static routes (what we have).
 </details>
 
 <details>
-<summary>② Why not a circuit breaker yet?</summary>
+<summary>② Why not a circuit breaker yet? (+~10 min)</summary>
 
 Timeouts stop a single call from hanging, but if a downstream is *consistently* failing, every request still pays the timeout (latency) and may pile up. A **circuit breaker** (Resilience4j, Step 37) "opens" after a failure threshold and fails fast (or serves a fallback) without even trying — protecting both caller and callee, and giving the downstream room to recover. Add **bulkheads** (isolate thread pools per dependency) and **retries with backoff** for the full picture. We layer those in Step 37.
 </details>
 
 <details>
-<summary>③ BFF vs shared gateway</summary>
+<summary>③ BFF vs shared gateway (+~10 min)</summary>
 
 One gateway for everyone is simplest. A **BFF** gives each client (web, mobile, partner) its own gateway that aggregates/tailors calls — the mobile BFF might combine three service calls into one trimmed payload to save round-trips on a phone. Trade-off: more gateways to operate, but each is simpler and evolves with its client. Start with one; split to BFFs when client needs diverge.
 </details>
+
+❓ **Knowledge-check:** timeouts are set — so why do we still need a circuit breaker (Step 37)? <details><summary>answer</summary>A timeout only bounds each individual call; if the downstream is *consistently* failing, every request still pays the timeout latency and can pile up. A circuit breaker opens after a failure threshold and fails fast without even calling the downstream.</details>
 
 ## 💼 Interview Prep: Questions You'll Be Asked
 
@@ -638,7 +977,20 @@ One gateway for everyone is simplest. A **BFF** gives each client (web, mobile, 
 - Spring Framework docs — **HTTP Interface** (`@HttpExchange`) and **`RestClient`**.
 - *Release It!* (Nygard) — timeouts, circuit breakers, bulkheads (the resilience canon; Step 37).
 
-**Glossary:** **API Gateway** · **BFF** · **route / predicate / filter** · **`StripPrefix`** · **Spring Cloud Gateway Server WebMVC** (servlet) vs reactive · **declarative HTTP interface** (`@HttpExchange`/`@GetExchange`) · **`HttpServiceProxyFactory` / `RestClientAdapter`** · **`RestClient`** · **connect/read timeout** · **`ResourceAccessException`** · **cascading failure** · **circuit breaker** (Step 37) · **sync vs async**.
+**Glossary**
+- **API Gateway** — the single front door: receives every external request and routes it to the right internal service; home of the edge concerns (auth, rate limiting, TLS, correlation).
+- **BFF (Backend-For-Frontend)** — a gateway specialized per client type (web/mobile) that aggregates and tailors responses for that frontend.
+- **Route / predicate / filter** — a route = id + target uri + predicates (when does it match? e.g. `Path=/cif/**`) + filters (transform request/response); the gateway's unit of forwarding.
+- **`StripPrefix`** — a filter that drops the first N path segments before forwarding (`/cif/api/customers/1` → `/api/customers/1`).
+- **Spring Cloud Gateway Server WebMVC** — the **servlet** gateway variant (blocking forwards, scale on virtual threads); the reactive (WebFlux/Netty) variant is the alternative.
+- **Declarative HTTP interface** — an interface annotated `@HttpExchange`/`@GetExchange`; you declare the calls, Spring generates the client implementation.
+- **`HttpServiceProxyFactory` / `RestClientAdapter`** — the machinery that builds a dynamic proxy for that interface over a `RestClient`.
+- **`RestClient`** — Spring's modern fluent synchronous HTTP client (successor to `RestTemplate`).
+- **Connect / read timeout** — how long to wait to establish the connection / to wait for the response after sending; both are required for fail-fast calls.
+- **`ResourceAccessException`** — how Spring surfaces transport errors, including a fired read timeout.
+- **Cascading failure** — one slow dependency, called without timeouts, ties up caller threads until the whole system stops responding.
+- **Circuit breaker** — opens after a failure threshold and fails fast without calling the downstream at all (Resilience4j, Step 37).
+- **Sync vs async** — request/reply HTTP (immediate, temporally coupled) vs messaging events (decoupled, eventually consistent — Kafka, Step 20).
 
 ## 🏆 Recap & Study Notes
 
@@ -657,6 +1009,7 @@ One gateway for everyone is simplest. A **BFF** gives each client (web, mobile, 
 3. How does a Spring service call another service today (modern way)? <details><summary>answer</summary>A declarative `@HttpExchange` interface implemented by `HttpServiceProxyFactory` over `RestClient`.</details>
 4. Why is a missing read timeout dangerous? <details><summary>answer</summary>A slow downstream hangs the caller's thread; chained, it exhausts threads and cascades into an outage.</details>
 5. What does `StripPrefix=1` do? <details><summary>answer</summary>Removes the first path segment before forwarding (e.g. `/cif/...` → `/...`).</details>
+6. You need the answer before you can proceed vs. you can tolerate eventual consistency — which communication style fits each, and what's the coupling trade-off? <details><summary>answer</summary>Sync HTTP when the caller can't proceed without the reply — immediate but temporally coupled (a slow/down callee hurts you *now*). Async messaging (Kafka, Step 20) when you want decoupling and can live with eventual consistency.</details>
 
 **(d) 🔗 How this connects**
 - **Back to Steps 13–14, 8**: the services + endpoints the gateway fronts.
@@ -677,6 +1030,7 @@ One gateway for everyone is simplest. A **BFF** gives each client (web, mobile, 
 - Q: Modern Spring service-to-service call? · A: `@HttpExchange` interface via `HttpServiceProxyFactory` over `RestClient`.
 - Q: Why timeouts on inter-service calls? · A: fail fast — a slow dependency without a timeout cascades into outage.
 - Q: `StripPrefix=1`? · A: drop the first path segment before forwarding.
+- Q: Sync HTTP vs async messaging? · A: immediate but temporally coupled vs decoupled but eventually consistent (Kafka, Step 20).
 > 🔁 **Revisit in ~2 steps** (Step 17 adds auth at the edge; Step 20 the async alternative; Step 37 circuit breakers).
 
 **(h) ✍️ One-line reflection:** *Where would you put auth — in the gateway, each service, or both — and why?*

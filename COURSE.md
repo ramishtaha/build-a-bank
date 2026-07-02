@@ -70,7 +70,7 @@ Every lesson uses the **same icons** for the **same kinds of sections**, so you 
 | 🔬 | **Prove It Works** | The Verification Log: real, pasted command output. |
 | 🚀 | **Go Deeper** | Optional advanced asides (don't count toward the effort budget). |
 | 💼 | **Interview Prep** | 4–6 Q&A, answers in `<details>`. |
-| 🏋️ | **Your Turn** | Exercises + stretch goals (references in `solutions/step-NN/`). |
+| 🏋️ | **Your Turn** | Exercises + stretch goals (answers inline in `<details>`; reference-solution folders tracked in [docs/ai/CONTRACT-DEBT.md](docs/ai/CONTRACT-DEBT.md)). |
 | 🩺 | **Troubleshooting** | The real errors hit while building → cause → fix. |
 | 📚 | **Resources & Glossary** | Curated links + this step's terms. |
 | 🏆 | **Recap & Study Notes** | Key points, Key Terms, Test Yourself, résumé line, "You can now…". |
@@ -124,14 +124,17 @@ A few conventions repeat in **every** `steps/step-NN/lesson.md`:
 - **⏭️ Can You Skip This Step?** — a 5-minute self-check at the top of every step ("if you can already do this, jump to Step N").
 - **🧵 Thread-safety notes** appear from **Step 12** onward in any step touching shared mutable state (the ledger, the fraud stream, caches), pointing back to Step 11.
 - **🧠 Cumulative Review** — every ~5 steps, a mixed quiz spanning recent **and** older material (distinct from each step's per-step *Test Yourself*).
-- **🃏 Flashcards** from each step append to the cumulative **[`docs/flashcards.md`](docs/flashcards.md)** (Anki-importable).
+- **🃏 Flashcards** from each step append to the cumulative **[`docs/flashcards.md`](docs/flashcards.md)** (a markdown Q/A deck for self-quizzing).
 - **Verification tiers:** every 🔬 Verification Log states its tier — 🟢 Light (doc/config), 🟠 Standard (most feature steps), 🔴 Full (milestones + every money/security/concurrency path). Step 1 is 🟠 Standard; the money & concurrency tiers begin in Phase B.
 
 ---
 
 ## 📊 Progress Tracker
 
-Tick the box as you finish each step (its `step-NN-end` tag is green and committed). Setup lives in the [README](README.md); each lesson is at `steps/step-NN/lesson.md`; stretch-goal references are in `solutions/step-NN/`.
+Tick the box as you finish each step (its `step-NN-end` tag is green and committed). Setup lives in the [README](README.md); each lesson is at `steps/step-NN/lesson.md`; stretch-goal answers are inline in each lesson's `<details>` blocks (reference-solution folders are tracked in [docs/ai/CONTRACT-DEBT.md](docs/ai/CONTRACT-DEBT.md)).
+
+> [!NOTE]
+> **Authoring status:** the course is fully built and verified through **Step 30** (Step 31 in progress); **Steps 32–67 below are the planned curriculum — designed in full, lessons not yet authored**. Live state: [PROGRESS.md](PROGRESS.md).
 
 ### Phase A — Foundations: Tools, Language & Platform 🟢
 
@@ -245,7 +248,7 @@ Tick the box as you finish each step (its `step-NN-end` tag is green and committ
 > 🎖️ **End of Phase G (Step 38) — milestone.** A deployable, observable, resilient platform with a UI. **Résumé line:** *"Containerized and deployed a microservices platform to Kubernetes with CI/CD, observability, canary releases, feature flags, and zero-downtime migrations."*
 
 > [!NOTE]
-> **Kubernetes is verify-adjacent in this sandbox** (no local cluster — see [CAPABILITIES.md](CAPABILITIES.md)). Phase G lessons `helm lint`/`helm template`, `kubeconform`/`kubectl --dry-run=client`, and document the exact `kubectl apply` commands + expected output. **Install `kind` on your own machine** for a real single-node cluster.
+> **Local Kubernetes: `kind` v0.32.0 is installed on the reference machine** (see [CAPABILITIES.md](CAPABILITIES.md)), so Phase G can create a real single-node cluster (`kind create cluster`) and actually `kubectl apply` + `helm install`. The lessons also teach the cluster-less verify path (`helm lint`/`helm template`, `kubeconform`/`kubectl --dry-run=client`) so learners without a cluster aren't blocked. **Install `kind` on your own machine** for the live path.
 
 > 🎓 **Phase G Capstone:** **canary-deploy** a change to `kind` with an **expand-contract migration**, watch it in Grafana, and **roll back via a feature flag**.
 
@@ -287,7 +290,7 @@ Tick the box as you finish each step (its `step-NN-end` tag is green and committ
 > 🎖️ **End of Phase I (Step 50) — milestone.** A real ML feature *and* an LLM assistant in production. **Résumé line:** *"Built and operationalized a real-time fraud model (Kafka Streams, ONNX, MLflow) and an LLM assistant (Spring AI, RAG)."*
 
 > [!WARNING]
-> **Spring AI version watch.** Only **2.0.0-RC1** exists on the Spring Boot 4 line today; the GA (1.1.7) targets the Boot-3 line. By the time you reach Phase I, re-pin to Spring AI **2.0.0 GA** if it has shipped — otherwise document the step-back and pin the newest RC, or take the **Python FastAPI sidecar** path. See [VERSIONS.md](VERSIONS.md).
+> **Spring AI version watch.** As of the 2026-06-09 pin, only **2.0.0-RC1** exists on the Spring Boot 4 line; the GA (1.1.7) targets the Boot-3 line. By the time you reach Phase I, re-pin to Spring AI **2.0.0 GA** if it has shipped — otherwise document the step-back and pin the newest RC, or take the **Python FastAPI sidecar** path. See [VERSIONS.md](VERSIONS.md).
 
 > 🎓 **Phase I Capstone:** score a live transaction stream for fraud, **register the model in MLflow**, show a **drift alert**, and add one **RAG-grounded assistant answer with a guardrail**.
 
@@ -369,7 +372,7 @@ flowchart LR
 ## 🧠 Cumulative Reviews & Flashcards
 
 - **🧠 Cumulative Review** drops in every ~5 steps — a mixed quiz interleaving recent *and* older material to force retrieval and fight forgetting. It's distinct from each step's per-step **🧠 Test Yourself**.
-- **🃏 Flashcards** from every step accumulate in **[`docs/flashcards.md`](docs/flashcards.md)** (Anki-importable CSV), each tagged with a **"🔁 revisit in ~N steps"** spaced-repetition pointer.
+- **🃏 Flashcards** from every step accumulate in **[`docs/flashcards.md`](docs/flashcards.md)** — a markdown Q/A deck for self-quizzing (no Anki/CSV export yet). Each lesson's Recap carries a **"🔁 revisit in ~N steps"** spaced-repetition pointer.
 - **🔗 How This Connects** at the end of each step calls back to earlier work and teases what's next, so the curriculum reads as one continuous story rather than 67 islands.
 
 ---
@@ -380,7 +383,7 @@ flowchart LR
 - 📚 **Starting the course?** → **[`steps/step-01/lesson.md`](steps/step-01/lesson.md)** — Step 1 of 67.
 - 📌 **Pinned versions?** → **[VERSIONS.md](VERSIONS.md)** (Java 25.0.3 LTS · Spring Boot 4.0.6 · Spring Cloud 2025.1.1 · Maven 3.9.12 + wrapper).
 - 🧪 **What this sandbox can actually run?** → **[CAPABILITIES.md](CAPABILITIES.md)**.
-- 🏋️ **Stretch-goal references?** → `solutions/step-NN/`.
+- 🏋️ **Stretch-goal answers?** → inline in each lesson's `<details>` blocks (reference-solution folders tracked in [docs/ai/CONTRACT-DEBT.md](docs/ai/CONTRACT-DEBT.md)).
 - 🧱 **Decisions & rationale?** → `adr/`.
 
 > [!IMPORTANT]

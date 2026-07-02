@@ -11,14 +11,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | ACID & `@Transactional` internals · double-entry · optimistic vs pessimistic locking |
-| **C** | [🛠️ Build](#build) | the `demand-account` service: schema → entities → locked repo → transfer service → API → tests |
-| **D** | [🔬 Prove](#prove) | the Verification Log — 11 tests, the capstone (fails without locking, passes with it), §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards, 🧠 Phase-B cumulative review & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~1h |
+| **B** | [🧠 Understand](#understand) | ACID & `@Transactional` internals · double-entry · optimistic vs pessimistic locking | ~2.5h |
+| **C** | [🛠️ Build](#build) | the `demand-account` service: schema → entities → locked repo → transfer service → API → tests | ~13h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — 11 tests, the capstone (fails without locking, passes with it), §12.3 mutation | ~2.5h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~2h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards, 🧠 Phase-B cumulative review & what's next | ~1h |
 
 ---
 
@@ -32,7 +32,7 @@
 |---|---|
 | **Title** | Demand Account + double-entry ledger + transaction management deep — move money correctly under concurrency |
 | **Step** | 12 of 67 · **Phase B — Data, Databases, Concurrency & Transactions** 🔵 · **🎖️ end-of-phase milestone** |
-| **Effort** | ≈ 22 hours focused (a meaty milestone — a whole new service plus the concurrency capstone). Experienced learners can skim the JPA basics and focus on the locking + propagation sections (~6h). |
+| **Effort** | ≈ 22 hours focused (a meaty milestone — a whole new service plus the concurrency capstone). Experienced learners can skim the JPA basics and focus on the locking + propagation sections (~6h). Plan it as ~8 sittings — see the **🗓️ Session Plan** below. |
 | **What you'll run this step** | **JVM + Maven** for build & tests; **🐳 Docker** for the tests (Testcontainers Postgres) and for running the service live. One command: `./mvnw -pl services/demand-account -am verify`. |
 | **Buildable artifact** | A NEW service **`services/demand-account`** (its own Postgres DB): `Account` (BigDecimal balance + `@Version`), an append-only `LedgerEntry` (double-entry), a `TransferService` with a **pessimistic-lock** transfer (`SELECT … FOR UPDATE`) + a deliberately-unsafe one for the capstone, `@Transactional` propagation/rollback/readOnly, a REST API, and **11 tests** including the **Phase-B capstone** concurrency stress test. `step-12-start == step-11-end`. |
 | **Verification tier** | 🔴 **Full** — a new service *and* the money + concurrency path. `./mvnw verify` green + all **11** tests + the capstone proven **both ways** (lost update without locking; perfect with it) + a live HTTP round-trip + the **§12.3 mutation** (remove the lock → 17/20 transfers fail → revert) + clean-room + `smoke.sh`. |
@@ -73,6 +73,12 @@ bash steps/step-12/smoke.sh
 # Run it live, then poke it with steps/step-12/requests.http:
 docker compose -f services/demand-account/compose.yaml up -d
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run
+```
+
+🪟 **Windows note:** the `VAR=value command` prefix on the last line is **bash-only**. In PowerShell run:
+
+```powershell
+$env:SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5433/demand_account'; .\mvnw.cmd -pl services/demand-account spring-boot:run
 ```
 
 **The one headline idea — *a transfer is a read-check-write on a balance; without a lock two of them race and one is lost; `SELECT … FOR UPDATE` serializes them*:**
@@ -122,6 +128,23 @@ Moving money is the canonical "get it exactly right or people lose real money" p
 
 > **Depends on: Steps 7, 8, 9, 10, 11.** This step is the convergence point of Phase B.
 
+## 🗓️ Session Plan
+
+≈ 22 hours is a multi-day build — don't face it as one wall. Eight sittings of ~1.5–3h, each ending at a real commit or checkpoint you can walk away from:
+
+| # | Sitting | Covers | ~ | Ends at (save point) |
+|---|---|---|---|---|
+| S1 | Orient + Understand | skip-test · Cheat Card · Big Idea · Pattern Spotlight · Under the Hood · Thread-safety note | ~2.5h | end of B; skip-test answered |
+| S2 | Module + entities | sub-step 0 (module + V1 schema) · sub-step 1 (`Account`, `LedgerEntry` + friends) | ~3h | sub-step 1 commit |
+| S3 | Locked repo + transfer | sub-step 2 (`FOR UPDATE` repository) · sub-step 3 (`TransferService`, safe path + broken twin) | ~3.5h | sub-step 3 commit |
+| S4 | Propagation | sub-step 4 (`AuditService` REQUIRES_NEW + `PropagationDemoService`) | ~1.5h | sub-step 4 commit |
+| S5 | REST API + first live run | sub-step 5 (controller, DTOs, error mapping) · 🎮 Play With It | ~2.5h | sub-step 5 commit |
+| S6 | Tests + 🎓 capstone | sub-step 6 (`ContainersConfig` + 6 test classes; the capstone both ways) | ~3h | sub-step 6 commit — 11 green |
+| S7 | Prove | D · 🔬: the §12.3 mutation, `smoke.sh`, clean-room, Definition of Done | ~2.5h | DoD all checked; `step-12-end` tagged |
+| S8 | Apply + Review | E + F: interview prep · Your Turn · recap · flashcards · Phase-B cumulative review | ~2h | one-line reflection written |
+
+*Optional routes:* the ⏭️ skip-test (5 min) can shrink the step to the ~6h experienced path (locking + propagation only); each 🚀 Go Deeper aside is +~10 min; Your Turn challenges are +30–60 min each — all safely skippable on a first pass.
+
 ---
 
 <a id="understand"></a>
@@ -169,7 +192,10 @@ flowchart TB
 
 ## 🌱 Under the Hood: How It Really Works
 
-**`@Transactional` is a proxy (callback to Step 7).** Spring wraps the bean in a proxy; calling a `@Transactional` method *through* the proxy opens a transaction (via the `PlatformTransactionManager`), runs your method, then commits or rolls back. Two consequences: **(1) self-invocation** — a `this.someTransactionalMethod()` call inside the same bean bypasses the proxy, so the annotation does nothing (the same trap as `@Around`/`@PreAuthorize` in Step 7). That's *why* our `REQUIRES_NEW` audit lives in a **separate** bean (`AuditService`) called from `PropagationDemoService`. **(2)** the transaction is tied to the *thread* (a `ThreadLocal`), which is why each concurrent transfer (its own thread) gets its own transaction.
+**`@Transactional` is a proxy (callback to Step 7).** Spring wraps the bean in a proxy; calling a `@Transactional` method *through* the proxy opens a transaction (via the `PlatformTransactionManager`), runs your method, then commits or rolls back. Two consequences:
+
+1. **Self-invocation** — a `this.someTransactionalMethod()` call inside the same bean bypasses the proxy, so the annotation does nothing (the same trap as `@Around`/`@PreAuthorize` in Step 7). That's *why* our `REQUIRES_NEW` audit lives in a **separate** bean (`AuditService`) called from `PropagationDemoService`.
+2. **Thread-bound** — the transaction is tied to the *thread* (a `ThreadLocal`), which is why each concurrent transfer (its own thread) gets its own transaction.
 
 **Propagation — what happens when a transactional method calls another.**
 - **`REQUIRED`** (default): join the caller's transaction if one exists, else start one. The two ledger writes + balance updates all share one transaction → atomic together.
@@ -178,6 +204,8 @@ flowchart TB
 - Others: `SUPPORTS`, `NOT_SUPPORTED`, `MANDATORY`, `NEVER` — situational.
 
 **Rollback rules (a classic gotcha).** By default Spring rolls back on **`RuntimeException`** and **`Error`**, but **commits** on checked exceptions. So our `InsufficientFundsException extends RuntimeException` → a failed transfer rolls back automatically (no half-transfer). If you threw a *checked* exception and wanted rollback, you'd need `@Transactional(rollbackFor = MyCheckedException.class)`. Proven: `overdraw_isRejected_andRollsBackEverything` shows the debit that ran *before* the exception is undone and **no ledger rows** remain.
+
+❓ **Knowledge-check:** your transfer method throws a *checked* exception on failure — does `@Transactional` roll the transfer back by default? <details><summary>answer</summary>No — by default Spring rolls back only on `RuntimeException`/`Error`; checked exceptions commit. You'd need `@Transactional(rollbackFor = ...)`, which is why `InsufficientFundsException` extends `RuntimeException`.</details>
 
 **`readOnly = true`.** A hint that the transaction won't write: Hibernate sets the flush mode to `MANUAL` (skips dirty-checking flushes) and the driver/DB can optimize. Our `balanceOf`/`totalSystemBalance` are read-only. (It's a hint, not a hard guarantee against writes.)
 
@@ -211,7 +239,13 @@ flowchart TB
 
 ## 🧵 Thread-safety note
 
-The account `balance` is **shared mutable state** touched by concurrent transfer threads — exactly Step 11's hazard, now in the database. Three layers defend it, and you should be able to place each: **(1)** in-JVM, a single instance could use `synchronized` — but that **fails across multiple service instances** (the real deployment), so we don't rely on it; **(2)** optimistic `@Version` (Step 9) — detect-and-retry; **(3)** pessimistic `FOR UPDATE` (Step 10) — lock-and-wait, our default for money. The database is the single point of truth where all instances coordinate, which is why the *database* lock (not a JVM lock) is the right tool for distributed money movement. (Distributed locks like Redis/ShedLock come in Step 22.)
+The account `balance` is **shared mutable state** touched by concurrent transfer threads — exactly Step 11's hazard, now in the database. Three layers defend it, and you should be able to place each:
+
+1. **In-JVM `synchronized`** — a single instance could use it, but it **fails across multiple service instances** (the real deployment), so we don't rely on it.
+2. **Optimistic `@Version`** (Step 9) — detect-and-retry.
+3. **Pessimistic `FOR UPDATE`** (Step 10) — lock-and-wait, our default for money.
+
+The database is the single point of truth where all instances coordinate, which is why the *database* lock (not a JVM lock) is the right tool for distributed money movement. (Distributed locks like Redis/ShedLock come in Step 22.)
 
 ---
 
@@ -254,26 +288,33 @@ src/test/java/com/buildabank/account/  (ContainersConfig + 6 test classes)
 compose.yaml · steps/step-12/{requests.http, smoke.sh}
 ```
 
-> *This is a large step (a whole service). Below we build the **core money path in full** — schema, `Account`, the locked repository, and `TransferService` — then summarise the supporting REST/DTO files (all present in the repo) and finish with the tests. Nothing is "left as an exercise"; every file is in `services/demand-account`.*
+> *This is a large step (a whole service). Below we build the **core money path in full** — schema, `Account`, the locked repository, and `TransferService` — and every supporting file (config, DTOs, advice, tests) appears **complete in this lesson**, either inline or in a collapsed 📄 block in the sub-step that introduces it. Two small late files are "you type first, solution below". Every file also lives in `services/demand-account`.*
 
 ---
 
-### Sub-step 0 of 6 — Module + schema 🧭 *(you are here: **module/schema** → entities → repo → service → propagation → api → tests)*
+### Sub-step 0 of 6 — Module + schema ⏱ ~1.5h 🧭 *(you are here: **module/schema** → entities → repo → service → propagation → api → tests)*
 
 🎯 **Goal:** a new Maven module (same deps as cif) and the Flyway schema for accounts + the double-entry ledger.
 
 📁 **Location:** `services/demand-account/pom.xml` (mirrors cif's), add `<module>services/demand-account</module>` to the root `pom.xml`, and the migration:
 
-⌨️ **Code** — `services/demand-account/src/main/resources/db/migration/V1__create_account_and_ledger.sql`:
+⌨️ **Code** — the migration, verbatim:
 ```sql
+-- services/demand-account/src/main/resources/db/migration/V1__create_account_and_ledger.sql
+-- The accounts + double-entry ledger schema. Flyway owns it; Hibernate (ddl-auto=validate) only checks
+-- the entity mappings match. Money is stored as numeric(19,4) (exact decimal — never float/double).
+
 create table account (
     id              bigint generated by default as identity primary key,
     account_number  varchar(20)    not null unique,
     currency        varchar(3)     not null,
-    balance         numeric(19, 4) not null default 0,   -- exact decimal money (never float)
-    version         bigint         not null default 0,    -- @Version optimistic lock
+    balance         numeric(19, 4) not null default 0,   -- materialized balance (kept in sync within a txn)
+    version         bigint         not null default 0,    -- optimistic-locking version (@Version)
     created_at      timestamp(6) with time zone not null
 );
+
+-- The double-entry ledger: an append-only record of every leg of every money movement. Two entries per
+-- transfer (one DEBIT, one CREDIT) share a transaction_id and sum to zero — the books always balance.
 create table ledger_entry (
     id              bigint generated by default as identity primary key,
     account_id      bigint         not null references account (id),
@@ -283,12 +324,16 @@ create table ledger_entry (
     description     varchar(200),
     created_at      timestamp(6) with time zone not null
 );
+
 create index idx_ledger_account on ledger_entry (account_id);
 create index idx_ledger_transaction on ledger_entry (transaction_id);
-create table audit_log (   -- used to demonstrate REQUIRES_NEW (commits independently)
-    id bigint generated by default as identity primary key,
-    event varchar(100) not null, detail varchar(500),
-    created_at timestamp(6) with time zone not null
+
+-- An independent audit log used to demonstrate transaction propagation (REQUIRES_NEW commits separately).
+create table audit_log (
+    id          bigint generated by default as identity primary key,
+    event       varchar(100) not null,
+    detail      varchar(500),
+    created_at  timestamp(6) with time zone not null
 );
 ```
 
@@ -296,22 +341,221 @@ create table audit_log (   -- used to demonstrate REQUIRES_NEW (commits independ
 
 💭 **Under the hood:** `ddl-auto=validate` (in `application.yml`) means Flyway owns this schema; Hibernate only checks the entity mappings match. The `audit_log` table backs the propagation demo.
 
+<details>
+<summary>📄 The complete files for this sub-step — <code>pom.xml</code>, <code>application.yml</code>, <code>compose.yaml</code>, <code>DemandAccountApplication.java</code> (+~5 min)</summary>
+
+Also add one line to the **root** `pom.xml`'s `<modules>` list: `<module>services/demand-account</module>`.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      demand-account — the bank's accounts + double-entry ledger. The SECOND real microservice (its own
+      Postgres DB), and the place we move money safely under concurrency: deep @Transactional, pessimistic
+      locking (SELECT ... FOR UPDATE), and a concurrency stress test that fails without locking and passes
+      with it. Money in BigDecimal (minor units), time in UTC/Instant. (Step 12.)
+    -->
+    <parent>
+        <groupId>com.buildabank</groupId>
+        <artifactId>build-a-bank-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>demand-account</artifactId>
+    <name>Build-a-Bank :: Services :: Demand Account</name>
+    <description>Accounts + double-entry ledger; transactions and pessimistic locking (Step 12).</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Flyway: Boot integration module (provides FlywayAutoConfiguration) + Postgres support module. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ── Test ── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-data-jpa-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+```yaml
+# services/demand-account/src/main/resources/application.yml
+spring:
+  application:
+    name: demand-account
+  datasource:
+    # Env-driven (12-factor). Defaults match a local Postgres; tests use Testcontainers (random port).
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/demand_account}
+    username: ${SPRING_DATASOURCE_USERNAME:bank}
+    password: ${SPRING_DATASOURCE_PASSWORD:change-me-locally}
+  jpa:
+    hibernate:
+      ddl-auto: validate     # Flyway OWNS the schema; Hibernate only validates the mapping matches.
+    open-in-view: false      # OSIV off (Step 9): fetch deliberately, fail fast on lazy-outside-tx.
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true            # runs db/migration/V*.sql on startup, before Hibernate validates.
+
+server:
+  port: 8082                 # demand-account's port (hello=8080, cif=8081).
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,flyway
+
+logging:
+  level:
+    com.buildabank.account: INFO
+```
+
+```yaml
+# services/demand-account/compose.yaml — local PostgreSQL for running the Demand Account service by hand.
+# Up:   docker compose -f services/demand-account/compose.yaml up -d
+# Down: docker compose -f services/demand-account/compose.yaml down -v   (the -v also drops the data volume)
+#
+# NOTE: this machine already runs a local Postgres on 5432, so we map host port 5433 to avoid the clash
+# (see CAPABILITIES.md). Run the service with the matching URL:
+#   SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run
+services:
+  postgres:
+    image: postgres:17-alpine          # pinned (never :latest)
+    container_name: demand-account-postgres
+    environment:
+      POSTGRES_DB: demand_account
+      POSTGRES_USER: bank
+      POSTGRES_PASSWORD: change-me-locally
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bank -d demand_account"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - demand-account-pgdata:/var/lib/postgresql/data
+
+volumes:
+  demand-account-pgdata:
+```
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/DemandAccountApplication.java
+package com.buildabank.account;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+/** The Demand Account service: accounts + a double-entry ledger, with safe money movement (Step 12). */
+@SpringBootApplication
+public class DemandAccountApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(DemandAccountApplication.class, args);
+    }
+}
+```
+</details>
+
 ✋ **Checkpoint:** `./mvnw -q -pl services/demand-account -am compile` succeeds.
 
 💾 **Commit:** `git add services/demand-account/pom.xml pom.xml services/demand-account/src/main/resources && git commit -m "feat(demand-account): module + account/ledger schema (V1)"`
+
+*Stopping here? You have the module + V1 schema committed and `compile` green. Next: sub-step 1 (entities, ~2h); first action: create `services/demand-account/src/main/java/com/buildabank/account/domain/Account.java`.*
 
 ⚠️ **Pitfall:** a raw `&` in `pom.xml` `<description>` breaks XML parsing — write `and`/`&amp;`.
 
 ---
 
-### Sub-step 1 of 6 — Entities: `Account` (money + `@Version`) and `LedgerEntry` 🧭 *(module ✅ → **entities** → repo → service → propagation → api → tests)*
+### Sub-step 1 of 6 — Entities: `Account` (money + `@Version`) and `LedgerEntry` ⏱ ~2h 🧭 *(module ✅ → **entities** → repo → service → propagation → api → tests)*
 
 🎯 **Goal:** the `Account` aggregate (with overdraft-refusing `debit`/`credit`) and the append-only `LedgerEntry`.
 
 📁 **Location:** `services/demand-account/src/main/java/com/buildabank/account/domain/Account.java`
 
-⌨️ **Code** (the heart of `Account`; full file in the repo):
+⌨️ **Code** (the heart of `Account`; the full file — this and every sibling — is in the collapsed block below):
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/domain/Account.java
+package com.buildabank.account.domain;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import jakarta.persistence.*;   // Column, Entity, GeneratedValue, GenerationType, Id, Table, Version
+
 @Entity
 @Table(name = "account")
 public class Account {
@@ -341,34 +585,364 @@ public class Account {
 
 💭 **Under the hood:** `LedgerEntry` stores `accountId` as a plain `Long` (not a `@ManyToOne`) — the ledger is a high-volume append-only fact table, and a bare FK avoids accidental lazy-loading/N+1 (Step 9) when appending.
 
+<details>
+<summary>📄 The complete files for this sub-step — <code>Account</code>, <code>LedgerEntry</code>, <code>AuditEntry</code>, <code>EntryDirection</code>, <code>InsufficientFundsException</code> (+~10 min)</summary>
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/domain/Account.java
+package com.buildabank.account.domain;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+
+/**
+ * A demand (current) account with a materialized {@code balance}. Money is a {@link BigDecimal} — exact
+ * decimal arithmetic, <strong>never</strong> {@code double}/{@code float} (which can't represent 0.10
+ * exactly). The {@code @Version} column gives optimistic locking (Step 9); under heavy contention we instead
+ * take a pessimistic row lock at read time (see {@code AccountRepository.findByAccountNumberForUpdate}).
+ *
+ * <p>The balance is kept correct by doing the read-check-write of {@link #debit}/{@link #credit} inside one
+ * transaction while holding the row lock — the database analogue of Step 11's {@code synchronized}.
+ */
+@Entity
+@Table(name = "account")
+public class Account {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "account_number", nullable = false, unique = true, updatable = false)
+    private String accountNumber;
+
+    @Column(nullable = false, updatable = false)
+    private String currency;
+
+    @Column(nullable = false)
+    private BigDecimal balance;
+
+    @Version
+    private long version;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    /** JPA requires a no-arg constructor. */
+    protected Account() {
+    }
+
+    public Account(String accountNumber, String currency, BigDecimal openingBalance, Instant createdAt) {
+        this.accountNumber = accountNumber;
+        this.currency = currency;
+        this.balance = openingBalance;
+        this.createdAt = createdAt;
+    }
+
+    /** Take money out — refuses to overdraw (the invariant this service must never break). */
+    public void debit(BigDecimal amount) {
+        requirePositive(amount);
+        if (balance.compareTo(amount) < 0) {
+            throw new InsufficientFundsException(
+                    "account " + accountNumber + " balance " + balance + " < debit " + amount);
+        }
+        balance = balance.subtract(amount);
+    }
+
+    /** Put money in. */
+    public void credit(BigDecimal amount) {
+        requirePositive(amount);
+        balance = balance.add(amount);
+    }
+
+    private static void requirePositive(BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new IllegalArgumentException("amount must be positive, was " + amount);
+        }
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getAccountNumber() {
+        return accountNumber;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public BigDecimal getBalance() {
+        return balance;
+    }
+
+    public long getVersion() {
+        return version;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+}
+```
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/domain/LedgerEntry.java
+package com.buildabank.account.domain;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+/**
+ * One leg of a money movement — the append-only heart of double-entry bookkeeping. A transfer writes two
+ * entries that share a {@code transactionId}: a {@link EntryDirection#DEBIT} on the payer and a
+ * {@link EntryDirection#CREDIT} on the payee, with equal {@code amount}. Entries are never updated or
+ * deleted — the ledger is an immutable audit trail (we revisit immutability + event sourcing in Phase J).
+ *
+ * <p>We store {@code accountId} as a plain id (not a {@code @ManyToOne}) on purpose: the ledger is a
+ * high-volume fact table, and a bare foreign key avoids accidental lazy-loading / N+1 (Step 9) when we
+ * append to it.
+ */
+@Entity
+@Table(name = "ledger_entry")
+public class LedgerEntry {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "account_id", nullable = false, updatable = false)
+    private Long accountId;
+
+    @Column(name = "transaction_id", nullable = false, updatable = false)
+    private UUID transactionId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false)
+    private EntryDirection direction;
+
+    @Column(nullable = false, updatable = false)
+    private BigDecimal amount;
+
+    @Column(updatable = false)
+    private String description;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    protected LedgerEntry() {
+    }
+
+    public LedgerEntry(Long accountId, UUID transactionId, EntryDirection direction,
+                       BigDecimal amount, String description, Instant createdAt) {
+        this.accountId = accountId;
+        this.transactionId = transactionId;
+        this.direction = direction;
+        this.amount = amount;
+        this.description = description;
+        this.createdAt = createdAt;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Long getAccountId() {
+        return accountId;
+    }
+
+    public UUID getTransactionId() {
+        return transactionId;
+    }
+
+    public EntryDirection getDirection() {
+        return direction;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+}
+```
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/domain/AuditEntry.java
+package com.buildabank.account.domain;
+
+import java.time.Instant;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+/** A standalone audit record, written in its OWN transaction (REQUIRES_NEW) to demonstrate propagation. */
+@Entity
+@Table(name = "audit_log")
+public class AuditEntry {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, updatable = false)
+    private String event;
+
+    @Column(updatable = false)
+    private String detail;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    protected AuditEntry() {
+    }
+
+    public AuditEntry(String event, String detail, Instant createdAt) {
+        this.event = event;
+        this.detail = detail;
+        this.createdAt = createdAt;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getEvent() {
+        return event;
+    }
+
+    public String getDetail() {
+        return detail;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+}
+```
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/domain/EntryDirection.java
+package com.buildabank.account.domain;
+
+/** The two legs of double-entry bookkeeping. Persisted as a STRING (stable, readable), never the ordinal. */
+public enum EntryDirection {
+    /** Money leaving this account. */
+    DEBIT,
+    /** Money arriving in this account. */
+    CREDIT
+}
+```
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/domain/InsufficientFundsException.java
+package com.buildabank.account.domain;
+
+/**
+ * Thrown when a debit would overdraw an account. It's a {@link RuntimeException}, so Spring's
+ * {@code @Transactional} rolls the transfer back by default (no half-completed money movement) — see the
+ * Step-12 lesson on rollback rules.
+ */
+public class InsufficientFundsException extends RuntimeException {
+
+    public InsufficientFundsException(String message) {
+        super(message);
+    }
+}
+```
+</details>
+
 🔮 **Predict:** if `debit` throws inside a `@Transactional` transfer, what happens to the credit and the ledger rows that would follow? <details><summary>answer</summary>Nothing persists — the whole transaction rolls back (atomicity). We prove it in `overdraw_isRejected_andRollsBackEverything`.</details>
 
 ✋ **Checkpoint:** entities compile; `LedgerEntry`, `AuditEntry`, `EntryDirection`, `InsufficientFundsException` all exist.
 
 💾 **Commit:** `git add services/demand-account/src/main/java/com/buildabank/account/domain && git commit -m "feat(demand-account): Account (BigDecimal + @Version) + double-entry LedgerEntry"`
 
+*Stopping here? You have `Account`, `LedgerEntry`, `AuditEntry` + friends committed and compiling. Next: sub-step 2 (the locked repository, ~1h); first action: create `services/demand-account/src/main/java/com/buildabank/account/domain/AccountRepository.java`.*
+
 ⚠️ **Pitfall:** mapping money as `double` would reintroduce rounding drift. Always `BigDecimal` → `numeric`.
 
 ---
 
-### Sub-step 2 of 6 — Repository with the pessimistic lock 🧭 *(module ✅ → entities ✅ → **repo** → service → propagation → api → tests)*
+### Sub-step 2 of 6 — Repository with the pessimistic lock ⏱ ~1h 🧭 *(module ✅ → entities ✅ → **repo** → service → propagation → api → tests)*
 
 🎯 **Goal:** a repository method that reads **and locks** an account row (`SELECT … FOR UPDATE`).
 
 📁 **Location:** `services/demand-account/src/main/java/com/buildabank/account/domain/AccountRepository.java`
 
-⌨️ **Code:**
+⌨️ **Code** (the complete file, verbatim):
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/domain/AccountRepository.java
+package com.buildabank.account.domain;
+
+import java.math.BigDecimal;
+import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 public interface AccountRepository extends JpaRepository<Account, Long> {
 
-    Optional<Account> findByAccountNumber(String accountNumber);              // plain read, NO lock
+    /** Plain read — NO lock. Used by the deliberately-unsafe transfer to demonstrate the race. */
+    Optional<Account> findByAccountNumber(String accountNumber);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)                                     // → SELECT ... FOR UPDATE
+    /**
+     * Read <strong>and take a pessimistic write lock</strong> on the row — Hibernate emits
+     * {@code SELECT ... FOR UPDATE}, so any other transaction trying to lock the same row <em>blocks</em>
+     * until we commit. This serializes concurrent transfers touching the account and is how we make the
+     * read-check-write of a balance atomic at the database level (the safe transfer uses this).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Account a where a.accountNumber = :accountNumber")
     Optional<Account> findByAccountNumberForUpdate(@Param("accountNumber") String accountNumber);
 
+    /** Sum of all account balances — used to assert money is conserved across concurrent transfers. */
     @Query("select coalesce(sum(a.balance), 0) from Account a")
-    BigDecimal totalBalance();                                               // for the conservation check
+    BigDecimal totalBalance();
+
+    /**
+     * <strong>DEMONSTRATION ONLY — never use for real money.</strong> A bulk JPQL update that writes an
+     * <em>absolute</em> balance computed in Java. It takes NO row lock and bypasses the {@code @Version}
+     * optimistic check (bulk updates don't load/version the entity), so two threads that both read the old
+     * balance and both write back will lose an update. The Step-12 capstone uses this to show the race
+     * <em>failing</em>, then contrasts it with the pessimistic-lock path that's correct.
+     */
+    @Modifying
+    @Query("update Account a set a.balance = :balance where a.id = :id")
+    void applyBalanceUnsafe(@Param("id") Long id, @Param("balance") BigDecimal balance);
 }
 ```
 
@@ -376,34 +950,90 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 - `@Lock(LockModeType.PESSIMISTIC_WRITE)` — tells Hibernate to take a **write lock** on the selected row → it emits `SELECT … FOR UPDATE`. Any other transaction locking the same row **blocks** until we commit.
 - We pair it with `@Query` because `@Lock` needs a query method to attach to.
 - `findByAccountNumber` (no lock) is used by the *deliberately-unsafe* transfer in the capstone — the contrast.
+- `applyBalanceUnsafe` — a `@Modifying` bulk JPQL update that writes an **absolute** balance. Bulk updates never load the entity, so they skip dirty-checking *and* the `@Version` check — which is exactly why the capstone's broken path (sub-step 3) uses it to make a true lost update happen.
 
 💭 **Under the hood:** the lock is held for the **rest of the transaction** (until commit/rollback) — that's what serializes concurrent transfers on a hot account. (The repo also has an `applyBalanceUnsafe` bulk update used *only* by the capstone's broken path — it bypasses `@Version` to show a true lost update.)
+
+<details>
+<summary>📄 The two sibling repositories — <code>LedgerEntryRepository</code>, <code>AuditEntryRepository</code> (+~3 min)</summary>
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/domain/LedgerEntryRepository.java
+package com.buildabank.account.domain;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> {
+
+    List<LedgerEntry> findByAccountIdOrderByCreatedAtAsc(Long accountId);
+
+    List<LedgerEntry> findByTransactionId(UUID transactionId);
+
+    /**
+     * Net of all ledger entries (credits minus debits) across the whole book. Double-entry guarantees this
+     * is always <strong>zero</strong> — every debit has an equal credit. A non-zero result means the books
+     * don't balance (a bug we assert can never happen).
+     */
+    @Query("""
+            select coalesce(sum(case when e.direction = com.buildabank.account.domain.EntryDirection.CREDIT
+                                     then e.amount else e.amount * -1 end), 0)
+            from LedgerEntry e""")
+    BigDecimal netOfAllEntries();
+}
+```
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/domain/AuditEntryRepository.java
+package com.buildabank.account.domain;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface AuditEntryRepository extends JpaRepository<AuditEntry, Long> {
+}
+```
+</details>
+
+❓ **Knowledge-check:** a second transaction calls `findByAccountNumberForUpdate` on a row another transaction has already locked — what happens, and until when? <details><summary>answer</summary>It **blocks** at the `SELECT … FOR UPDATE` until the lock holder commits or rolls back — the lock is held for the rest of the transaction. That waiting is what serializes concurrent transfers on a hot account.</details>
 
 ✋ **Checkpoint:** repository compiles.
 
 💾 **Commit:** `git add .../domain/AccountRepository.java && git commit -m "feat(demand-account): pessimistic SELECT FOR UPDATE repository method"`
 
+*Stopping here? You have the `FOR UPDATE` repository (plus the ledger/audit repositories) committed. Next: sub-step 3 (`TransferService`, ~2.5h); first action: create `services/demand-account/src/main/java/com/buildabank/account/service/TransferService.java`.*
+
 ⚠️ **Pitfall:** `@Lock` only takes effect when the call runs **inside a transaction** — i.e. from a `@Transactional` service method. Calling it outside a transaction does nothing useful.
 
 ---
 
-### Sub-step 3 of 6 — `TransferService.transfer` (the safe money path) 🧭 *(module ✅ → entities ✅ → repo ✅ → **service** → propagation → api → tests)*
+### Sub-step 3 of 6 — `TransferService.transfer` (the safe money path) ⏱ ~2.5h 🧭 *(module ✅ → entities ✅ → repo ✅ → **service** → propagation → api → tests)*
 
 🎯 **Goal:** the production transfer — lock both accounts in a deadlock-safe order, debit/credit, write the two ledger legs, all in one transaction.
 
 📁 **Location:** `services/demand-account/src/main/java/com/buildabank/account/service/TransferService.java`
 
-⌨️ **Code** (the safe transfer; full file in the repo):
+⌨️ **Code** (the safe transfer; the complete file is in the collapsed block below):
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/service/TransferService.java
+// (excerpt — the complete file, with package + imports, is in the collapsed block below)
+
 @Transactional
 public UUID transfer(String fromNumber, String toNumber, BigDecimal amount, String description) {
-    if (fromNumber.equals(toNumber)) throw new IllegalArgumentException("cannot transfer to the same account");
+    if (fromNumber.equals(toNumber)) {
+        throw new IllegalArgumentException("cannot transfer to the same account");
+    }
     // Lock in a stable global order (by account number) to avoid deadlock, then map back to from/to.
     boolean fromIsLower = fromNumber.compareTo(toNumber) < 0;
-    Account firstLocked  = lockOrThrow(fromIsLower ? fromNumber : toNumber);
-    Account secondLocked = lockOrThrow(fromIsLower ? toNumber : fromNumber);
+    String firstNumber = fromIsLower ? fromNumber : toNumber;
+    String secondNumber = fromIsLower ? toNumber : fromNumber;
+    Account firstLocked = lockOrThrow(firstNumber);
+    Account secondLocked = lockOrThrow(secondNumber);
     Account from = fromIsLower ? firstLocked : secondLocked;
-    Account to   = fromIsLower ? secondLocked : firstLocked;
+    Account to = fromIsLower ? secondLocked : firstLocked;
     return post(from, to, amount, description);
 }
 
@@ -433,26 +1063,220 @@ private UUID post(Account from, Account to, BigDecimal amount, String descriptio
 
 🔮 **Predict:** two transfers of 100 run concurrently on account A (balance 200). With the lock, what are the final balances? <details><summary>answer</summary>They serialize: A=0, B=200. Both succeed. We prove it with 20 concurrent transfers in the capstone.</details>
 
+🧨 **The deliberately broken twin — `transferUnsafe`.** The capstone (sub-step 6) needs a transfer that *really* loses an update, so the same class carries a demonstration-only twin. Type it too — the contrast is the whole point of the step:
+
+```java
+/**
+ * DEMONSTRATION ONLY — no lock, no version. Reads the balances, runs {@code afterRead} (a test seam that
+ * lets the Step-12 capstone force two transfers to interleave), then writes <em>absolute</em> balances
+ * via a bulk update that bypasses {@code @Version}. Under contention this loses updates. Never use for
+ * real money.
+ */
+@Transactional
+public UUID transferUnsafe(String fromNumber, String toNumber, BigDecimal amount,
+                           String description, Runnable afterRead) {
+    Account from = accounts.findByAccountNumber(fromNumber).orElseThrow();
+    Account to = accounts.findByAccountNumber(toNumber).orElseThrow();
+    if (from.getBalance().compareTo(amount) < 0) {
+        throw new com.buildabank.account.domain.InsufficientFundsException("insufficient funds");
+    }
+    afterRead.run();   // the race window: another transfer can read the same balances here
+    accounts.applyBalanceUnsafe(from.getId(), from.getBalance().subtract(amount));
+    accounts.applyBalanceUnsafe(to.getId(), to.getBalance().add(amount));
+    UUID transactionId = UUID.randomUUID();
+    Instant now = Instant.now();
+    ledger.save(new LedgerEntry(from.getId(), transactionId, EntryDirection.DEBIT, amount, description, now));
+    ledger.save(new LedgerEntry(to.getId(), transactionId, EntryDirection.CREDIT, amount, description, now));
+    return transactionId;
+}
+```
+
+🔍 **Why this loses money where `@Version` can't save it:**
+- `findByAccountNumber` — the **unlocked** read from sub-step 2. Two threads can both read the same old balance.
+- `applyBalanceUnsafe(id, absoluteBalance)` — a bulk `UPDATE account SET balance = :balance` (sub-step 2). Bulk JPQL updates never load the entity, so there is **no dirty-checking and no `WHERE version = ?`** — the second writer silently overwrites the first. That's the mechanism that turns the race into a *true* lost update.
+- `Runnable afterRead` — an injected **test seam**. The capstone passes a `CyclicBarrier::await` here, forcing *both* threads to finish their reads before *either* writes — the race becomes deterministic instead of "sometimes on a fast machine".
+
+<details>
+<summary>📄 The complete <code>TransferService.java</code> — safe path, broken twin, and the read-only queries (+~5 min)</summary>
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/service/TransferService.java
+package com.buildabank.account.service;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.buildabank.account.domain.Account;
+import com.buildabank.account.domain.AccountRepository;
+import com.buildabank.account.domain.EntryDirection;
+import com.buildabank.account.domain.LedgerEntry;
+import com.buildabank.account.domain.LedgerEntryRepository;
+
+/**
+ * Moves money between accounts and records it in the double-entry ledger. The interesting part is
+ * <em>concurrency correctness</em>: two transfer strategies show the spectrum (plus optimistic locking,
+ * which lives on the {@link Account} {@code @Version} column and is proven by {@code OptimisticLockTest}).
+ *
+ * <ul>
+ *   <li>{@link #transfer} — <strong>pessimistic</strong> lock ({@code SELECT ... FOR UPDATE}); the safe,
+ *       production path. Concurrent transfers on the same account serialize.</li>
+ *   <li>{@link #transferUnsafe} — <strong>no guard at all</strong> (a bulk absolute write that bypasses both
+ *       lock and version). Demonstration only: it loses updates under contention.</li>
+ * </ul>
+ *
+ * Every transfer writes exactly two ledger entries (a DEBIT and a CREDIT sharing one {@code transactionId})
+ * inside one transaction, so the books always balance and a failure rolls back <em>both</em> legs.
+ */
+@Service
+public class TransferService {
+
+    private final AccountRepository accounts;
+    private final LedgerEntryRepository ledger;
+
+    public TransferService(AccountRepository accounts, LedgerEntryRepository ledger) {
+        this.accounts = accounts;
+        this.ledger = ledger;
+    }
+
+    @Transactional
+    public Account openAccount(String accountNumber, String currency, BigDecimal openingBalance) {
+        return accounts.save(new Account(accountNumber, currency, openingBalance, Instant.now()));
+    }
+
+    /**
+     * SAFE transfer using pessimistic row locks. We lock the two accounts in a deterministic order (by
+     * account number) so two transfers touching the same pair can never deadlock by grabbing them in the
+     * opposite order (the lock-ordering rule from Step 11).
+     */
+    @Transactional
+    public UUID transfer(String fromNumber, String toNumber, BigDecimal amount, String description) {
+        if (fromNumber.equals(toNumber)) {
+            throw new IllegalArgumentException("cannot transfer to the same account");
+        }
+        // Lock in a stable global order to avoid deadlock, then map back to from/to.
+        boolean fromIsLower = fromNumber.compareTo(toNumber) < 0;
+        String firstNumber = fromIsLower ? fromNumber : toNumber;
+        String secondNumber = fromIsLower ? toNumber : fromNumber;
+        Account firstLocked = lockOrThrow(firstNumber);
+        Account secondLocked = lockOrThrow(secondNumber);
+        Account from = fromIsLower ? firstLocked : secondLocked;
+        Account to = fromIsLower ? secondLocked : firstLocked;
+        return post(from, to, amount, description);
+    }
+
+    /**
+     * DEMONSTRATION ONLY — no lock, no version. Reads the balances, runs {@code afterRead} (a test seam that
+     * lets the Step-12 capstone force two transfers to interleave), then writes <em>absolute</em> balances
+     * via a bulk update that bypasses {@code @Version}. Under contention this loses updates. Never use for
+     * real money.
+     */
+    @Transactional
+    public UUID transferUnsafe(String fromNumber, String toNumber, BigDecimal amount,
+                               String description, Runnable afterRead) {
+        Account from = accounts.findByAccountNumber(fromNumber).orElseThrow();
+        Account to = accounts.findByAccountNumber(toNumber).orElseThrow();
+        if (from.getBalance().compareTo(amount) < 0) {
+            throw new com.buildabank.account.domain.InsufficientFundsException("insufficient funds");
+        }
+        afterRead.run();   // the race window: another transfer can read the same balances here
+        accounts.applyBalanceUnsafe(from.getId(), from.getBalance().subtract(amount));
+        accounts.applyBalanceUnsafe(to.getId(), to.getBalance().add(amount));
+        UUID transactionId = UUID.randomUUID();
+        Instant now = Instant.now();
+        ledger.save(new LedgerEntry(from.getId(), transactionId, EntryDirection.DEBIT, amount, description, now));
+        ledger.save(new LedgerEntry(to.getId(), transactionId, EntryDirection.CREDIT, amount, description, now));
+        return transactionId;
+    }
+
+    @Transactional(readOnly = true)
+    public BigDecimal balanceOf(String accountNumber) {
+        return accounts.findByAccountNumber(accountNumber)
+                .orElseThrow(() -> new IllegalArgumentException("no such account: " + accountNumber))
+                .getBalance();
+    }
+
+    @Transactional(readOnly = true)
+    public BigDecimal totalSystemBalance() {
+        return accounts.totalBalance();
+    }
+
+    /** The net of every ledger entry across the book — double-entry guarantees this is always zero. */
+    @Transactional(readOnly = true)
+    public BigDecimal ledgerNet() {
+        return ledger.netOfAllEntries();
+    }
+
+    private Account lockOrThrow(String accountNumber) {
+        return accounts.findByAccountNumberForUpdate(accountNumber)
+                .orElseThrow(() -> new IllegalArgumentException("no such account: " + accountNumber));
+    }
+
+    /** Apply a debit + credit and record both ledger legs. Shared by the safe and optimistic paths. */
+    private UUID post(Account from, Account to, BigDecimal amount, String description) {
+        from.debit(amount);            // throws InsufficientFundsException → whole transfer rolls back
+        to.credit(amount);             // dirty checking flushes both balance UPDATEs at commit
+        UUID transactionId = UUID.randomUUID();
+        Instant now = Instant.now();
+        ledger.save(new LedgerEntry(from.getId(), transactionId, EntryDirection.DEBIT, amount, description, now));
+        ledger.save(new LedgerEntry(to.getId(), transactionId, EntryDirection.CREDIT, amount, description, now));
+        return transactionId;
+    }
+}
+```
+</details>
+
 ✋ **Checkpoint:** service compiles; `openAccount`, `transfer`, `transferUnsafe`, `balanceOf`, `totalSystemBalance`, `ledgerNet` exist.
 
 💾 **Commit:** `git add .../service/TransferService.java && git commit -m "feat(demand-account): pessimistic, deadlock-safe transfer + double-entry posting"`
+
+*Stopping here? You have a deadlock-safe, transactional transfer (and its broken twin) committed. Next: sub-step 4 (propagation, ~1.5h); first action: create `services/demand-account/src/main/java/com/buildabank/account/service/AuditService.java`.*
 
 ⚠️ **Pitfall:** locking the accounts in *transfer direction* (always from-then-to) deadlocks under reverse transfers (A→B and B→A). Always lock in a **direction-independent** order.
 
 ---
 
-### Sub-step 4 of 6 — Propagation: `AuditService` (`REQUIRES_NEW`) 🧭 *(module ✅ → entities ✅ → repo ✅ → service ✅ → **propagation** → api → tests)*
+### Sub-step 4 of 6 — Propagation: `AuditService` (`REQUIRES_NEW`) ⏱ ~1.5h 🧭 *(module ✅ → entities ✅ → repo ✅ → service ✅ → **propagation** → api → tests)*
 
 🎯 **Goal:** show `REQUIRES_NEW` — an audit record that commits **independently**, surviving an outer rollback.
 
 📁 **Location:** `services/demand-account/src/main/java/com/buildabank/account/service/AuditService.java`
 
-⌨️ **Code:**
+⌨️ **Code** (the complete file, verbatim):
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/service/AuditService.java
+package com.buildabank.account.service;
+
+import java.time.Instant;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.buildabank.account.domain.AuditEntry;
+import com.buildabank.account.domain.AuditEntryRepository;
+
+/**
+ * Writes audit records in their OWN transaction. {@code Propagation.REQUIRES_NEW} suspends any caller's
+ * transaction and starts a fresh one that commits independently — so an audit row <strong>survives even if
+ * the business transaction that called it rolls back</strong>. (Contrast with the default {@code REQUIRED},
+ * which joins the caller's transaction and would roll back with it.)
+ *
+ * <p>Note the seam: REQUIRES_NEW only takes effect when called through the Spring proxy — i.e. from a
+ * <em>different</em> bean. A {@code this.}-call inside the same bean bypasses the proxy (the self-invocation
+ * pitfall from Step 7), so this lives in its own service.
+ */
 @Service
 public class AuditService {
+
     private final AuditEntryRepository repository;
-    public AuditService(AuditEntryRepository repository) { this.repository = repository; }
+
+    public AuditService(AuditEntryRepository repository) {
+        this.repository = repository;
+    }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(String event, String detail) {
@@ -460,14 +1284,42 @@ public class AuditService {
     }
 }
 ```
-and the caller (`PropagationDemoService`) that audits, then fails:
+
+⌨️ **Now you type — `PropagationDemoService`** (your first unaided file; everything so far has trained you for it): create `service/PropagationDemoService.java` — a `@Service` with a constructor-injected `AuditService` and one `@Transactional` method `auditThenFail(String event)` that (1) calls `auditService.record(event, "written before the failure")` and (2) then throws `new IllegalStateException("business failure after auditing")`. Write it before peeking:
+
+<details>
+<summary>✅ Solution — the complete <code>PropagationDemoService.java</code></summary>
+
 ```java
-@Transactional
-public void auditThenFail(String event) {
-    auditService.record(event, "written before the failure");   // REQUIRES_NEW → commits independently
-    throw new IllegalStateException("business failure after auditing");   // rolls the OUTER txn back
+// services/demand-account/src/main/java/com/buildabank/account/service/PropagationDemoService.java
+package com.buildabank.account.service;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Demonstrates transaction <strong>propagation</strong>. This (outer) method runs in its own transaction,
+ * writes an audit record through {@link AuditService} (which is {@code REQUIRES_NEW}, so it commits in a
+ * <em>separate</em> transaction), then throws. The outer transaction rolls back — but the audit row, having
+ * committed independently, <strong>survives</strong>. That's the whole point of REQUIRES_NEW.
+ */
+@Service
+public class PropagationDemoService {
+
+    private final AuditService auditService;
+
+    public PropagationDemoService(AuditService auditService) {
+        this.auditService = auditService;
+    }
+
+    @Transactional
+    public void auditThenFail(String event) {
+        auditService.record(event, "written before the failure");   // REQUIRES_NEW → commits independently
+        throw new IllegalStateException("business failure after auditing");   // rolls the OUTER txn back
+    }
 }
 ```
+</details>
 
 🔍 **Line-by-line:** `Propagation.REQUIRES_NEW` **suspends** the caller's transaction and runs `record` in a fresh one that commits on its own. So when `auditThenFail` throws and its (outer) transaction rolls back, the audit row — already committed separately — **remains**. Crucially, `AuditService` is a **separate bean**: a `this.record(...)` call would bypass the proxy (self-invocation, Step 7) and `REQUIRES_NEW` would silently not apply.
 
@@ -477,43 +1329,189 @@ public void auditThenFail(String event) {
 
 💾 **Commit:** `git add .../service/AuditService.java .../service/PropagationDemoService.java && git commit -m "feat(demand-account): REQUIRES_NEW audit propagation demo"`
 
+*Stopping here? You have the `REQUIRES_NEW` propagation demo committed — the whole service layer is done. Next: sub-step 5 (REST API, ~2h); first action: create `services/demand-account/src/main/java/com/buildabank/account/web/TransferController.java`.*
+
 ⚠️ **Pitfall:** putting `REQUIRES_NEW` on a method called via `this.` inside the same bean does nothing — the proxy is bypassed. Cross a bean boundary.
 
 ---
 
-### Sub-step 5 of 6 — REST API + error mapping 🧭 *(module ✅ → … → **api** → tests)*
+### Sub-step 5 of 6 — REST API + error mapping ⏱ ~2h 🧭 *(module ✅ → … → **api** → tests)*
 
 🎯 **Goal:** a usable HTTP API — open an account, transfer, read a balance — with sensible error codes.
 
 📁 **Location:** `services/demand-account/src/main/java/com/buildabank/account/web/` (controller + DTOs + advice)
 
-⌨️ **Code** (the controller; DTOs and `ApiExceptionHandler` are short — full files in the repo):
+⌨️ **Code** (the controller, complete and verbatim):
 ```java
+// services/demand-account/src/main/java/com/buildabank/account/web/TransferController.java
+package com.buildabank.account.web;
+
+import java.net.URI;
+import java.util.UUID;
+
+import jakarta.validation.Valid;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.buildabank.account.domain.Account;
+import com.buildabank.account.service.TransferService;
+
+/** REST API for accounts and transfers. Money movement always uses the safe (pessimistic-lock) path. */
 @RestController
 public class TransferController {
+
     private final TransferService transfers;
-    public TransferController(TransferService transfers) { this.transfers = transfers; }
 
+    public TransferController(TransferService transfers) {
+        this.transfers = transfers;
+    }
+
+    /** Open an account → 201 Created. */
     @PostMapping("/api/accounts")
-    public ResponseEntity<AccountResponse> open(@Valid @RequestBody OpenAccountRequest r) {
-        Account a = transfers.openAccount(r.accountNumber(), r.currency(), r.openingBalance());
-        return ResponseEntity.created(URI.create("/api/accounts/" + a.getAccountNumber())).body(AccountResponse.from(a));
+    public ResponseEntity<AccountResponse> open(@Valid @RequestBody OpenAccountRequest request) {
+        Account account = transfers.openAccount(
+                request.accountNumber(), request.currency(), request.openingBalance());
+        return ResponseEntity
+                .created(URI.create("/api/accounts/" + account.getAccountNumber()))
+                .body(AccountResponse.from(account));
     }
 
-    @PostMapping("/api/transfers")
-    public ResponseEntity<TransferResponse> transfer(@Valid @RequestBody TransferRequest r) {
-        UUID txId = transfers.transfer(r.from(), r.to(), r.amount(), r.description());
-        return ResponseEntity.ok(new TransferResponse(txId));
-    }
-
+    /** Read an account's balance → 200, or 404 if it doesn't exist. */
     @GetMapping("/api/accounts/{accountNumber}")
     public ResponseEntity<AccountResponse> balance(@PathVariable String accountNumber) {
-        try { return ResponseEntity.ok(new AccountResponse(accountNumber, null, transfers.balanceOf(accountNumber))); }
-        catch (IllegalArgumentException e) { return ResponseEntity.notFound().build(); }
+        try {
+            return ResponseEntity.ok(new AccountResponse(
+                    accountNumber, null, transfers.balanceOf(accountNumber)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /** Move money → 200 with the transaction id (safe, pessimistic-lock transfer). */
+    @PostMapping("/api/transfers")
+    public ResponseEntity<TransferResponse> transfer(@Valid @RequestBody TransferRequest request) {
+        UUID transactionId = transfers.transfer(
+                request.from(), request.to(), request.amount(), request.description());
+        return ResponseEntity.ok(new TransferResponse(transactionId));
     }
 }
 ```
 and the error mapping (`@RestControllerAdvice`): `InsufficientFundsException` → **422**, `IllegalArgumentException` → **400**. (Full RFC-9457 `ProblemDetail` is Step 13.)
+
+⌨️ **Now you type — the four DTO records** (records + Bean Validation, both known since earlier steps): `OpenAccountRequest` (`@NotBlank accountNumber`, `@NotBlank @Size(min=3,max=3) currency`, `@NotNull @PositiveOrZero openingBalance`), `TransferRequest` (`@NotBlank from`/`to`, `@NotNull @Positive amount`, plain `description`), `TransferResponse` (a `UUID transactionId`), and `AccountResponse` (with a static `from(Account)`). Write them before peeking:
+
+<details>
+<summary>✅ Solution — the four DTO records, complete</summary>
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/web/OpenAccountRequest.java
+package com.buildabank.account.web;
+
+import java.math.BigDecimal;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
+
+/** Request body to open an account. Bean Validation rejects bad input before the controller runs. */
+public record OpenAccountRequest(
+        @NotBlank String accountNumber,
+        @NotBlank @Size(min = 3, max = 3) String currency,
+        @NotNull @PositiveOrZero BigDecimal openingBalance) {
+}
+```
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/web/TransferRequest.java
+package com.buildabank.account.web;
+
+import java.math.BigDecimal;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+
+/** Request body for a money transfer. The amount must be strictly positive. */
+public record TransferRequest(
+        @NotBlank String from,
+        @NotBlank String to,
+        @NotNull @Positive BigDecimal amount,
+        String description) {
+}
+```
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/web/TransferResponse.java
+package com.buildabank.account.web;
+
+import java.util.UUID;
+
+/** Returned after a successful transfer — the shared transaction id of the two ledger legs. */
+public record TransferResponse(UUID transactionId) {
+}
+```
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/web/AccountResponse.java
+package com.buildabank.account.web;
+
+import java.math.BigDecimal;
+
+import com.buildabank.account.domain.Account;
+
+/** API view of an account — a DTO, so we never leak the JPA entity (or its version) to clients. */
+public record AccountResponse(String accountNumber, String currency, BigDecimal balance) {
+
+    public static AccountResponse from(Account account) {
+        return new AccountResponse(account.getAccountNumber(), account.getCurrency(), account.getBalance());
+    }
+}
+```
+</details>
+
+<details>
+<summary>📄 The complete <code>ApiExceptionHandler.java</code> (+~2 min)</summary>
+
+```java
+// services/demand-account/src/main/java/com/buildabank/account/web/ApiExceptionHandler.java
+package com.buildabank.account.web;
+
+import java.util.Map;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import com.buildabank.account.domain.InsufficientFundsException;
+
+/**
+ * Minimal error mapping so business failures return sensible HTTP codes (not 500). The full
+ * {@code ProblemDetail}/RFC 9457 treatment arrives in Step 13 — this is just enough to make the API usable.
+ */
+@RestControllerAdvice
+public class ApiExceptionHandler {
+
+    /** Overdraw attempt → 422 Unprocessable Entity (the request was well-formed but can't be fulfilled). */
+    @ExceptionHandler(InsufficientFundsException.class)
+    public ResponseEntity<Map<String, String>> insufficientFunds(InsufficientFundsException e) {
+        return ResponseEntity.unprocessableEntity().body(Map.of("error", "insufficient_funds", "detail", e.getMessage()));
+    }
+
+    /** Unknown account / same-account transfer → 400 Bad Request. */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> badRequest(IllegalArgumentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "bad_request", "detail", e.getMessage()));
+    }
+}
+```
+</details>
 
 🔍 **Line-by-line:** `@Valid` triggers Bean Validation (`@Positive` amount, `@NotBlank` fields) → a bad body is `400` before the method runs. The transfer endpoint always uses the **safe** (pessimistic) path. The advice turns a domain exception into a clean HTTP status instead of a `500`.
 
@@ -526,59 +1524,101 @@ curl -s -X POST localhost:8082/api/accounts -H 'Content-Type: application/json' 
 curl -s -X POST localhost:8082/api/transfers -H 'Content-Type: application/json' -d '{"from":"ACC-A","to":"ACC-B","amount":50.00}'
 curl -s localhost:8082/api/accounts/ACC-A
 ```
+🪟 **Windows (PowerShell):** the `VAR=…` env prefix and single-quoted JSON above are bash-only. Start the app with `$env:SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5433/demand_account'; .\mvnw.cmd -pl services/demand-account spring-boot:run`, and instead of the `curl`s open `steps/step-12/requests.http` in VS Code/IntelliJ and click **Send Request**.
+
 (We prove the same flow over a real socket in `DemandAccountIntegrationTest` — see 🔬.)
 
 ✋ **Checkpoint:** the service starts and serves; `requests.http` returns 201/200/422 as documented.
 
 💾 **Commit:** `git add .../web && git commit -m "feat(demand-account): accounts/transfers REST API + error mapping"`
 
+*Stopping here? You have a live HTTP API answering on 8082 (201/200/422), committed. Next: sub-step 6 (tests + the 🎓 capstone, ~2.5h); first action: create `services/demand-account/src/test/java/com/buildabank/account/ContainersConfig.java`.*
+
 ⚠️ **Pitfall:** wrong port — the service is on **8082** (8080=hello, 8081=cif). The compose maps Postgres to host **5433** to dodge the local 5432.
 
 ---
 
-### Sub-step 6 of 6 — Tests, incl. the 🎓 Phase-B capstone 🧭 *(module ✅ → … → api ✅ → **tests**)*
+### Sub-step 6 of 6 — Tests, incl. the 🎓 Phase-B capstone ⏱ ~2.5h 🧭 *(module ✅ → … → api ✅ → **tests**)*
 
 🎯 **Goal:** prove the ledger behaviour, propagation, optimistic locking, the live API — and the **capstone**: fails without locking, passes with it.
 
 📁 **Location:** `services/demand-account/src/test/java/com/buildabank/account/` (`ContainersConfig` + 6 test classes)
 
-⌨️ **Code** — the capstone's two halves (`ConcurrentTransferTest`; full file in the repo):
+⌨️ **Code** — the capstone's two halves, verbatim from `ConcurrentTransferTest` (note the `System.out.println` lines — they produce the `[capstone:…]` output you'll see below; class header + imports are in the collapsed block):
 ```java
-/** ❌ No locking: two concurrent transfers of 100 both read 200, both write 100 → one transfer LOST. */
+/** ❌ No locking: two concurrent transfers of 100 both read 200, both write 100 → one transfer is LOST. */
 @Test
 void withoutLocking_concurrentTransfersLoseAnUpdate() throws Exception {
     transfers.openAccount("ACC-A", "USD", new BigDecimal("200.00"));
     transfers.openAccount("ACC-B", "USD", new BigDecimal("0.00"));
-    CyclicBarrier bothHaveRead = new CyclicBarrier(2);                 // force both to read BEFORE either writes
-    Runnable afterRead = () -> { try { bothHaveRead.await(); } catch (Exception e) { throw new RuntimeException(e); } };
+
+    CyclicBarrier bothHaveRead = new CyclicBarrier(2);   // force both to read BEFORE either writes
+    Runnable afterRead = () -> {
+        try {
+            bothHaveRead.await();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    };
+
     try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
-        Future<?> t1 = pool.submit(() -> transfers.transferUnsafe("ACC-A","ACC-B", new BigDecimal("100.00"), "race-1", afterRead));
-        Future<?> t2 = pool.submit(() -> transfers.transferUnsafe("ACC-A","ACC-B", new BigDecimal("100.00"), "race-2", afterRead));
-        t1.get(); t2.get();
+        Future<?> t1 = pool.submit(() ->
+                transfers.transferUnsafe("ACC-A", "ACC-B", new BigDecimal("100.00"), "race-1", afterRead));
+        Future<?> t2 = pool.submit(() ->
+                transfers.transferUnsafe("ACC-A", "ACC-B", new BigDecimal("100.00"), "race-2", afterRead));
+        t1.get();
+        t2.get();
     }
-    assertThat(transfers.balanceOf("ACC-A")).isEqualByComparingTo("100.00");   // should be 0 if both applied
-    assertThat(transfers.balanceOf("ACC-B")).isEqualByComparingTo("100.00");   // should be 200 if both applied
+
+    BigDecimal a = transfers.balanceOf("ACC-A");
+    BigDecimal b = transfers.balanceOf("ACC-B");
+    System.out.println("[capstone:no-lock] A=" + a + " B=" + b
+            + "  (correct would be A=0, B=200 — but one transfer was lost)");
+
+    // The lost update: only ONE transfer's effect survived, even though BOTH "succeeded".
+    assertThat(a).isEqualByComparingTo("100.00");   // should be 0 if both applied
+    assertThat(b).isEqualByComparingTo("100.00");   // should be 200 if both applied
+    // Corruption made visible: the ledger recorded TWO credits to B (200 total) but B only holds 100.
+    assertThat(ledger.count()).isEqualTo(4);        // 2 entries per "successful" transfer
+    assertThat(transfers.ledgerNet()).isEqualByComparingTo("0");   // the ledger itself still balances
 }
 
-/** ✅ Pessimistic lock: 20 concurrent transfers all apply — conserved, balanced, no overdraft. */
+/** ✅ Pessimistic lock: 20 concurrent transfers all apply correctly — conserved, balanced, no overdraft. */
 @Test
 void withPessimisticLock_concurrentTransfersAreCorrect() throws Exception {
+    int transferCount = 20;
+    BigDecimal each = new BigDecimal("50.00");      // 20 × 50 = 1000 = the whole of A
     transfers.openAccount("ACC-A", "USD", new BigDecimal("1000.00"));
     transfers.openAccount("ACC-B", "USD", new BigDecimal("0.00"));
+
     AtomicInteger failures = new AtomicInteger();
-    try (ExecutorService pool = Executors.newFixedThreadPool(20)) {
-        var futures = new ArrayList<Future<?>>();
-        for (int i = 0; i < 20; i++) futures.add(pool.submit(() -> {
-            try { transfers.transfer("ACC-A","ACC-B", new BigDecimal("50.00"), "concurrent"); }
-            catch (RuntimeException e) { failures.incrementAndGet(); }
-        }));
-        for (Future<?> f : futures) f.get();
+    try (ExecutorService pool = Executors.newFixedThreadPool(transferCount)) {
+        List<Future<?>> futures = new ArrayList<>();
+        for (int i = 0; i < transferCount; i++) {
+            futures.add(pool.submit(() -> {
+                try {
+                    transfers.transfer("ACC-A", "ACC-B", each, "concurrent");
+                } catch (RuntimeException e) {
+                    failures.incrementAndGet();
+                }
+            }));
+        }
+        for (Future<?> f : futures) {
+            f.get();
+        }
     }
-    assertThat(failures.get()).isZero();
-    assertThat(transfers.balanceOf("ACC-A")).isEqualByComparingTo("0.00");
-    assertThat(transfers.balanceOf("ACC-B")).isEqualByComparingTo("1000.00");
+
+    BigDecimal a = transfers.balanceOf("ACC-A");
+    BigDecimal b = transfers.balanceOf("ACC-B");
+    System.out.println("[capstone:pessimistic] failures=" + failures.get() + " A=" + a + " B=" + b
+            + " total=" + transfers.totalSystemBalance() + " ledgerNet=" + transfers.ledgerNet());
+
+    assertThat(failures.get()).isZero();                              // every transfer succeeded
+    assertThat(a).isEqualByComparingTo("0.00");                       // A fully drained
+    assertThat(b).isEqualByComparingTo("1000.00");                    // B received it all
     assertThat(transfers.totalSystemBalance()).isEqualByComparingTo("1000.00");   // money conserved
-    assertThat(transfers.ledgerNet()).isEqualByComparingTo("0");                  // books balance
+    assertThat(transfers.ledgerNet()).isEqualByComparingTo("0");      // books balance
+    assertThat(ledger.count()).isEqualTo(transferCount * 2L);         // 2 entries per transfer
 }
 ```
 
@@ -587,6 +1627,490 @@ void withPessimisticLock_concurrentTransfersAreCorrect() throws Exception {
 - The pessimistic test runs **20** transfers concurrently through the real `transfer` (FOR UPDATE). They serialize → all succeed → A drained to 0, B holds 1000, **total conserved at 1000**, `ledgerNet == 0` (books balance).
 
 🔮 **Predict:** in the unsafe test, the ledger records 2 entries per "successful" transfer (4 total, crediting B 200). What does B's balance show? <details><summary>answer</summary>100 — so the materialized balance no longer matches the ledger. That mismatch *is* the corruption.</details>
+
+<details>
+<summary>📄 The complete test suite — <code>ContainersConfig</code>, <code>ConcurrentTransferTest</code> class frame, and the other 5 test classes (+~15 min)</summary>
+
+```java
+// services/demand-account/src/test/java/com/buildabank/account/ContainersConfig.java
+package com.buildabank.account;
+
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Bean;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
+
+/**
+ * Spins up a REAL PostgreSQL for tests. {@code @ServiceConnection} points the app's DataSource at this
+ * container automatically (no JDBC URL/credentials in test config). Image pinned (never {@code latest}).
+ */
+@TestConfiguration(proxyBeanMethods = false)
+public class ContainersConfig {
+
+    @Bean
+    @ServiceConnection
+    PostgreSQLContainer postgresContainer() {
+        return new PostgreSQLContainer(DockerImageName.parse("postgres:17-alpine"));
+    }
+}
+```
+
+The class frame around the two capstone methods shown above:
+
+```java
+// services/demand-account/src/test/java/com/buildabank/account/service/ConcurrentTransferTest.java
+package com.buildabank.account.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+
+import com.buildabank.account.ContainersConfig;
+import com.buildabank.account.domain.AccountRepository;
+import com.buildabank.account.domain.LedgerEntryRepository;
+
+/**
+ * 🎓 <strong>The Phase B Capstone.</strong> A concurrency stress test against the ledger that <em>fails
+ * without locking and passes with it</em> — on a real Postgres.
+ */
+@SpringBootTest
+@Import(ContainersConfig.class)
+class ConcurrentTransferTest {
+
+    @Autowired
+    TransferService transfers;
+
+    @Autowired
+    AccountRepository accounts;
+
+    @Autowired
+    LedgerEntryRepository ledger;
+
+    @BeforeEach
+    void clean() {
+        ledger.deleteAll();
+        accounts.deleteAll();
+    }
+
+    // ... the two @Test methods shown above go here, verbatim ...
+}
+```
+
+```java
+// services/demand-account/src/test/java/com/buildabank/account/service/TransferServiceTest.java
+package com.buildabank.account.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+
+import com.buildabank.account.ContainersConfig;
+import com.buildabank.account.domain.AccountRepository;
+import com.buildabank.account.domain.EntryDirection;
+import com.buildabank.account.domain.InsufficientFundsException;
+import com.buildabank.account.domain.LedgerEntry;
+import com.buildabank.account.domain.LedgerEntryRepository;
+
+/**
+ * The ledger's core behaviour on a real Postgres: a transfer atomically debits one account, credits the
+ * other, and writes a balanced pair of ledger entries — and a failed transfer (overdraw) rolls back
+ * <em>everything</em>, leaving no trace.
+ */
+@SpringBootTest
+@Import(ContainersConfig.class)
+class TransferServiceTest {
+
+    @Autowired
+    TransferService transfers;
+
+    @Autowired
+    AccountRepository accounts;
+
+    @Autowired
+    LedgerEntryRepository ledger;
+
+    @BeforeEach
+    void clean() {
+        ledger.deleteAll();
+        accounts.deleteAll();
+    }
+
+    @Test
+    void transfer_movesMoney_andWritesABalancedLedgerPair() {
+        var from = transfers.openAccount("ACC-A", "USD", new BigDecimal("200.00"));
+        var to = transfers.openAccount("ACC-B", "USD", new BigDecimal("0.00"));
+
+        UUID txId = transfers.transfer("ACC-A", "ACC-B", new BigDecimal("50.00"), "rent");
+
+        // Balances moved exactly.
+        assertThat(transfers.balanceOf("ACC-A")).isEqualByComparingTo("150.00");
+        assertThat(transfers.balanceOf("ACC-B")).isEqualByComparingTo("50.00");
+
+        // Money is conserved across the system, and the books balance (debits == credits).
+        assertThat(transfers.totalSystemBalance()).isEqualByComparingTo("200.00");
+        assertThat(transfers.ledgerNet()).isEqualByComparingTo("0");
+
+        // Exactly two ledger entries, sharing the transaction id: a DEBIT on the payer, a CREDIT on the payee.
+        List<LedgerEntry> entries = ledger.findByTransactionId(txId);
+        assertThat(entries).hasSize(2);
+        assertThat(entries).anySatisfy(e -> {
+            assertThat(e.getAccountId()).isEqualTo(from.getId());
+            assertThat(e.getDirection()).isEqualTo(EntryDirection.DEBIT);
+            assertThat(e.getAmount()).isEqualByComparingTo("50.00");
+        });
+        assertThat(entries).anySatisfy(e -> {
+            assertThat(e.getAccountId()).isEqualTo(to.getId());
+            assertThat(e.getDirection()).isEqualTo(EntryDirection.CREDIT);
+            assertThat(e.getAmount()).isEqualByComparingTo("50.00");
+        });
+    }
+
+    @Test
+    void overdraw_isRejected_andRollsBackEverything() {
+        transfers.openAccount("ACC-A", "USD", new BigDecimal("10.00"));
+        transfers.openAccount("ACC-B", "USD", new BigDecimal("0.00"));
+
+        assertThatThrownBy(() -> transfers.transfer("ACC-A", "ACC-B", new BigDecimal("50.00"), "too much"))
+                .isInstanceOf(InsufficientFundsException.class);
+
+        // Nothing changed: the debit that ran before the exception was rolled back, and NO ledger rows exist.
+        assertThat(transfers.balanceOf("ACC-A")).isEqualByComparingTo("10.00");
+        assertThat(transfers.balanceOf("ACC-B")).isEqualByComparingTo("0.00");
+        assertThat(ledger.count()).isZero();
+    }
+}
+```
+
+```java
+// services/demand-account/src/test/java/com/buildabank/account/service/OptimisticLockTest.java
+package com.buildabank.account.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.math.BigDecimal;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import com.buildabank.account.ContainersConfig;
+import com.buildabank.account.domain.Account;
+import com.buildabank.account.domain.AccountRepository;
+import com.buildabank.account.domain.LedgerEntryRepository;
+
+/**
+ * The <strong>optimistic</strong> alternative to pessimistic locking (the third strategy from the lesson),
+ * proven on the {@code Account} {@code @Version} column exactly as Step 9 did for the customer: two
+ * "sessions" read the same account at version 0; the first credit commits (version → 1); the second, holding
+ * a now-stale copy, is REJECTED instead of silently overwriting. No lock is held during the read — the
+ * conflict is detected only at write time. (Contrast: {@code transfer} blocks at read time with FOR UPDATE.)
+ */
+@SpringBootTest
+@Import(ContainersConfig.class)
+class OptimisticLockTest {
+
+    @Autowired
+    AccountRepository accounts;
+
+    @Autowired
+    LedgerEntryRepository ledger;
+
+    @Autowired
+    PlatformTransactionManager transactionManager;
+
+    private TransactionTemplate tx;
+
+    @BeforeEach
+    void init() {
+        tx = new TransactionTemplate(transactionManager);
+        // Delete ledger rows first — they have a FK to account (other test classes leave data; the DB is shared).
+        tx.executeWithoutResult(s -> ledger.deleteAll());
+        tx.executeWithoutResult(s -> accounts.deleteAll());
+        tx.executeWithoutResult(s -> accounts.save(
+                new Account("ACC-O", "USD", new BigDecimal("200.00"), java.time.Instant.now())));
+    }
+
+    @Test
+    void concurrentUpdateIsRejected() {
+        Account sessionA = tx.execute(s -> accounts.findByAccountNumber("ACC-O").orElseThrow());
+        Account sessionB = tx.execute(s -> accounts.findByAccountNumber("ACC-O").orElseThrow());
+        assertThat(sessionA.getVersion()).isZero();
+
+        // Session A credits and commits → version 0 → 1.
+        tx.executeWithoutResult(s -> {
+            sessionA.credit(new BigDecimal("10.00"));
+            accounts.save(sessionA);
+        });
+
+        // Session B updates its now-stale copy (still version 0) → optimistic-lock conflict, no lost update.
+        assertThatThrownBy(() -> tx.executeWithoutResult(s -> {
+            sessionB.credit(new BigDecimal("20.00"));
+            accounts.save(sessionB);
+        })).isInstanceOf(ObjectOptimisticLockingFailureException.class);
+
+        // Only the winner's credit stands.
+        Account current = tx.execute(s -> accounts.findByAccountNumber("ACC-O").orElseThrow());
+        assertThat(current.getBalance()).isEqualByComparingTo("210.00");
+        assertThat(current.getVersion()).isEqualTo(1L);
+    }
+}
+```
+
+```java
+// services/demand-account/src/test/java/com/buildabank/account/service/TransactionPropagationTest.java
+package com.buildabank.account.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+
+import com.buildabank.account.ContainersConfig;
+import com.buildabank.account.domain.AuditEntryRepository;
+
+/**
+ * Proves transaction <strong>propagation</strong>: an audit record written with {@code REQUIRES_NEW} commits
+ * in its own transaction, so it <em>survives</em> even though the calling (outer) transaction rolls back.
+ */
+@SpringBootTest
+@Import(ContainersConfig.class)
+class TransactionPropagationTest {
+
+    @Autowired
+    PropagationDemoService demo;
+
+    @Autowired
+    AuditEntryRepository auditEntries;
+
+    @BeforeEach
+    void clean() {
+        auditEntries.deleteAll();
+    }
+
+    @Test
+    void requiresNew_auditSurvivesOuterRollback() {
+        assertThatThrownBy(() -> demo.auditThenFail("transfer-attempt"))
+                .isInstanceOf(IllegalStateException.class);
+
+        // The outer transaction rolled back, but the REQUIRES_NEW audit committed independently → it's still here.
+        assertThat(auditEntries.count()).isEqualTo(1);
+        assertThat(auditEntries.findAll().getFirst().getEvent()).isEqualTo("transfer-attempt");
+    }
+}
+```
+
+```java
+// services/demand-account/src/test/java/com/buildabank/account/web/TransferControllerTest.java
+package com.buildabank.account.web;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import com.buildabank.account.domain.Account;
+import com.buildabank.account.domain.InsufficientFundsException;
+import com.buildabank.account.service.TransferService;
+
+/** Web-layer slice: just the controller + advice + MVC infra (no DB). The service is a Mockito mock. */
+@WebMvcTest(TransferController.class)
+class TransferControllerTest {
+
+    @Autowired
+    MockMvc mvc;
+
+    @MockitoBean
+    TransferService transfers;
+
+    @Test
+    void openReturns201() throws Exception {
+        given(transfers.openAccount(eq("ACC-A"), eq("USD"), any()))
+                .willReturn(new Account("ACC-A", "USD", new BigDecimal("100.00"), Instant.now()));
+
+        mvc.perform(post("/api/accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"accountNumber":"ACC-A","currency":"USD","openingBalance":100.00}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.accountNumber").value("ACC-A"))
+                .andExpect(jsonPath("$.balance").value(100.00));
+    }
+
+    @Test
+    void transferReturns200WithTransactionId() throws Exception {
+        UUID txId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        given(transfers.transfer(eq("ACC-A"), eq("ACC-B"), any(), any())).willReturn(txId);
+
+        mvc.perform(post("/api/transfers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":25.00,"description":"rent"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.transactionId").value(txId.toString()));
+    }
+
+    @Test
+    void overdrawReturns422() throws Exception {
+        given(transfers.transfer(any(), any(), any(), any()))
+                .willThrow(new InsufficientFundsException("balance too low"));
+
+        mvc.perform(post("/api/transfers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":9999.00}
+                                """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.error").value("insufficient_funds"));
+    }
+
+    @Test
+    void negativeAmountReturns400() throws Exception {
+        // @Positive on the amount fails Bean Validation before the controller body runs.
+        mvc.perform(post("/api/transfers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"from":"ACC-A","to":"ACC-B","amount":-5.00}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+}
+```
+
+```java
+// services/demand-account/src/test/java/com/buildabank/account/DemandAccountIntegrationTest.java
+package com.buildabank.account;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
+
+import com.buildabank.account.domain.AccountRepository;
+import com.buildabank.account.domain.LedgerEntryRepository;
+
+/**
+ * End-to-end over a REAL HTTP socket on a random bound port, against a REAL Postgres (Testcontainers): open
+ * two accounts, transfer money, read the balance, and confirm an overdraft is refused — exactly what a
+ * learner sees with {@code curl}. Uses the JDK {@link HttpClient} (no extra test client needed).
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(ContainersConfig.class)
+class DemandAccountIntegrationTest {
+
+    @LocalServerPort
+    int port;
+
+    @Autowired
+    AccountRepository accounts;
+
+    @Autowired
+    LedgerEntryRepository ledger;
+
+    private final HttpClient http = HttpClient.newHttpClient();
+    private String base;
+
+    @BeforeEach
+    void setup() {
+        ledger.deleteAll();
+        accounts.deleteAll();
+        base = "http://localhost:" + port;
+    }
+
+    @Test
+    void openTransferQuery_andRefuseOverdraft_overHttp() throws Exception {
+        assertThat(post("/api/accounts",
+                "{\"accountNumber\":\"ACC-A\",\"currency\":\"USD\",\"openingBalance\":200.00}").statusCode())
+                .isEqualTo(201);
+        assertThat(post("/api/accounts",
+                "{\"accountNumber\":\"ACC-B\",\"currency\":\"USD\",\"openingBalance\":0.00}").statusCode())
+                .isEqualTo(201);
+
+        HttpResponse<String> transfer = post("/api/transfers",
+                "{\"from\":\"ACC-A\",\"to\":\"ACC-B\",\"amount\":50.00,\"description\":\"rent\"}");
+        assertThat(transfer.statusCode()).isEqualTo(200);
+        assertThat(transfer.body()).contains("transactionId");
+
+        HttpResponse<String> balanceA = get("/api/accounts/ACC-A");
+        assertThat(balanceA.statusCode()).isEqualTo(200);
+        assertThat(balanceA.body()).contains("150");   // 200 − 50
+
+        // Overdraft → 422 Unprocessable Entity (mapped by ApiExceptionHandler).
+        assertThat(post("/api/transfers",
+                "{\"from\":\"ACC-A\",\"to\":\"ACC-B\",\"amount\":9999.00}").statusCode())
+                .isEqualTo(422);
+    }
+
+    private HttpResponse<String> post(String path, String json) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create(base + path))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(json)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> get(String path) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create(base + path)).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+}
+```
+</details>
 
 ▶️ **Run & See:**
 ```bash
@@ -604,6 +2128,8 @@ void withPessimisticLock_concurrentTransfersAreCorrect() throws Exception {
 ✋ **Checkpoint:** all 11 tests green.
 
 💾 **Commit:** `git add services/demand-account/src/test && git commit -m "test(demand-account): ledger, propagation, optimistic lock, live HTTP + Phase-B capstone"`
+
+*Stopping here? All 11 tests are green and committed — the build is done. Next: D · 🔬 Prove (~2.5h: §12.3 mutation, `smoke.sh`, clean-room); first action: run `./mvnw -pl services/demand-account -am verify`.*
 
 ⚠️ **Pitfall:** `@SpringBootTest` doesn't roll back between tests, and these tests share one Postgres — clean up in `@BeforeEach` (delete `ledger_entry` **before** `account` because of the FK).
 
@@ -630,7 +2156,7 @@ sequenceDiagram
 
 ## 🎮 Play With It
 
-1. **Start it:** `docker compose -f services/demand-account/compose.yaml up -d` then `SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run`.
+1. **Start it:** `docker compose -f services/demand-account/compose.yaml up -d` then `SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account ./mvnw -pl services/demand-account spring-boot:run` (Windows PowerShell: `$env:SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5433/demand_account'; .\mvnw.cmd -pl services/demand-account spring-boot:run`).
 2. **Drive the API:** open `steps/step-12/requests.http` (VS Code/IntelliJ), or the `curl`s in sub-step 5. Watch a transfer return a `transactionId`, the balance drop, and an overdraft return **422**.
 3. **See the migrations:** `GET http://localhost:8082/actuator/flyway`.
 4. 🧪 **Little experiments:**
@@ -710,22 +2236,24 @@ Fresh `git clone` at `step-12-end` → `make doctor` + full `./mvnw verify` → 
 ## 🚀 Go Deeper (Optional)
 
 <details>
-<summary>① Retry-on-conflict: the optimistic counterpart to pessimistic locking</summary>
+<summary>① Retry-on-conflict: the optimistic counterpart to pessimistic locking (+~10 min)</summary>
 
 With `@Version` (no `FOR UPDATE`), a conflicting transfer throws `ObjectOptimisticLockingFailureException`. The standard fix is a bounded **retry loop** (Spring Retry's `@Retryable`, or a hand-rolled `for` loop): catch the exception, re-read, re-apply, up to N attempts with small backoff. It out-throughputs pessimistic locking when conflicts are *rare* (no lock held) but degrades under heavy contention (we saw 17/20 conflicts). Pessimistic locking is the opposite trade. Knowing *which* to reach for is the senior skill.
 </details>
 
 <details>
-<summary>② Derived vs materialized balance</summary>
+<summary>② Derived vs materialized balance (+~10 min)</summary>
 
 We keep a materialized `balance` *and* an append-only ledger. The alternative is to **derive** the balance by summing entries (`SELECT sum(...) FROM ledger_entry WHERE account_id = ?`) — perfectly auditable, no balance to lock, but O(entries) per read. Real systems often snapshot a running balance periodically (or per statement period) to bound the sum. Event sourcing (Step 52) makes the ledger the *only* source of truth and projects balances as read models.
 </details>
 
 <details>
-<summary>③ `NESTED` propagation & savepoints</summary>
+<summary>③ `NESTED` propagation & savepoints (+~10 min)</summary>
 
 `Propagation.NESTED` creates a **savepoint** inside the current transaction. If the nested work fails, you roll back to the savepoint without aborting the whole transaction — useful for "attempt this optional sub-step." It needs a JDBC driver/DB that supports savepoints (Postgres does). Contrast with `REQUIRES_NEW` (a truly independent transaction that commits separately).
 </details>
+
+❓ **Knowledge-check:** an inner piece of work fails — when does the rest of the outer transaction survive with `NESTED`, and what happens to already-committed `REQUIRES_NEW` work if the outer transaction later rolls back? <details><summary>answer</summary>`NESTED` rolls back only to its savepoint, so the outer transaction continues; `REQUIRES_NEW` work committed in its own independent transaction and **stays committed** regardless of the outer rollback (the audit-row demo).</details>
 
 ## 💼 Interview Prep: Questions You'll Be Asked
 

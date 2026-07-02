@@ -14,14 +14,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | mutation testing (score vs coverage) · property-based testing · what makes a starter · quality gates |
-| **C** | [🛠️ Build](#build) | TDD core unit tests · jqwik property · PITest capstone · the custom starter · MockMvcTester · the gates |
-| **D** | [🔬 Prove](#prove) | the Verification Log — 100% mutation score; §12.3 a surviving mutant fails the build; gates green; real output |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · the honest JDK-25 tool status · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start · session plan | ≈ ½ h |
+| **B** | [🧠 Understand](#understand) | mutation testing (score vs coverage) · property-based testing · what makes a starter · quality gates | ≈ 1 h |
+| **C** | [🛠️ Build](#build) | TDD core unit tests · jqwik property · PITest capstone · the custom starter · MockMvcTester · the gates | ≈ 11 h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — 100% mutation score; §12.3 a surviving mutant fails the build; gates green; real output | ≈ 2 h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ≈ 1 h |
+| **F** | [🏆 Review](#review) | troubleshooting · the honest JDK-25 tool status · recap, flashcards & what's next | ≈ ½ h |
 
 ---
 
@@ -97,6 +97,27 @@ You can hit 100% line coverage with tests that assert nothing — coverage is a 
 - **Connects to what you know:** we mutation-test the **Step-26 hexagon** core (now unit-testable *because* it's a hexagon); the starter uses **Step-6 auto-configuration** mechanics; the capstone combines **26 + 27 + 28**.
 - **Depends on:** Steps **26, 27, 6**.
 
+<a id="session-plan"></a>
+## 🗓️ Session Plan — eight sittings, ≈ 16 h total
+
+Sixteen hours is not one heroic evening. Each sitting ends at a natural save point (a 💾 commit or a movement
+boundary), and ✋ re-entry lines in the text tell you what you have and where to pick up.
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| **S1 · Frame it** | A Orient + B Understand + the B→C bridge | 1.5 h | the 🗺️ bridge (nothing built yet) |
+| **S2 · First tests** | Sub-steps 1–2 — core unit tests + the jqwik property | 2.5 h | end of sub-step 2 (uncommitted) |
+| **S3 · Mutation capstone** | Sub-step 3 — the `-Pmutation` profile, run PITest, the §12.3 break-it | 2.5 h | the sub-step-3 💾 commit |
+| **S4 · Starter, part 1** | Sub-step 4a–4b — `MoneyFormatter`/`MoneyProperties` + the auto-configuration | 2 h | end of 4b (classes exist, untested) |
+| **S5 · Starter, part 2** | Sub-step 4c — `ApplicationContextRunner` tests + consume from `hello` | 1.5 h | the sub-step-4 💾 commit |
+| **S6 · Slice + gates** | Sub-steps 5–6 — `MockMvcTester`, Spotless + Checkstyle, ADR-0019 | 2.5 h | the sub-step-6 💾 commit |
+| **S7 · Prove it** | 🎮 Play With It + the Finished-Result DoD + D (full `verify`, smoke, clean-room) | 2.5 h | tag `step-28-end` |
+| **S8 · Close out** | E Apply + F Review — go-deeper, interview prep, recap | 1.5 h | end of lesson 🎉 |
+
+**Optional routes:** the ⏭️ skip-test (5 min) can skip the whole step if you ace it; each 🚀 Go Deeper aside is +~5 min; the 🎯 stretch challenge is +~1–2 h on top.
+
+✋ **Stopping here?** Nothing built yet — you have the map. Next: [B · Understand](#understand); first action: reopen this lesson at the Big Idea.
+
 ---
 
 <a id="understand"></a>
@@ -112,6 +133,11 @@ flip a `>` to `>=`, negate an `if`, replace a return with `null`, delete a metho
 against each **mutant**. If a test fails, the mutant is **killed** (good — a test caught the bug). If all tests
 still pass, the mutant **survived** (bad — that's a real behaviour change nobody tested). The **mutation score**
 = killed ÷ total. It's the most honest "are my tests any good?" signal there is.
+
+**Analogy:** line coverage counts the smoke detectors you *installed*; mutation testing lights a small
+controlled fire in every room and checks an alarm actually *rings*.
+
+❓ **Quick check:** every mutant PITest planted *survived*, yet line coverage is 100% — what does that tell you about the tests? <details><summary>Answer</summary>The tests **execute** the code but **assert nothing that would catch a change** — coverage says "ran", a surviving mutant says "nobody checked". The suite is participation, not protection; the mutation score (killed ÷ total) is the honest signal.</details>
 
 ```mermaid
 flowchart LR
@@ -179,16 +205,38 @@ BOOT-4 SLICE (hello)                                     money/MoneyFormatter ·
                                                          money/MoneyAutoConfigurationTest (ApplicationContextRunner)
 ```
 
+✋ **Stopping here?** You have the concepts (mutation score, properties, starter discovery) — no code yet. Next: [C · Build](#build); first action: `git describe` → confirm `step-27-end`.
+
 <a id="build"></a>
 
 # C · 🛠️ Let's Build It — Step by Step
+
+🧭 **You are here:** the build — four tracks, six sub-steps, ≈ 11 h of the step's ≈ 16 (sittings S2–S6 of the [session plan](#session-plan)).
 
 ## 📦 Your Starting Point
 
 `step-28-start == step-27-end`. The notification hexagon is enforced by ArchUnit; its core (`NotificationService`,
 `Notification`) is unit-testable but only *exercised* by Docker integration tests so far.
 
-## Sub-step 1 — fast unit tests for the core (the payoff of the hexagon)
+The four tracks and how they meet the build:
+
+```mermaid
+flowchart LR
+    subgraph T1["Track 1 · test the core (no Docker)"]
+      UT["NotificationServiceTest (Mockito)\nNotificationTest (example)"] --> PROP["NotificationPropertyTest\n(jqwik, 1000 cases)"] --> PIT["-Pmutation → PITest\nthreshold 90"]
+    end
+    subgraph T2["Track 2 · your starter"]
+      AC["libs/common: @AutoConfiguration\n+ AutoConfiguration.imports"] --> H["hello injects MoneyFormatter\n(no @Import)"]
+    end
+    subgraph T3["Track 3 · Boot-4 slice"]
+      MMT["HelloMockMvcTesterTest\n(@WebMvcTest + MockMvcTester)"]
+    end
+    subgraph T4["Track 4 · gates (whole repo)"]
+      SP["Spotless + Checkstyle\nbound to verify"] --> EP["-Perrorprone (opt-in\nNullAway, :WARN)"]
+    end
+```
+
+## Sub-step 1 of 6 — fast unit tests for the core (the payoff of the hexagon) · ≈ 1.5 h
 
 🎯 Because `NotificationService` depends only on its **ports**, we mock them (Mockito) and test the use case in
 microseconds — no Kafka, no Spring. `NotificationServiceTest`: a new event is applied + published once; a
@@ -197,11 +245,25 @@ and composes the exact message. These are what PITest will mutate against.
 
 🔮 **Predict:** mutation-test the core with only the Docker integration test covering it — fast, or slow? <details><summary>Answer</summary>**Painfully slow** — PITest re-runs covering tests *per mutant*; a Testcontainers boot ×N mutants is unusable. Mutation testing needs **fast unit tests** on the core. That's why the hexagon (fast-testable core) and mutation testing fit together.</details>
 
-## Sub-step 2 — a property-based test (jqwik)
+✋ **Stopping here?** You have the core's fast unit tests written (`NotificationServiceTest`, `NotificationTest`) — uncommitted for now. Next: Sub-step 2 (the jqwik property); first action: open `services/notification/pom.xml` to add the jqwik dependency.
 
-🎯 `NotificationPropertyTest` states the invariant and lets jqwik generate 1000 cases (alphabetic ids, amounts in `[0.01, 1_000_000]`). Add the `net.jqwik:jqwik` test dependency; it registers as its own JUnit-Platform engine.
+## Sub-step 2 of 6 — a property-based test (jqwik) · ≈ 1 h
 
-## Sub-step 3 — the PITest capstone (mutation coverage to a justified target)
+🎯 `NotificationPropertyTest` states the invariant and lets jqwik generate 1000 cases (alphabetic ids, amounts in `[0.01, 1_000_000]`). Add the jqwik test dependency to `services/notification/pom.xml` — pinned like everything else (the version lives in the parent pom's `<properties>`); it registers as its own JUnit-Platform engine:
+
+```xml
+<!-- services/notification/pom.xml — in <dependencies> -->
+<dependency>
+    <groupId>net.jqwik</groupId>
+    <artifactId>jqwik</artifactId>
+    <version>${jqwik.version}</version>  <!-- 1.9.3 in the parent pom -->
+    <scope>test</scope>
+</dependency>
+```
+
+✋ **Stopping here?** You have the jqwik dependency + `NotificationPropertyTest` (uncommitted — sub-step 3's commit will carry them). Next: Sub-step 3 (the PITest capstone); first action: reopen `services/notification/pom.xml` to add the `-Pmutation` profile.
+
+## Sub-step 3 of 6 — the PITest capstone (mutation coverage to a justified target) · ≈ 2.5 h
 
 🎯 Add a `-Pmutation` profile to `services/notification/pom.xml`: `pitest-maven` (1.25.4 — **not** 1.19.1, see
 🩺) + `pitest-junit5-plugin`, **`targetClasses`** = `Notification` + `NotificationService` (the core), **fast
@@ -209,45 +271,106 @@ unit tests only** (exclude the Testcontainers tests), **`mutationThreshold` = 90
 
 ⚠️ **Pitfall:** point `targetClasses` at the whole package and PITest will mutate record-generated `equals`/`hashCode` and produce junk survivors. Scope it to the classes with real logic.
 
+🔮 **Predict:** if we instead deleted the *duplicate-event* test, which of the five mutants (see the kill table in [D](#prove)) would survive? <details><summary>Answer</summary>The `BooleanTrueReturnVals` mutant (`handle` always returns `true`) — only the duplicate test expects `false`. The negated-guard mutant stays killed: the *new-event* test also exercises that branch.</details>
+
 🔬 **Break-it (the §12.3 proof):** delete the `verify(publisher).publish(...)` assertion → the "removed call to publish" mutant **survives** → score drops to 80% → **the build fails**. Put it back. *That* is mutation testing earning its keep.
 
-💾 **Commit:** `test(notification): Step 28 mutation (PITest) + property (jqwik) tests on the hexagon core`
+💾 **Commit:** `test(notification): Step 28 mutation (PITest) + property (jqwik) tests on the hexagon core` *(this commit also carries sub-steps 1–2 — the tests PITest mutates against)*
 
-## Sub-step 4 — turn `libs/common` into a real auto-configured starter
+✋ **Stopping here?** You have the mutation gate committed — the capstone's test half is done. Next: Sub-step 4 (your starter); first action: create the new `libs/common` module (its `pom.xml` first).
 
-🎯 New module `libs/common` (`common-spring-boot-starter`): `MoneyFormatter` (immutable, `BigDecimal` +
-HALF_EVEN, locale-free), `MoneyProperties` (`@ConfigurationProperties("buildabank.money")`),
-`MoneyAutoConfiguration` (`@AutoConfiguration` + `@ConditionalOnProperty(matchIfMissing=true)` +
-`@ConditionalOnMissingBean`), and the `AutoConfiguration.imports` file. Test it with **`ApplicationContextRunner`**
-(default-on, property-binds, **backs off** when the consumer defines its own, **off** when disabled).
+## Sub-step 4 of 6 — turn `libs/common` into a real auto-configured starter · ≈ 3.5 h
 
-🎯 **Prove real consumption:** add the one dependency to `hello`; its `@SpringBootTest` injects the
-auto-configured `MoneyFormatter` — discovered via the imports file, with no `@Import`.
+🎯 New module `libs/common` (`common-spring-boot-starter`) — built in three passes, so no pass carries more
+than ~3 new ideas:
+
+**4a — the plain classes (no Spring magic yet).** `MoneyFormatter` (immutable, `BigDecimal` + HALF_EVEN,
+locale-free) and `MoneyProperties` (`@ConfigurationProperties("buildabank.money")` — the type-safe binding for
+`buildabank.money.*`). Two ordinary classes you could unit-test with no context at all.
+
+**4b — the auto-configuration.** `MoneyAutoConfiguration`: `@AutoConfiguration` (marks it a Boot recipe) +
+`@ConditionalOnProperty(matchIfMissing=true)` (on unless the consumer turns it off) + `@ConditionalOnMissingBean`
+(**back off** if the consumer defined its own) — then list the class in the `AutoConfiguration.imports` file so
+Boot can discover it (the §B mechanism, one condition at a time).
+
+✋ **Stopping here?** You have the starter's four artifacts (`MoneyFormatter`, `MoneyProperties`, `MoneyAutoConfiguration`, the imports file) — untested, uncommitted. Next: 4c; first action: create `MoneyAutoConfigurationTest` with `ApplicationContextRunner`.
+
+**4c — prove it.** Test with **`ApplicationContextRunner`** — a tiny throwaway context per test, so you can
+assert all four behaviours fast: default-on, property-binds, **backs off** when the consumer defines its own,
+**off** when disabled. Then **prove real consumption:** add the one dependency to `hello`; its `@SpringBootTest`
+injects the auto-configured `MoneyFormatter` — discovered via the imports file, with no `@Import`.
+
+🔮 **Predict:** the consumer defines its *own* `MoneyFormatter` bean — what happens at startup? <details><summary>Answer</summary>Nothing dramatic: `@ConditionalOnMissingBean` makes the auto-configuration **back off**, so the consumer's bean wins — no conflict, no duplicate-bean error. That's exactly what the "backs-off" `ApplicationContextRunner` test asserts.</details>
+
+❓ **Quick check:** which file makes Boot find the auto-config — and what was it called in Boot 2? <details><summary>Answer</summary>`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`. Boot 2 used `spring.factories` (the `EnableAutoConfiguration` key) — see 🕰️ Then vs. Now.</details>
 
 💾 **Commit:** `feat(common): Step 28 turn libs/common into a real auto-configured Spring Boot starter`
 
-## Sub-step 5 — a Boot-4 slice test with MockMvcTester
+✋ **Stopping here?** You have the starter committed and consumed by `hello`. Next: Sub-step 5 (the Boot-4 slice); first action: create `HelloMockMvcTesterTest` in `services/hello/src/test/java/com/buildabank/hello/`.
+
+## Sub-step 5 of 6 — a Boot-4 slice test with MockMvcTester · ≈ 1 h
 
 🎯 `HelloMockMvcTesterTest` — `@WebMvcTest(HelloController.class)` (loads only the MVC layer) + autowired `MockMvcTester`, asserting `mvc.get().uri("/api/hello")` `.hasStatusOk().bodyText().contains(...)`. The AssertJ-fluent successor to `MockMvc.perform(...)` (honors the Step-1 forward-reference).
 
-## Sub-step 6 — code-quality gates (Spotless + Checkstyle), wired into `verify`
+⌨️ **Type it yourself** — complete the fluent chain (assert 200 OK, then that the body text contains the greeting and the service name):
+
+```java
+// services/hello/src/test/java/com/buildabank/hello/HelloMockMvcTesterTest.java
+@WebMvcTest(HelloController.class)
+class HelloMockMvcTesterTest {
+
+    @Autowired
+    MockMvcTester mvc;
+
+    @Test
+    void getHelloReturns200WithJsonGreeting() {
+        assertThat(mvc.get().uri("/api/hello"))
+                // your turn: status, then body text
+    }
+}
+```
+
+<details><summary>Solution (the finished chain)</summary>
+
+```java
+assertThat(mvc.get().uri("/api/hello"))
+        .hasStatusOk()
+        .bodyText()
+        .contains("Welcome to Build-a-Bank", "\"service\":\"hello\"");
+```
+
+Imports that trip people up (Boot 4 moved them — see 🩺): `org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest`, `org.springframework.test.web.servlet.assertj.MockMvcTester`, and AssertJ's `assertThat`.</details>
+
+✋ **Stopping here?** You have the slice test (it rides in sub-step 6's commit). Next: Sub-step 6 (the gates); first action: open the **parent** `pom.xml` `<build>` to add Spotless + Checkstyle.
+
+## Sub-step 6 of 6 — code-quality gates (Spotless + Checkstyle), wired into `verify` · ≈ 1.5 h
 
 🎯 In the **parent** `pom.xml` `<build>`: **Spotless** (lean — removeUnusedImports + whitespace + EOF newline,
 **`lineEndings=PRESERVE`**) and **Checkstyle** (the lean `config/checkstyle/checkstyle.xml`), both bound to
 `verify`. Run `./mvnw spotless:apply` once to normalize, then `verify` enforces it. A planted violation fails the build.
 
+🔮 **Predict:** will `spotless:check` pass *before* you've run `spotless:apply`? <details><summary>Answer</summary>Almost certainly not — `check` fails on any file that doesn't yet match the rules; that's why the order is **apply once to normalize, then let `verify` enforce**. And without `lineEndings=PRESERVE` it would flag hundreds of CRLF files (the pitfall below).</details>
+
 ⚠️ **Pitfall (we hit it):** Spotless's default line-ending handling rewrote **CRLF→LF on 232 files** — a phantom diff. `lineEndings=PRESERVE` fixes it. And a full reformatter (google-java-format) would reflow every lesson's hand-laid code — so we keep formatting *lean*.
+
+❓ **Quick check:** why run `spotless:apply` once *before* letting `verify` enforce `spotless:check` — and why keep the ruleset lean? <details><summary>Answer</summary>`apply` normalizes the existing code once so `check` (bound to `verify`) has a clean baseline to enforce; a heavy ruleset (or a full reformatter) would dump thousands of violations / a huge diff on the existing codebase and the gate would just get switched off.</details>
 
 🎯 **Error Prone / NullAway** — an off-by-default `-Perrorprone` profile (these are javac plugins; JDK support lags). **Verify** whether they run on JDK 25 (they do — 2.49.0/0.13.6); keep them at `:WARN`, opt-in.
 
-💾 **Commit:** `build: Step 28 code-quality gates — Spotless + Checkstyle (lean) + opt-in Error Prone/NullAway`
+📝 **Record the decision:** create `adr/0019-testing-quality-mastery-and-custom-starter.md` — why the mutation
+threshold is 90 on the notification *core* only, and why the gates ship *lean* rulesets (the Definition of Done
+checks for it).
+
+💾 **Commit:** `build: Step 28 code-quality gates — Spotless + Checkstyle (lean) + opt-in Error Prone/NullAway` *(this commit also carries sub-step 5's slice test and ADR-0019)*
+
+✋ **Stopping here?** All three step-28 commits exist; the gates are live in `verify`. Next: 🎮 Play With It, then the Finished Result; first action: run the PITest command from the 📇 cheat card.
 
 ## 🎮 Play With It
 
 ```bash
 # Watch a mutant die — then survive:
 ./mvnw -pl services/notification -Pmutation test-compile org.pitest:pitest-maven:mutationCoverage
-open services/notification/target/pit-reports/index.html     # the HTML mutation report (per-line, per-mutant)
+start services/notification/target/pit-reports/index.html    # the HTML mutation report — Windows; macOS: open …, Linux: xdg-open …
 # Toggle the starter off and watch the bean disappear:
 ./mvnw -pl libs/common test -Dtest=MoneyAutoConfigurationTest
 # Plant a Checkstyle violation (e.g. `int x;;` a double semicolon) and run — the build goes red:
@@ -259,9 +382,34 @@ open services/notification/target/pit-reports/index.html     # the HTML mutation
 ## 🏁 The Finished Result
 
 `step-28-end`: a **100% mutation score** on the hexagon core, property + slice tests, a **real starter** consumed
-by `hello`, and **build-failing quality gates** — **🎓 Phase E complete.** **✅ Definition of Done:** `./mvnw verify`
-green (gates included), the §12.3 surviving-mutant proof works, `bash steps/step-28/smoke.sh` passes, ADR-0019
-recorded, committed/tagged `step-28-end`.
+by `hello`, and **build-failing quality gates** — **🎓 Phase E complete.**
+
+The flow you built, end to end — how `hello` discovers your starter at startup:
+
+```mermaid
+sequenceDiagram
+    participant T as hello's @SpringBootTest
+    participant B as Spring Boot startup
+    participant J as common-spring-boot-starter (jar)
+    participant AC as MoneyAutoConfiguration
+    T->>B: start the context
+    B->>J: read META-INF/spring/…AutoConfiguration.imports
+    J-->>B: com.buildabank.common.money.MoneyAutoConfiguration
+    B->>AC: evaluate conditions
+    Note over AC: @ConditionalOnProperty(matchIfMissing=true) → on<br/>@ConditionalOnMissingBean → no user bean → proceed
+    AC-->>B: register the MoneyFormatter bean
+    B-->>T: test @Autowires the formatter — no @Import anywhere
+```
+
+**✅ Definition of Done:**
+
+- [ ] `./mvnw verify` green (gates included)
+- [ ] the §12.3 surviving-mutant proof works (delete the assertion → build fails → revert)
+- [ ] `bash steps/step-28/smoke.sh` passes
+- [ ] ADR-0019 recorded
+- [ ] committed + tagged `step-28-end`
+
+✋ **Stopping here?** Everything is built; you have the DoD checklist to verify against. Next: [D · Prove](#prove) — run the checks and compare against the real pasted output; first action: `./mvnw verify`.
 
 ---
 
@@ -359,13 +507,15 @@ The starter is one combined module (production splits `-autoconfigure` + `-start
 
 # E · 🎓 Apply
 
+✋ **Resuming here?** You have a verified `step-28-end` (DoD met, tag pushed). E + F are reading (~1.5 h): go-deeper asides, interview prep, recap.
+
 ## 🚀 Go Deeper (Optional)
 
-<details><summary>Why not just chase 100% line coverage?</summary>Coverage counts executed lines, not verified behaviour — a test with no assertions can hit 100%. Mutation score counts *caught* defects. Teams use coverage as a floor (don't ship untouched code) and mutation as the quality signal on critical logic. Running mutation on the *whole* repo is slow; target the parts that matter (money, dedup, auth).</details>
+<details><summary>Why not just chase 100% line coverage? (+~5 min)</summary>Coverage counts executed lines, not verified behaviour — a test with no assertions can hit 100%. Mutation score counts *caught* defects. Teams use coverage as a floor (don't ship untouched code) and mutation as the quality signal on critical logic. Running mutation on the *whole* repo is slow; target the parts that matter (money, dedup, auth).</details>
 
-<details><summary>The production starter split (`-autoconfigure` + `-starter`)</summary>Spring's convention: an `acme-spring-boot-autoconfigure` module holds the `@AutoConfiguration` + optional dependencies, and a thin `acme-spring-boot-starter` module just depends on it + the required libraries — so consumers can take the autoconfig without forcing optional deps. We use one combined module for teaching; splitting is mechanical when you publish externally.</details>
+<details><summary>The production starter split (`-autoconfigure` + `-starter`) (+~5 min)</summary>Spring's convention: an `acme-spring-boot-autoconfigure` module holds the `@AutoConfiguration` + optional dependencies, and a thin `acme-spring-boot-starter` module just depends on it + the required libraries — so consumers can take the autoconfig without forcing optional deps. We use one combined module for teaching; splitting is mechanical when you publish externally.</details>
 
-<details><summary>Property-based testing pitfalls</summary>Properties must be true for *all* generated inputs — beware invariants that only hold for "reasonable" data (constrain generators with `@Scale`, `@BigRange`, etc.). And a property that's really just `assertThat(f(x)).isEqualTo(reimplement-f(x))` tests nothing — assert a *different*, simpler truth (here: "the message contains the amount", not "equals the exact concatenation").</details>
+<details><summary>Property-based testing pitfalls (+~5 min)</summary>Properties must be true for *all* generated inputs — beware invariants that only hold for "reasonable" data (constrain generators with `@Scale`, `@BigRange`, etc.). And a property that's really just `assertThat(f(x)).isEqualTo(reimplement-f(x))` tests nothing — assert a *different*, simpler truth (here: "the message contains the amount", not "equals the exact concatenation").</details>
 
 ## 💼 Interview Prep
 
@@ -379,7 +529,7 @@ The starter is one combined module (production splits `-autoconfigure` + `-start
 
 - **Quick:** raise the PITest `mutationThreshold` to 100 and re-run — it passes (we're at 100%). Now add a third core method without a test and watch a mutant survive.
 - **Quick:** add a jqwik property for `MoneyFormatter`: for any `BigDecimal`, `format` always ends in two decimals and starts with the currency code.
-- 🎯 **Stretch (reference solution in `solutions/step-28/`):** extend the starter with a second bean (e.g. a `CorrelationIdFilter`) gated by `@ConditionalOnWebApplication`, and add `ApplicationContextRunner` tests for the web/non-web cases. Then consume it in a second service.
+- 🎯 **Stretch (+~1–2 h; no reference solution yet — verify with your own `ApplicationContextRunner` web/non-web tests):** extend the starter with a second bean (e.g. a `CorrelationIdFilter`) gated by `@ConditionalOnWebApplication`, and add `ApplicationContextRunner` tests for the web/non-web cases. Then consume it in a second service.
 
 ---
 
@@ -421,7 +571,12 @@ Spotless + Checkstyle** gates into `verify`. On JDK 25: PITest needs **1.25.4** 
 
 **(f) ✅ You can now:** run/read mutation testing · write property-based + Boot-4 slice tests · build & consume a real starter · wire quality gates · assess tooling on a new JDK honestly.
 
-**(g) 🃏 Flashcards** appended to `docs/flashcards.md` · 🔁 revisit mutation testing whenever you touch a critical path (ledger, Saga, auth).
+**(g) 🃏 Flashcards** — the four to drill (all six are in `docs/flashcards.md`) · 🔁 revisit mutation testing whenever you touch a critical path (ledger, Saga, auth):
+
+- **Q:** Mutation testing vs code coverage? — **A:** Coverage = lines *executed* (can be 100% with zero assertions). Mutation = inject a tiny bytecode change and expect a red test; the score (killed÷total) is real evidence the suite catches regressions.
+- **Q:** What is a surviving mutant and what do you do about it? — **A:** A behaviour change no test detected — a gap. Kill it with a stronger assertion, or (rarely) exclude it as *equivalent* (no observable change).
+- **Q:** How does a starter auto-configure itself? — **A:** Its jar lists an `@AutoConfiguration` class in `META-INF/spring/…AutoConfiguration.imports`; Boot applies it from the classpath, guarded by `@ConditionalOn*` (esp. `@ConditionalOnMissingBean`). Boot 2 used `spring.factories`.
+- **Q:** Why lean rulesets — and what bit us with Spotless? — **A:** A 200-rule set drops thousands of violations on an existing codebase, so the gate gets switched off. Spotless's default line endings rewrote CRLF→LF on 232 files (a phantom diff) — `lineEndings=PRESERVE` fixes it.
 
 **(h) ✍️ One-line reflection:** *Where in the bank would a surviving mutant scare you most — and is that code mutation-tested?*
 

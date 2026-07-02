@@ -13,14 +13,14 @@
 <a id="toc"></a>
 ## 🧭 The Six Movements of This Step
 
-| | Movement | What happens |
-|---|---|---|
-| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start |
-| **B** | [🧠 Understand](#understand) | SOLID (esp. SRP & DIP) · code smells · refactoring discipline · ports-and-adapters |
-| **C** | [🛠️ Build](#build) | spot the smells · extract collaborators · introduce a DIP port + adapter · keep tests green |
-| **D** | [🔬 Prove](#prove) | the Verification Log — unchanged tests still green + new unit tests; §12.3 mutation |
-| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges |
-| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next |
+| | Movement | What happens | ~time |
+|---|---|---|---|
+| **A** | [🧭 Orient](#orient) | 30-second overview · skip-test · cheat card · why it matters · before you start | ~0.5h |
+| **B** | [🧠 Understand](#understand) | SOLID (esp. SRP & DIP) · code smells · refactoring discipline · ports-and-adapters | ~2h |
+| **C** | [🛠️ Build](#build) | spot the smells · extract collaborators · introduce a DIP port + adapter · keep tests green | ~4.5h |
+| **D** | [🔬 Prove](#prove) | the Verification Log — unchanged tests still green + new unit tests; §12.3 mutation | ~1h |
+| **E** | [🎓 Apply](#apply) | go deeper · interview prep · your-turn challenges | ~1.5h |
+| **F** | [🏆 Review](#review) | troubleshooting · resources · recap, flashcards & what's next | ~0.5h |
 
 ---
 
@@ -34,7 +34,7 @@
 |---|---|
 | **Title** | SOLID & clean code — refactor a smelly service (SRP, DIP → ports-and-adapters, code smells), behaviour-preserving |
 | **Step** | 25 of 67 · **Phase E — Design, Architecture & Testing Mastery** 🟣 · **Phase E opener** |
-| **Effort** | ≈ 10 hours focused. A **refactor** — no new feature; the win is cleaner, more testable code. |
+| **Effort** | ≈ 10 hours focused — split into 4 sittings in the [🗓️ Session Plan](#session-plan) below. A **refactor** — no new feature; the win is cleaner, more testable code. |
 | **What you'll run this step** | **JVM + Maven**; **🐳 Docker** for the notification integration tests (Testcontainers Redpanda). The new unit tests need neither. |
 | **Buildable artifact** | A refactored **notification** service: `TransferEventConsumer` becomes a thin orchestration depending on abstractions — a `TransferEventParser` (SRP), a `ProcessedEventStore` **port** + `InMemoryProcessedEventStore` **adapter** (DIP), a `Notification.from(event)` factory. New unit tests for the extracted pieces. The **existing integration tests are unchanged** and still pass. `step-25-start == step-24-end`. |
 | **Verification tier** | 🟠 **Standard** — a refactor that keeps tests green (no money/security path touched). `./mvnw verify` green + the **unchanged** integration tests pass (behaviour preserved) + new unit tests + `smoke.sh`; a §12.3 mutation confirms the new port is exercised. |
@@ -91,8 +91,22 @@ Code is read and changed far more than written. A god-method coupled to concrete
 ## 🧰 Before You Start
 
 - **Prereqs:** bank builds green (`git describe` → `step-24-end`); Docker for the notification integration tests.
-- **Connects to what you know:** the **notification consumer** (Step 20) is the target; **proxies/DI** (Step 7) underpin the port wiring; this is the SOLID groundwork for **hexagonal architecture** (Step 26) and the boundaries **ArchUnit** will enforce (Step 27).
+- **Connects to what you know:** the **notification consumer** (Step 20 — the `@KafkaListener` that turns Kafka `transfer.completed` events into SSE pushes) is the target; **proxies/DI** (Step 7 — Spring injects constructor dependencies by type, so one `@Component` implementing an interface is auto-wired) underpin the port wiring; this is the SOLID groundwork for **hexagonal architecture** (Step 26) and the boundaries **ArchUnit** will enforce (Step 27).
 - **Depends on:** Steps **20, 7**.
+
+<a id="session-plan"></a>
+## 🗓️ Session Plan
+
+≈10 hours won't fit one sitting. Four sittings of ~2.5h, each ending at a real boundary — stop at the end of any sitting and you resume clean:
+
+| Sitting | Covers | ~time | Ends at |
+|---|---|---|---|
+| **S1 · The theory** | A · Orient + B · Understand (SOLID · smells table · DIP port/adapter · security lens) | ~2.5h | the B→C bridge — nothing typed yet |
+| **S2 · Extract + invert** | Sub-steps 1–2 (`TransferEvent` + `TransferEventParser`, then the `ProcessedEventStore` port + in-memory adapter) | ~2h | end of sub-step 2 — parser, port and adapter written; the consumer depends on the port |
+| **S3 · Thin consumer + tests** | Sub-steps 3–4 (`Notification.from`, the thin consumer, the 2 new unit tests) + 💾 commit + 🎮 Play With It | ~2.5h | 🏁 The Finished Result — all 7 notification tests green, refactor committed |
+| **S4 · Prove + Apply + Review** | D · Prove (Verification Log + §12.3 mutation) + E · Apply + F · Review | ~2.5h | ✅ Definition of Done · flashcards · sign-off |
+
+*Optional routes:* the ⏭️ skip-test above costs ~5 min (pass it and you can skim the Build and jump to Step 26); each 🚀 Go Deeper aside is +~5 min; 🧪 Little experiments are +~15 min; the 🎯 Redis-adapter stretch is +~1h.
 
 ---
 
@@ -113,6 +127,23 @@ Code is read and changed far more than written. A god-method coupled to concrete
 the tests are green before and (unchanged) green after, the behaviour is preserved. That's why this step does
 **not** edit the integration tests — they're the proof.
 
+Here is exactly that transformation, applied to our consumer:
+
+```mermaid
+flowchart LR
+    subgraph BEFORE["BEFORE — god method (SRP✗ · DIP✗)"]
+        G["onTransferCompleted()\ncount · parse (ObjectMapper) ·\ndedupe (ConcurrentHashMap) ·\nbuild msg · publish · log"]
+    end
+    subgraph AFTER["AFTER — thin orchestration (SRP✓ · DIP✓)"]
+        TC["TransferEventConsumer"] --> TP["TransferEventParser"]
+        TC --> PS["ProcessedEventStore\n«port»"]
+        IM["InMemoryProcessedEventStore\n«adapter»"] -.->|implements| PS
+        TC --> NF["Notification.from()\n«factory»"]
+        TC --> SH["SseHub"]
+    end
+    BEFORE ==>|"refactor — tests unchanged & green"| AFTER
+```
+
 ## 🧩 Pattern Spotlight — the smells in our consumer, and the fixes
 
 `TransferEventConsumer.onTransferCompleted` had several smells:
@@ -124,6 +155,8 @@ the tests are green before and (unchanged) green after, the behaviour is preserv
 | **Tight coupling / DIP✗** | direct `ObjectMapper` + inline `ConcurrentHashMap` | depend on a `TransferEventParser` and a `ProcessedEventStore` **port** |
 | **Mixed levels** | wire-format parsing next to domain logic | separate the transport concern (parse) from the policy (dedupe → notify) |
 
+❓ **Quick check:** a method that parses JSON, dedupes, builds a message, and logs — which smells, and what's the first refactoring you'd reach for? <details><summary>Answer</summary>A god method (SRP✗) with mixed levels (wire-format parsing next to domain policy). First move: **extract** — pull each concern into its own collaborator, which is exactly what sub-steps 1–3 do.</details>
+
 ## 🌱 Under the Hood: DIP with a port + adapter
 
 A **port** is an interface owned by the code that *uses* it (here `ProcessedEventStore.markIfNew`). An
@@ -132,10 +165,16 @@ consumer now depends on the **abstraction**, so the idempotency mechanism is **s
 consumer** (DIP) and **mockable in tests** — and adding a Redis adapter is *extension, not modification* (OCP).
 This is "dependency inversion in the small"; Step 26 grows it into a full hexagon.
 
+*Analogy:* a **port** is a wall socket, an **adapter** is the plug. The lamp (our consumer) doesn't know or care
+which power plant is behind the socket — in-memory map today, Redis tomorrow — as long as the plug fits the socket's shape.
+
+❓ **Quick check:** which SOLID letter does the `ProcessedEventStore` port serve — and which letter says adding a Redis adapter later is "extension, not modification"? <details><summary>Answer</summary>**D** (Dependency Inversion) — the consumer depends on the abstraction, not on a `ConcurrentHashMap`. Adding another adapter without touching the consumer is **O** (Open/Closed).</details>
+
 ## 🛡️ Security Lens & 🧵 Thread-safety note
 
 Behaviour is preserved, including the **Dead-Letter** path: the parser **throws** on a poison payload and the
-consumer doesn't swallow it (Step 21), so it still routes to the DLT. The dedup adapter stays thread-safe
+consumer doesn't swallow it, so it still routes to the DLT (Step 21 — messages that keep failing are retried,
+then routed to a **Dead-Letter Topic**; that only works if the listener lets exceptions propagate). The dedup adapter stays thread-safe
 (`ConcurrentHashMap.newKeySet()`), now behind the port.
 
 ## 🕰️ Then vs. Now
@@ -162,6 +201,20 @@ src/test/.../InMemoryProcessedEventStoreTest.java  (new) unit test — no Kafka
 steps/step-25/{lesson.md, smoke.sh}
 ```
 
+And the shape we're building toward — one line per concern, numbered in build order:
+
+```mermaid
+flowchart LR
+    K[("Kafka\ntransfer.completed")] --> TC["TransferEventConsumer\n(thin orchestration)"]
+    TC -->|"1 · parse"| TP["TransferEventParser"]
+    TC -->|"2 · markIfNew"| PS["ProcessedEventStore «port»"]
+    IM["InMemoryProcessedEventStore «adapter»"] -.->|implements| PS
+    TC -->|"3 · from"| NF["Notification.from"]
+    TC -->|"4 · publish"| SH["SseHub"]
+```
+
+✋ *Stopping here (end of S1)? You have nothing typed yet — the target shape is the tree + diagram above. Next: C · Build, sub-step 1; first action: `git checkout step-25-start` (or confirm `git describe --tags` → `step-24-end`).*
+
 <a id="build"></a>
 
 # C · 🛠️ Let's Build It — Step by Step
@@ -170,37 +223,81 @@ steps/step-25/{lesson.md, smoke.sh}
 
 `step-25-start == step-24-end`: 13 modules green, including the notification consumer with its smells.
 
-## Sub-step 1 — extract the parsing concern (SRP)
+🔮 **Predict before you run:** you haven't typed anything yet — what will `git describe --tags` print, and why could two different tags be correct? <details><summary>Answer</summary>Either `step-25-start` or `step-24-end` — this step adds no new feature, so both tags point at the same commit.</details>
+
+Continue from your Step-24 working tree, or `git checkout step-25-start`. Verify: `git describe --tags` →
+`step-25-start` (or `step-24-end` — they point at the same commit).
+
+## Sub-step 1 of 4 — extract the parsing concern (SRP) · ~1h
 
 🎯 `TransferEvent` (domain record) + `TransferEventParser.parse(payload)` (Jackson here, throws on poison). The consumer stops touching `JsonNode`.
 
-## Sub-step 2 — invert the idempotency dependency (DIP)
+✋ *Stopping here? You have the parsing concern extracted — `TransferEvent` + `TransferEventParser`; the consumer no longer touches `JsonNode`. Next: sub-step 2 (the DIP port); first action: create `ProcessedEventStore.java` in `services/notification`.*
+
+## Sub-step 2 of 4 — invert the idempotency dependency (DIP) · ~1h
 
 🎯 `ProcessedEventStore.markIfNew(eventId)` (port) + `InMemoryProcessedEventStore` (adapter, the old `ConcurrentHashMap`). The consumer depends on the port.
 
-## Sub-step 3 — a notification factory, and a thin consumer
+✋ *Stopping here (end of S2)? You have the port and its in-memory adapter, and the consumer depends on the abstraction. Next: sub-step 3 (factory + thin consumer); first action: open `Notification.java` and add the `from(TransferEvent)` factory.*
+
+## Sub-step 3 of 4 — a notification factory, and a thin consumer · ~1.25h
 
 🎯 `Notification.from(TransferEvent)` (message wording in one place). `TransferEventConsumer` becomes: `parse → markIfNew → from → publish` (one line each), depending on `TransferEventParser`, `ProcessedEventStore`, `SseHub`.
 
+🔮 **Predict before you run:** if your parser *caught* its own exception instead of throwing on a poison payload, which unchanged test would fail? <details><summary>Answer</summary>`DeadLetterTest` — the consumer would never propagate the failure, so nothing would route to the Dead-Letter Topic (Step 21's path).</details>
+
 🔬 **Break-it-on-purpose:** run the **unchanged** `TransferEventConsumerKafkaTest`/`DeadLetterTest` — they pass, proving you changed structure, not behaviour. (If they'd failed, the refactor wasn't safe.)
 
-## Sub-step 4 — unit-test the extracted pieces (the payoff)
+✋ *Stopping here? You have a thin consumer — `parse → markIfNew → from → publish` — and the unchanged integration tests just proved behaviour is preserved. Next: sub-step 4 (unit tests); first action: create `TransferEventParserTest.java` under `services/notification/src/test`.*
+
+## Sub-step 4 of 4 — unit-test the extracted pieces (the payoff) · ~1h
 
 🎯 `TransferEventParserTest` and `InMemoryProcessedEventStoreTest` — fast, no Kafka, no Spring. The refactor made these independently testable.
+
+✍️ **Type-it-yourself:** write `InMemoryProcessedEventStoreTest` from its spec before peeking anywhere: `markIfNew("evt-1")` must return `true` on first sight and `false` on the repeat — exactly the behaviour the §12.3 mutation in Prove breaks on purpose.
 
 💾 **Commit:** `refactor(notification): Step 25 SOLID — extract parser/dedup port, thin consumer`
 
 ## 🎮 Play With It
 
+🔮 **Predict before you run:** how many notification tests will run in total, and which of them must pass *without any edits* to prove the refactor was behaviour-preserving? <details><summary>Answer</summary>7 in total — the unchanged integration tests (`TransferEventConsumerKafkaTest`, `DeadLetterTest`, `NotificationControllerTest`) are the proof of preserved behaviour, plus the 2 new unit test classes for the extracted pieces.</details>
+
 ```bash
 ./mvnw -pl services/notification test     # watch the unchanged integration tests + the new unit tests pass
 ```
 
-🧪 **Little experiments:** sketch a `RedisProcessedEventStore implements ProcessedEventStore` — note that the consumer needs **zero** changes (DIP/OCP). Mock the `ProcessedEventStore` in a consumer test to simulate a duplicate without Kafka.
+🧪 **Little experiments (+~15 min):** sketch a `RedisProcessedEventStore implements ProcessedEventStore` — note that the consumer needs **zero** changes (DIP/OCP). Mock the `ProcessedEventStore` in a consumer test to simulate a duplicate without Kafka.
 
 ## 🏁 The Finished Result
 
-`step-25-end`: a cleaner notification service — a thin consumer over single-purpose, abstraction-backed collaborators — with identical behaviour. **✅ Definition of Done:** the unchanged integration tests pass, the new unit tests pass, `./mvnw verify` is green, `bash steps/step-25/smoke.sh` passes, and you've committed/tagged `step-25-end`.
+`step-25-end`: a cleaner notification service — a thin consumer over single-purpose, abstraction-backed collaborators — with identical behaviour. The refactored flow end-to-end:
+
+```mermaid
+sequenceDiagram
+    participant K as Kafka
+    participant C as TransferEventConsumer
+    participant P as TransferEventParser
+    participant S as ProcessedEventStore (port)
+    participant H as SseHub
+    K->>C: transfer.completed payload
+    C->>P: parse(payload)
+    alt poison payload
+        P-->>C: throws → propagates → DLT (Step 21)
+    else valid
+        P-->>C: TransferEvent
+        C->>S: markIfNew(eventId)
+        alt duplicate (false)
+            C->>C: skip — exactly-once effect preserved
+        else new (true)
+            C->>C: Notification.from(event)
+            C->>H: publish(notification)
+        end
+    end
+```
+
+**✅ Definition of Done:** the unchanged integration tests pass, the new unit tests pass, `./mvnw verify` is green, `bash steps/step-25/smoke.sh` passes, and you've committed/tagged `step-25-end`.
+
+✋ *Stopping here (end of S3)? Your refactor is committed and all 7 notification tests are green. Next: D · Prove (the Verification Log); first action: `bash steps/step-25/smoke.sh` and compare against Prove's §3.*
 
 ---
 
@@ -247,9 +344,11 @@ Expecting value to be false but was true
 
 ## 🚀 Go Deeper (Optional)
 
-<details><summary>Is a port over-engineering for one adapter?</summary>For a single, stable implementation it can be (YAGNI). Here it's justified: idempotency is a known future swap (in-memory → Redis, Step 21's pattern), the port makes the consumer testable without Kafka, and it's the seed of the Step-26 hexagon. Introduce abstractions when you have a concrete reason (a second implementation, a test seam), not reflexively.</details>
+<details><summary>Is a port over-engineering for one adapter? (+~5 min)</summary>For a single, stable implementation it can be (YAGNI). Here it's justified: idempotency is a known future swap (in-memory → Redis, Step 21's pattern), the port makes the consumer testable without Kafka, and it's the seed of the Step-26 hexagon. Introduce abstractions when you have a concrete reason (a second implementation, a test seam), not reflexively.</details>
 
-<details><summary>SRP vs anemic over-splitting</summary>SRP isn't "one method per class." It's "one reason to change." We split parsing (changes when the wire format changes) from idempotency (changes when the dedup store changes) from notification-building (changes when the message changes) — genuinely different axes of change. Don't shred cohesive logic into noise.</details>
+<details><summary>SRP vs anemic over-splitting (+~5 min)</summary>SRP isn't "one method per class." It's "one reason to change." We split parsing (changes when the wire format changes) from idempotency (changes when the dedup store changes) from notification-building (changes when the message changes) — genuinely different axes of change. Don't shred cohesive logic into noise.</details>
+
+❓ **Quick check:** a teammate calls the `ProcessedEventStore` port over-engineering — what concrete reasons make an abstraction *worth it* here rather than YAGNI? <details><summary>Answer</summary>A known future swap (in-memory → Redis), a test seam (the consumer becomes testable without Kafka), and it seeds the Step-26 hexagon. Introduce abstractions for a concrete reason — a second implementation or a testability need — not reflexively.</details>
 
 ## 💼 Interview Prep
 
@@ -263,7 +362,7 @@ Expecting value to be false but was true
 
 - **Quick:** add a consumer unit test that mocks `ProcessedEventStore` to return `false` (duplicate) and asserts `hub.publish` is never called — now possible *without* Kafka, thanks to DIP.
 - **Quick:** find one more smell elsewhere (e.g. demand-account's `TransferService` breadth) and write down the refactoring you'd apply (don't do it yet — Step 26/27).
-- 🎯 **Stretch (reference solution in `solutions/step-25/`):** implement a `RedisProcessedEventStore implements ProcessedEventStore` (reusing Step 21's Redis) and wire it via a profile/`@ConditionalOnProperty` — proving the consumer needs no change (DIP/OCP). Test it on Testcontainers Redis.
+- 🎯 **Stretch (+~1h; no reference solution — compare against Step 21's Redis wiring):** implement a `RedisProcessedEventStore implements ProcessedEventStore` (reusing Step 21's Redis) and wire it via a profile/`@ConditionalOnProperty` — proving the consumer needs no change (DIP/OCP). Test it on Testcontainers Redis.
 
 ---
 
