@@ -115,6 +115,17 @@ public class TransferService {
                 .getBalance();
     }
 
+    /**
+     * The whole account for the read API. (Step 32 fix: the balance endpoint used to fabricate a response
+     * with a {@code null} currency — the SPA's Intl formatter throws on that. Found by the full-stack
+     * capstone E2E; the MSW mocks had been papering over it since Step 30.)
+     */
+    @Transactional(readOnly = true)
+    public Account accountOf(String accountNumber) {
+        return accounts.findByAccountNumber(accountNumber)
+                .orElseThrow(() -> new IllegalArgumentException("no such account: " + accountNumber));
+    }
+
     @Transactional(readOnly = true)
     public BigDecimal totalSystemBalance() {
         return accounts.totalBalance();

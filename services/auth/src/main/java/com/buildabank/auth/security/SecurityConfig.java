@@ -58,8 +58,11 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(authorize -> authorize
-                        // public: login, health, and the JWKS so resource servers can fetch the public key
-                        .requestMatchers("/api/auth/login", "/actuator/health", "/oauth2/jwks").permitAll()
+                        // public: login, health, and the JWKS so resource servers can fetch the public key.
+                        // Step 32: refresh + logout are 'public' to the FILTER CHAIN but authenticated by the
+                        // httpOnly refresh cookie inside the controller (no Bearer token exists yet on refresh).
+                        .requestMatchers("/api/auth/login", "/api/auth/refresh", "/api/auth/logout",
+                                "/actuator/health", "/oauth2/jwks").permitAll()
                         .requestMatchers("/api/auth/admin").hasRole("ADMIN")           // URL-based authZ
                         .anyRequest().authenticated())                                 // everything else: authN
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter())));

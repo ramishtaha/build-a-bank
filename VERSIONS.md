@@ -53,13 +53,18 @@
    `-Perrorprone` profile at `:WARN` (needs javac `--add-exports/--add-opens`); Spotless + Checkstyle remain the
    always-on gates bound to `verify`.
 3a. **Spring Boot 4 modularization (Step 8 findings):** test slices moved to per-tech modules — `@DataJpaTest`∈`spring-boot-data-jpa-test`, `@WebMvcTest`/`@AutoConfigureMockMvc`∈`spring-boot-webmvc-test`, `@AutoConfigureTestDatabase`∈`spring-boot-jdbc-test`; **Flyway** needs the Boot integration module `spring-boot-flyway` (the `flyway-core` library alone gives no `FlywayAutoConfiguration`), and `@DataJpaTest` excludes Flyway (use `@ImportAutoConfiguration(FlywayAutoConfiguration.class)`); `@MockBean`→`@MockitoBean`.
-3. **`TestRestTemplate` REMOVED in Spring Boot 4** (along with `org.springframework.boot.test.web.client`).
-   Replacements: **`RestTestClient`** and **`MockMvcTester`** (Spring Framework 7, `org.springframework.test.web.servlet.client`).
-   We hit this for real in Step 1 — it's now a "Then vs Now" teaching moment. The course uses `RestClient` / `RestTestClient`.
+3. **`TestRestTemplate` gone from the default test classpath in Spring Boot 4** — precise status (verified
+   at Step 32 against the Boot 4.0 migration guide): the old package `org.springframework.boot.test.web.client`
+   is removed; the class itself *moved* to the separate `spring-boot-resttestclient` artifact and is no longer
+   auto-configured (needs `@AutoConfigureTestRestTemplate` + an explicit dependency). Practically removed for
+   us; the course uses **`RestTestClient`** / **`MockMvcTester`** (Spring Framework 7) — hit for real in Step 1.
 
 ## Infra image tags (pinned when introduced — never `latest`)
 - Postgres, Redis, Redpanda, Prometheus/Grafana/Loki/Tempo image **digests** are pinned in the step that adds them
   (Steps 8, 20, 22, 36). Recorded here as they land.
+- **SPA container base images (Step 32,** `frontend/Dockerfile`**):**
+  `node:22.20.0-alpine` (digest `sha256:dbcedd8aeab47fbc0f4dd4bffa55b7c3c729a707875968d467aaaea42d6225af`; build stage — matches the Node pin above) ·
+  `nginx:1.28.3-alpine` (digest `sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236`; reports nginx/1.28.3; serve stage).
 
 ## Frontend (npm) — pinned by `frontend/package-lock.json` (Step 29, Phase F)
 The SPA is a separate Node/npm project (not a Maven module). `package.json` carries ranges; the **committed
@@ -83,6 +88,7 @@ The SPA is a separate Node/npm project (not a Maven module). `package.json` carr
 | i18next / react-i18next | 24.2.3 / 15.7.4 | i18n with synchronous bundled resources (Step 31) |
 | @playwright/test | 1.60.0 | E2E in real Chromium; browsers verified installed here (Step 31) |
 | axe-core | 4.12.0 | accessibility assertions (Step 31) |
+| rollup-plugin-visualizer | 7.0.1 | bundle treemap (`dist/stats.html`) for the Step-32 code-splitting work |
 
 ## Reproducibility
 `./mvnw verify` twice yields the same result; `npm ci` in `frontend/` reproduces the locked SPA tree.

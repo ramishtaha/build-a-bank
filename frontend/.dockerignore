@@ -1,0 +1,9 @@
+# frontend/.dockerignore — keep the build context small + deterministic (Step 32).
+# node_modules is the big one: `npm ci` inside the image rebuilds it from the lockfile — copying the host's
+# (Windows-flavored) tree in would be slow AND wrong.
+node_modules
+dist
+playwright-report
+test-results
+Dockerfile
+.dockerignore

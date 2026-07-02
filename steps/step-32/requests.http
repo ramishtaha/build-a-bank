@@ -1,0 +1,32 @@
+# steps/step-32/requests.http — the Step-32 session lifecycle, through the gateway (port 8080).
+# VS Code REST Client keeps a cookie jar per file, so the refresh cookie flows between requests
+# automatically — exactly like a browser. curl equivalents in the lesson use -c/-b jars.
+
+### 1. Login — the body carries the short-lived access JWT; the response ALSO sets the httpOnly
+###    refresh cookie (watch the Set-Cookie header: HttpOnly; SameSite=Strict; Path=/api/auth).
+# @name login
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{"username": "alice", "password": "password"}
+
+### 2. Silent refresh — no body needed: the cookie authenticates. Response = fresh access token
+###    + a ROTATED cookie (compare Set-Cookie with step 1 — the value changed).
+POST http://localhost:8080/api/auth/refresh
+
+### 3. Use the access token (paste from step 1 or 2) against a protected endpoint.
+GET http://localhost:8080/bank/api/accounts/ACC-A
+Authorization: Bearer {{login.response.body.token}}
+
+### 4. Logout — revokes the whole refresh family server-side and clears the cookie (Max-Age=0).
+POST http://localhost:8080/api/auth/logout
+
+### 5. Refresh after logout → 401. The session is really gone (server-side state, not just a
+###    deleted cookie — that's what an opaque, stored refresh token buys over a stateless JWT).
+POST http://localhost:8080/api/auth/refresh
+
+### 6. The SPA itself, served by the gateway's catch-all route (view source: the built index.html).
+GET http://localhost:8080/
+
+### 7. A deep link — no /some/client/route file exists; nginx's try_files hands React Router the wheel.
+GET http://localhost:8080/login

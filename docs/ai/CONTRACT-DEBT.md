@@ -12,4 +12,6 @@
 | 29, 30 (+13 lab/theory steps) | `steps/step-NN/requests.http` | 15 steps lack the file; 29/30 DO expose endpoints (gateway auth route, `/bank` data routes, SSE) — the rest are lab/theory steps with no endpoints | Add files for 29/30 during the Step-31/32 frontend work (same endpoints exercised anyway); lab/theory steps: note "no endpoints" and descope | 🔶 open |
 | 01–30 | `steps/step-NN/capsule.md` context capsules | Capsule requirement introduced 2026-07-02 (this audit) | Backfilled for all of steps 1–30 from lesson recaps (2026-07-02); new steps write them natively | ✅ paid |
 
+| 32 | duplicate `POST /api/accounts` returns 500 (unhandled unique-constraint violation) | discovered by the full-stack capstone seeder; a 409 ProblemDetail mapping was out of Step-32 scope | map `DataIntegrityViolationException` → 409 ProblemDetail in demand-account's advice (natural fit: Phase-G hardening or next demand-account touch) | 🔶 open |
+
 **How to add a row:** step · artifact · one-line reason · concrete remediation (or "descope + where recorded") · status (🔶 open / ✅ paid / ✅ descoped).

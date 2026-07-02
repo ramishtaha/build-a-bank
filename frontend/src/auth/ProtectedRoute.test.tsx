@@ -1,12 +1,16 @@
 // frontend/src/auth/ProtectedRoute.test.tsx
-// Step 29 · route-guard test. With no token the guard redirects to /login; with a token it renders the
-// protected content. (AuthProvider seeds its token from localStorage, so we drive auth state via localStorage.)
+// Step 29 · route-guard test. Step 32 · the guard is session-aware: while the silent-refresh bootstrap is
+// in flight it HOLDS (placeholder, no redirect); a settled anonymous redirects to /login; an established
+// session renders the protected content. We drive the bootstrap by mocking the api module.
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as api from '../api/client';
 import { AuthProvider } from '../auth/AuthContext';
 import { ProtectedRoute } from './ProtectedRoute';
+
+vi.mock('../api/client');
 
 function renderAt(path: string) {
   return render(
@@ -29,17 +33,26 @@ function renderAt(path: string) {
 }
 
 describe('ProtectedRoute', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => vi.resetAllMocks());
 
-  it('redirects to /login when there is no token', () => {
+  it('holds with a placeholder while the session bootstrap is deciding', () => {
+    vi.mocked(api.refreshAccessToken).mockReturnValue(new Promise(() => undefined)); // never settles
     renderAt('/secret');
-    expect(screen.getByText('Login page')).toBeInTheDocument();
+    expect(screen.getByText(/checking your session/i)).toBeInTheDocument();
+    expect(screen.queryByText('Login page')).not.toBeInTheDocument(); // no premature bounce
+  });
+
+  it('redirects to /login once the bootstrap settles anonymous (refresh 401)', async () => {
+    vi.mocked(api.refreshAccessToken).mockResolvedValue(null); // no live session
+    renderAt('/secret');
+    expect(await screen.findByText('Login page')).toBeInTheDocument();
     expect(screen.queryByText('Secret area')).not.toBeInTheDocument();
   });
 
-  it('renders the protected content when a token is present', () => {
-    localStorage.setItem('bab.token', 'jwt-123');
+  it('renders the protected content when the silent refresh restores the session', async () => {
+    vi.mocked(api.refreshAccessToken).mockResolvedValue('restored-jwt');
+    vi.mocked(api.getCurrentUser).mockResolvedValue({ username: 'alice', roles: ['ROLE_USER'] });
     renderAt('/secret');
-    expect(screen.getByText('Secret area')).toBeInTheDocument();
+    expect(await screen.findByText('Secret area')).toBeInTheDocument();
   });
 });

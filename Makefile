@@ -177,5 +177,19 @@ frontend-test: ## Lint + unit/component test the SPA (Vitest + Testing Library)
 frontend-build: ## Type-check + production-build the SPA (tsc + vite)
 	cd frontend && npm run build
 
+fullstack-up: ## Step 32: infra (Postgres:5433/Redis/Redpanda) + the SPA container. Then run the 4 services (see fullstack-services)
+	docker compose -f deploy/compose.fullstack.yaml up -d --build
+	@echo "Infra + SPA up. Now start the services (each in its own terminal) — see 'make fullstack-services'"
+
+fullstack-services: ## Step 32: print the exact commands to run the four services on the host
+	@echo "./mvnw -pl services/auth spring-boot:run"
+	@echo "SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account APP_CORS_ALLOWED_ORIGINS=http://localhost:8080 ./mvnw -pl services/demand-account spring-boot:run"
+	@echo "./mvnw -pl services/notification spring-boot:run"
+	@echo "./mvnw -pl gateway spring-boot:run"
+	@echo "Then: open http://localhost:8080 (the WHOLE bank through one origin) · capstone: cd frontend && npm run test:e2e:fullstack"
+
+fullstack-down: ## Step 32: stop the compose stack (drops the data volume too)
+	docker compose -f deploy/compose.fullstack.yaml down -v
+
 clean: ## Remove all build output
 	$(MVNW) -B clean

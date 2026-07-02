@@ -55,12 +55,13 @@ public class TransferController {
                 .body(AccountResponse.from(account));
     }
 
-    /** Read an account's balance → 200, or 404 if it doesn't exist. */
+    /** Read an account (number, currency, balance) → 200, or 404 if it doesn't exist. */
     @GetMapping("/api/accounts/{accountNumber}")
     public ResponseEntity<AccountResponse> balance(@PathVariable String accountNumber) {
         try {
-            return ResponseEntity.ok(new AccountResponse(
-                    accountNumber, null, transfers.balanceOf(accountNumber)));
+            // Step 32 fix: this used to hand-build the response with currency=null; the SPA's Intl
+            // formatter throws on a null currency code. Map the real entity — one source of truth.
+            return ResponseEntity.ok(AccountResponse.from(transfers.accountOf(accountNumber)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         }

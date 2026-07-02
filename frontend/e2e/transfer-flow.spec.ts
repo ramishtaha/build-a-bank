@@ -40,6 +40,10 @@ const sseBody = [
 
 /** Wire the mocked gateway: auth, account, entries, transfers, SSE stream. */
 async function mockGateway(page: Page) {
+  // Step 32: the app runs a silent refresh on mount — answer 401 so these hermetic specs start anonymous.
+  await page.route('**/api/auth/refresh', (route) =>
+    route.fulfill({ status: 401, json: { detail: 'No session' } }),
+  );
   await page.route('**/api/auth/login', async (route) => {
     const body = route.request().postDataJSON() as { username: string; password: string };
     if (body.username === 'alice' && body.password === 'password123') {

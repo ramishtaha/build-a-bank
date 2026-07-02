@@ -12,8 +12,9 @@ vi.mock('../api/client');
 
 describe('AccountPanel', () => {
   beforeEach(() => {
-    localStorage.clear();
-    localStorage.setItem('bab.token', 'jwt-123'); // makes the queries enabled (AuthContext reads this)
+    // Step 32: queries are enabled once the session bootstrap succeeds — mock the silent refresh + identity.
+    vi.mocked(api.refreshAccessToken).mockResolvedValue('jwt-123');
+    vi.mocked(api.getCurrentUser).mockResolvedValue({ username: 'alice', roles: ['ROLE_USER'] });
     vi.mocked(api.getAccount).mockResolvedValue({ accountNumber: 'ACC-A', currency: 'USD', balance: 200 });
     vi.mocked(api.listEntries).mockResolvedValue({
       content: [{ transactionId: 't1', direction: 'CREDIT', amount: 50, description: 'pay', createdAt: '2026-06-10T00:00:00Z' }],
@@ -29,7 +30,7 @@ describe('AccountPanel', () => {
 
     expect(await screen.findByText(/\$200\.00/)).toBeInTheDocument(); // Intl en-US currency formatting
     expect(await screen.findByText(/pay/)).toBeInTheDocument();
-    expect(api.getAccount).toHaveBeenCalledWith('jwt-123', 'ACC-A');
+    expect(api.getAccount).toHaveBeenCalledWith('ACC-A'); // Step 32: no token arg — the client attaches it
   });
 
   it('shows an error message when the account fails to load', async () => {

@@ -30,7 +30,9 @@ import org.springframework.test.context.DynamicPropertySource;
 class GatewayRoutingTest {
 
     private static HttpServer stub;
+    private static HttpServer spaStub;                                  // Step 32: a separate "SPA nginx"
     private static final AtomicReference<String> receivedPath = new AtomicReference<>();
+    private static final AtomicReference<String> spaReceivedPath = new AtomicReference<>();
 
     @LocalServerPort
     int gatewayPort;
@@ -39,32 +41,44 @@ class GatewayRoutingTest {
 
     @DynamicPropertySource
     static void downstream(DynamicPropertyRegistry registry) {
-        try {
-            stub = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        stub.createContext("/", exchange -> {
-            receivedPath.set(exchange.getRequestURI().getPath());   // record what the downstream actually got
-            byte[] body = "{\"ok\":true}".getBytes(UTF_8);
-            exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, body.length);
-            exchange.getResponseBody().write(body);
-            exchange.close();
-        });
-        stub.start();
+        stub = startStub(receivedPath, "{\"ok\":true}");
+        spaStub = startStub(spaReceivedPath, "<html>spa</html>");       // distinguishable body
         String stubUri = "http://localhost:" + stub.getAddress().getPort();
         registry.add("services.cif.uri", () -> stubUri);
         registry.add("services.demand-account.uri", () -> stubUri);
         registry.add("services.auth.uri", () -> stubUri);                                  // Step 29: auth route target
         registry.add("services.notification.uri", () -> stubUri);                          // Step 30: notification (SSE) target
+        registry.add("services.spa.uri", () -> "http://localhost:" + spaStub.getAddress().getPort()); // Step 32
         registry.add("app.security.cors.allowed-origins", () -> "http://localhost:5173");  // Step 29: allowed dev origin
+    }
+
+    private static HttpServer startStub(AtomicReference<String> pathRecorder, String body) {
+        HttpServer server;
+        try {
+            server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        server.createContext("/", exchange -> {
+            pathRecorder.set(exchange.getRequestURI().getPath());   // record what the downstream actually got
+            byte[] bytes = body.getBytes(UTF_8);
+            exchange.getResponseHeaders().add("Content-Type",
+                    body.startsWith("<") ? "text/html" : "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+        return server;
     }
 
     @AfterAll
     static void stopStub() {
         if (stub != null) {
             stub.stop(0);
+        }
+        if (spaStub != null) {
+            spaStub.stop(0);
         }
     }
 
@@ -125,6 +139,38 @@ class GatewayRoutingTest {
         assertThat(preflight.statusCode()).isEqualTo(200);
         assertThat(preflight.headers().firstValue("Access-Control-Allow-Origin"))
                 .hasValue("http://localhost:5173");
+        // Step 32: the refresh flow authenticates with a cookie — credentialed CORS must be granted.
+        assertThat(preflight.headers().firstValue("Access-Control-Allow-Credentials")).hasValue("true");
+    }
+
+    @Test
+    void catchAllRouteForwardsUnmatchedPathsToTheSpa() throws Exception {
+        // Step 32: a client-side route (or any unknown path) falls through every service prefix and lands on
+        // the SPA target verbatim (no strip) — nginx's try_files then serves index.html for deep links.
+        HttpResponse<String> response = http.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/some/client/route"))
+                        .GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("spa");                         // the SPA stub answered…
+        assertThat(spaReceivedPath.get()).isEqualTo("/some/client/route");   // …with the path forwarded verbatim
+    }
+
+    @Test
+    void serviceRoutesStillWinOverTheCatchAll() throws Exception {
+        // Step 32 regression guard: route order is LIST POSITION (the `order` attribute is ignored by the
+        // MVC gateway) — if someone reorders application.yml and /** swallows /bank, this fails loudly.
+        spaReceivedPath.set(null);
+        HttpResponse<String> response = http.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/bank/api/accounts/ACC-A"))
+                        .GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("\"ok\":true");                 // the SERVICE stub answered
+        assertThat(receivedPath.get()).isEqualTo("/api/accounts/ACC-A");     // stripped, as before
+        assertThat(spaReceivedPath.get()).isNull();                          // the SPA never saw it
     }
 
     @Test

@@ -134,7 +134,7 @@ A few conventions repeat in **every** `steps/step-NN/lesson.md`:
 Tick the box as you finish each step (its `step-NN-end` tag is green and committed). Setup lives in the [README](README.md); each lesson is at `steps/step-NN/lesson.md`; stretch-goal answers are inline in each lesson's `<details>` blocks (reference-solution folders are tracked in [docs/ai/CONTRACT-DEBT.md](docs/ai/CONTRACT-DEBT.md)).
 
 > [!NOTE]
-> **Authoring status:** the course is fully built and verified through **Step 30** (Step 31 in progress); **Steps 32–67 below are the planned curriculum — designed in full, lessons not yet authored**. Live state: [PROGRESS.md](PROGRESS.md).
+> **Authoring status:** the course is fully built and verified through **Step 32** (Phase F complete); **Steps 33–67 below are the planned curriculum — designed in full, lessons not yet authored**. Live state: [PROGRESS.md](PROGRESS.md).
 
 ### Phase A — Foundations: Tools, Language & Platform 🟢
 
@@ -224,7 +224,7 @@ Tick the box as you finish each step (its `step-NN-end` tag is green and committ
 | [ ] | 29 | Frontend pt.1 — foundations | 🔵 | React + TS + Vite, components, routing, calling the gateway, the login/auth flow | ~20h |
 | [ ] | 30 | Frontend pt.2 — state, data & forms | 🔵 | data fetching/caching (TanStack Query), client state, forms + validation (React Hook Form + Zod), loading/error UX, WebSocket live updates | ~20h |
 | [x] | 31 | Frontend pt.3 — testing & accessibility | 🔵 | component tests (Testing Library), E2E (Playwright), API mocking (MSW), WCAG basics, i18n + multi-currency formatting | ~20h |
-| [ ] | 32 | Frontend pt.4 — hardening & ship | 🔵 | token refresh & route guards, bundle/perf optimization, Dockerize the SPA + serve via gateway/CDN, deploy, end-to-end demo | ~20h |
+| [x] | 32 | Frontend pt.4 — hardening & ship | 🔵 | token refresh & route guards, bundle/perf optimization, Dockerize the SPA + serve via gateway/CDN, deploy, end-to-end demo | ~20h |
 
 > [!TIP]
 > 🎖️ **End of Phase F (Step 32) — full-stack milestone.** **Résumé line:** *"Built, tested, secured, and deployed a React/TypeScript banking UI (data caching, forms/validation, Playwright E2E, accessibility, i18n) against a microservices backend."*

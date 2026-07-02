@@ -7,8 +7,16 @@ bank:
   jwt:
     # DEMO secret only (fake — never a real secret in git; Vault in Phase H). HS256 needs >= 32 bytes.
     secret: ${BANK_JWT_SECRET:dev-only-change-me-build-a-bank-hmac-secret-key-256bit-minimum}
-    ttl-minutes: 30
+    # Step 32: 30 → 10. Logout revokes the REFRESH family, but an already-issued access JWT is stateless —
+    # nothing can un-sign it, so it stays valid until exp. A short TTL bounds that window; the SPA silently
+    # refreshes, so users never notice.
+    ttl-minutes: 10
     issuer: build-a-bank-auth
+  # Step 32 — the refresh session (rotating httpOnly cookie). cookie-secure MUST be true behind TLS;
+  # false here only because local dev is plain http (the browser drops Secure cookies over http).
+  auth:
+    refresh-ttl-hours: 12
+    cookie-secure: ${BANK_AUTH_COOKIE_SECURE:false}
 
 server:
   port: 8083                 # auth's port (hello/gateway 8080, cif 8081, demand-account 8082)

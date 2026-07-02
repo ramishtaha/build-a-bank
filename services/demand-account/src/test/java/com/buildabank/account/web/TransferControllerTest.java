@@ -78,6 +78,20 @@ class TransferControllerTest {
     }
 
     @Test
+    void accountReadIncludesTheCurrency() throws Exception {
+        // Step 32 regression guard: this endpoint once hand-built its response with currency=null (the SPA's
+        // Intl formatter throws on that — found by the full-stack capstone E2E). The REAL entity must be mapped.
+        given(transfers.accountOf("ACC-A"))
+                .willReturn(new Account("ACC-A", "USD", new BigDecimal("100.00"), Instant.now()));
+
+        mvc.perform(get("/api/accounts/ACC-A").with(user()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountNumber").value("ACC-A"))
+                .andExpect(jsonPath("$.currency").value("USD"))
+                .andExpect(jsonPath("$.balance").value(100.00));
+    }
+
+    @Test
     void transferReturns200WithTransactionId() throws Exception {
         UUID txId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
         given(transfers.transfer(eq("ACC-A"), eq("ACC-B"), any(), any())).willReturn(txId);

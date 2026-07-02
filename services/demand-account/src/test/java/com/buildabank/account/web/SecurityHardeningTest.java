@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.buildabank.account.domain.Account;
 import com.buildabank.account.service.IdempotentTransferService;
 import com.buildabank.account.service.TransferService;
 import com.buildabank.account.webhook.WebhookPublisher;
@@ -54,7 +56,9 @@ class SecurityHardeningTest {
 
     @Test
     void everyResponseCarriesHardenedSecurityHeaders() throws Exception {
-        given(transfers.balanceOf(eq("ACC-A"))).willReturn(new BigDecimal("10.00"));
+        // Step 32: the balance endpoint now maps the whole entity (accountOf), not just balanceOf.
+        given(transfers.accountOf(eq("ACC-A")))
+                .willReturn(new Account("ACC-A", "USD", new BigDecimal("10.00"), Instant.now()));
 
         mvc.perform(get("/api/accounts/ACC-A")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER"))))

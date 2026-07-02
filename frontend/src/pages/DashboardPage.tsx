@@ -25,7 +25,7 @@ export function DashboardPage() {
           {user !== null && user.roles.length > 0 ? ` (${user.roles.join(', ')})` : ''}
         </p>
         <LanguageSwitcher />
-        <button type="button" onClick={logout}>
+        <button type="button" onClick={() => void logout()}>
           {t('dashboard.signOut')}
         </button>
       </header>

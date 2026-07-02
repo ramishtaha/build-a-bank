@@ -27,6 +27,9 @@ spring:
                 - AddResponseHeader=X-Gateway, build-a-bank
             # Step 29: front the auth service so the React app has ONE base URL (the gateway). Auth's own
             # paths already start with /api/auth, so we DON'T strip — /api/auth/login → auth's /api/auth/login.
+            # ⚠️ Step 32: NO-STRIP is now load-bearing for the refresh cookie: its Path=/api/auth matches the
+            # browser-visible path ONLY because the gateway forwards it verbatim. Add StripPrefix here and
+            # the cookie silently stops being sent — refresh dies with 401s.
             - id: auth
               uri: ${services.auth.uri:http://localhost:8083}
               predicates:
@@ -42,6 +45,21 @@ spring:
                 - Path=/notifications/**
               filters:
                 - StripPrefix=1                          # /notifications/api/notifications → /api/notifications
+                - AddResponseHeader=X-Gateway, build-a-bank
+            # Step 32: the shipped topology — the gateway serves the SPA too (one origin for app + API, so
+            # no CORS and the SameSite cookie just works). Forwards to the nginx container from
+            # frontend/Dockerfile. NO StripPrefix: nginx must see /assets/chunk.js verbatim.
+            # ⚠️ ORDER IS LOAD-BEARING: the MVC gateway matches routes strictly by LIST POSITION (first match
+            # wins; RouteProperties' `order` attribute is silently ignored — spring-cloud-gateway#3495). This
+            # catch-all MUST stay the last route, after every service prefix. Side effect: unknown paths now
+            # return the SPA's index.html (200), not 404 — SPA routes must never collide with the four
+            # service prefixes above. (The gateway's own /actuator/* endpoints still win: their handler
+            # mapping runs at order -100, before route matching at order 3.)
+            - id: spa
+              uri: ${services.spa.uri:http://localhost:5175}
+              predicates:
+                - Path=/**
+              filters:
                 - AddResponseHeader=X-Gateway, build-a-bank
 
 server:

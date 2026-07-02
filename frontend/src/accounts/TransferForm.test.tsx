@@ -13,8 +13,6 @@ vi.mock('../api/client');
 
 describe('TransferForm', () => {
   beforeEach(() => {
-    localStorage.clear();
-    localStorage.setItem('bab.token', 'jwt-123');
     vi.mocked(api.transfer).mockResolvedValue({ transactionId: 'txn-1' });
   });
 
@@ -39,8 +37,7 @@ describe('TransferForm', () => {
     await userEvent.click(screen.getByRole('button', { name: /send transfer/i }));
 
     await waitFor(() => expect(api.transfer).toHaveBeenCalledTimes(1));
-    const [token, body, idempotencyKey] = vi.mocked(api.transfer).mock.calls[0];
-    expect(token).toBe('jwt-123');
+    const [body, idempotencyKey] = vi.mocked(api.transfer).mock.calls[0]; // Step 32: no token arg
     expect(body).toMatchObject({ from: 'ACC-A', to: 'ACC-B', amount: 50 });
     expect(idempotencyKey).toMatch(/[0-9a-f-]{36}/i); // a UUID
   });

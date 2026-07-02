@@ -25,10 +25,24 @@ class GatewayCorsConfig {
 
     @Bean
     CorsFilter corsFilter(@Value("${app.security.cors.allowed-origins:}") List<String> allowedOrigins) {
+        List<String> origins = allowedOrigins.stream().filter(o -> !o.isBlank()).toList();
+        // Step 32 guard: with credentialed CORS, /api/auth/refresh answers a READABLE access token to any
+        // allowed origin. A wildcard here would hand every website a signed-in user visits a valid bank
+        // token (full account takeover, no XSS needed) — so a wildcard kills the app at startup, loudly.
+        if (origins.contains("*")) {
+            throw new IllegalStateException(
+                    "app.security.cors.allowed-origins must list explicit origins — '*' is forbidden with "
+                            + "credentialed CORS (the refresh flow would leak access tokens to any site)");
+        }
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(allowedOrigins.stream().filter(o -> !o.isBlank()).toList()); // empty ⇒ deny all
+        config.setAllowedOrigins(origins); // empty ⇒ deny all
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
+        // Step 32: the refresh flow authenticates with an httpOnly COOKIE. A cross-origin fetch only sends /
+        // stores cookies when the request says credentials:'include' AND the server answers
+        // Access-Control-Allow-Credentials: true. Only needed in dev (5173 → 8080); in the shipped topology
+        // the SPA is served BY the gateway (same origin), and CORS doesn't apply at all.
+        config.setAllowCredentials(true);   // NEVER together with a wildcard origin — ours is an exact list
         config.setMaxAge(Duration.ofHours(1));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

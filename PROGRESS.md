@@ -4,14 +4,14 @@
 > from **Next action**. A single session will not reach Step 67 — that is expected, not a failure.
 
 ## Where we are
-- **Phase:** F — Full-Stack Frontend 🔵 **IN PROGRESS** (Steps 29–32). Phase E ✅ (25–28). Phase D ✅ (19–24). Phase C ✅ (13–18). Phase B ✅ (8–12).
-- **Step:** 31 of 67 — *Frontend pt.3 — testing, a11y & i18n (MSW · Playwright · axe · Intl)* — ✅ **COMPLETE & VERIFIED** (🟠 Standard tier; Lesson DoD: PASS — 9 sub-steps · 🔮 6 · ❓ 5 · 🔬 3 · ▶️ 9).
-- **Last verified tag:** `step-31-end` (== `step-32-start`) — full-repo `./mvnw verify` → BUILD SUCCESS (14 modules) + SPA: npm build (133 modules) / lint (0 errors) / **24 Vitest tests** (MSW floor) / **Playwright E2E 2/2 in real Chromium** / smoke.sh PASSED.
-  MSW network-floor mocking + axe a11y + i18n (en/es) + `Intl` multi-currency + **hermetic Playwright E2E** (login→balance→transfer→live SSE; Idempotency-Key asserted on the wire; §12.3 mutation both directions). ADR-0022.
-  Full detail → the `step-31-end` row in `docs/ai/VERIFICATION-LEDGER.md`.
+- **Phase:** F — Full-Stack Frontend ✅ **COMPLETE** (Steps 29–32) 🎖️ full-stack milestone. Phase E ✅ (25–28). Phase D ✅ (19–24). Phase C ✅ (13–18). Phase B ✅ (8–12).
+- **Step:** 32 of 67 — *Frontend pt.4 — hardening & ship (refresh rotation · code-splitting · SPA behind the gateway · 🎓 capstone)* — ✅ **COMPLETE & VERIFIED** (🔴 Full tier; Lesson DoD: PASS — 11 sub-steps · 🔮 11 · ❓ 7 · 🔬 2 · ▶️ 13).
+- **Last verified tag:** `step-32-end` (== `step-33-start`) — full-repo `./mvnw verify` → BUILD SUCCESS (14 modules; auth 17 tests, gateway 7, demand-account 48) + SPA: split build (login path 100.3 kB gzip, was 127.8) / lint (0 errors) / **29 Vitest** / hermetic E2E 2/2 / 🎓 **full-stack capstone E2E 2/2 (zero mocks, real gateway :8080)** / smoke.sh 6 gates PASSED.
+  Session hardening: in-memory access JWT (TTL 10 min) + rotating httpOnly refresh cookie with reuse detection (replay→family revoked; 3 s race grace→409) — localStorage debt RETIRED (risk C-10). SPA shipped: nginx container behind gateway `Path=/**` catch-all (order-regression-tested), one origin, credentialed-CORS wildcard guard. Capstone caught 2 real bugs (currency:null since ~Step 13 masked by MSW; proxied-CORS 403). §12.3 mutation both sides. ADR-0023.
+  Full detail → the `step-32-end` row in `docs/ai/VERIFICATION-LEDGER.md`.
 
 ## Next action
-**Step 32 — Frontend pt.4 (hardening & ship)** 🔵 — per the step-32 row of `COURSE.md`: **token refresh & route guards** (move the JWT out of `localStorage` — httpOnly cookie or in-memory + refresh rotation; the security debt carried since Step 29), **bundle/perf optimization** (code-splitting, lazy routes, bundle analysis — current single chunk is 414.72 kB), **Dockerize the SPA + serve via gateway/CDN**, deploy, end-to-end demo. 🎓 **Phase-F capstone closes here**: the full money-transfer UI — form + validation → live balance via SSE → **Playwright E2E against the real stack behind the gateway** (browsers ARE installed — capability re-verified 2026-07-02; the hermetic Step-31 E2E graduates to full-stack). Likely 🔴 Full tier (security path + phase capstone + milestone Step 32). Follow `docs/ai/CONTEXT-PLAYBOOK.md` (read-set: this file → `steps/step-31/capsule.md` → COURSE row 32 → CAPABILITIES/VERSIONS → LESSON-SPEC/PROJECT-MAP). Keep `step-32-end == step-33-start`. **Carry-forward security debt** (honor when relevant): R-001 BOLA, R-002 cif/notification/market-info/onboarding no app-auth, R-003 rate limiting (Step 37), R-005 key rotation (Phase H), R-006 scanning gates (Step 40) — `security/risk-register.md`.
+**Step 33 — Phase G opens (DevOps zero-to-hero)** 🔵🟣 — per the step-33 row of `COURSE.md` (grep `| 33 |`) and the Phase-G intro. Likely: containerize the JAVA services (the SPA's multi-stage `frontend/Dockerfile` from Step 32 is the template; `deploy/compose.fullstack.yaml` grows from infra-only toward full-compose) — read the COURSE row first, don't assume. `kind` v0.32.0 IS installed for the k8s steps (CAPABILITIES.md 🟢). Follow `docs/ai/CONTEXT-PLAYBOOK.md` (read-set: this file → `steps/step-32/capsule.md` → COURSE row 33 → CAPABILITIES/VERSIONS → LESSON-SPEC/PROJECT-MAP). Keep `step-33-end == step-34-start`. **Carry-forward security debt** (honor when relevant): R-001 BOLA, R-002 cif/notification/market-info/onboarding no app-auth, R-003 rate limiting (Step 37), R-005 key rotation (Phase H), R-006 scanning gates (Step 40) — `security/risk-register.md`; plus CONTRACT-DEBT: duplicate `POST /api/accounts` → 500 (map to 409 when touching demand-account).
 
 ## Lesson metrics
 Measured 2026-07-02 after full reconciliation (enrichment loops merged + ADHD layer + aids pass). 🔬 counts `🔬 **Break` break-its only; ▶️ counts run-and-see markers. Compare new steps against these — a dive below the neighborhood means decay.
@@ -49,12 +49,14 @@ Measured 2026-07-02 after full reconciliation (enrichment loops merged + ADHD la
 | 29 | 1617 | 6 | 6 | 3 | 0 | 6 |
 | 30 | 1426 | 9 | 9 | 4 | 0 | 9 |
 | 31 | 2143 | 9 | 6 | 5 | 3 | 9 |
+| 32 | 2645 | 11 | 11 | 7 | 2 | 13 |
 
 ## Known watch-items (carried forward)
 - **Spring AI** is RC on the Boot-4 line → re-pin to GA at Phase I (Step 46+), or use the Python FastAPI sidecar path.
-- **Frontend JWT storage** (Step 29): JWT in `localStorage` (XSS-exposed) — teaching simplification; harden in **Step 32** (httpOnly cookie / in-memory + refresh rotation).
-- **Kubernetes/cloud** are verify-adjacent here (no local cluster) → learner installs `kind`; we lint/template/dry-run.
-- **Playwright browsers ARE installed here** (re-verified 2026-07-02; hermetic E2E ran green in Step 31). The remaining verify-adjacent browser item is the *full-stack* flow through the real gateway — Step 32's capstone runs it for real.
+- ~~Frontend JWT storage~~ ✅ **RETIRED at Step 32** (in-memory + rotating httpOnly refresh cookie; risk register C-10).
+- **Auth session store is in-memory** (Step 32): an auth restart signs everyone out; horizontal scale needs a shared store (Redis) — revisit in Phase G/H.
+- **kind v0.32.0 IS installed** (CAPABILITIES 🟢): Phase G runs a REAL local cluster; only managed-cloud stays verify-adjacent.
+- **Gateway route order is load-bearing** (Step 32): the SPA catch-all must stay the LAST route; guarded by `serviceRoutesStillWinOverTheCatchAll`.
 
 ## Pointers
 - Full verification history → `docs/ai/VERIFICATION-LEDGER.md`

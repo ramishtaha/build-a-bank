@@ -78,3 +78,4 @@
 | C-07 | Cross-origin browser abuse | Deny-by-default CORS | Step 18 — preflight from un-listed origin → 403 |
 | C-08 | Verbose error leakage | RFC 9457 ProblemDetail | Step 13 |
 | C-09 | Lost-update / overdraw races | `FOR UPDATE` + `@Version` + double-entry | Step 11/12 |
+| C-10 | JWT persisted in `localStorage` (XSS-exfiltratable, carried since Step 29) | Access token in memory only + rotating httpOnly refresh cookie with reuse detection (ADR-0023) | Step 32 — `RefreshFlowTest` (rotate/replay→401/family-revoke on the wire) + full-stack Playwright: reload keeps session with `localStorage.length == 0`. Residual: active-XSS-in-page can still use the session (CSP/deps = the real defense); logout can't un-sign issued access JWTs (TTL now 10 min) |

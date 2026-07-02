@@ -1,0 +1,73 @@
+# deploy/compose.fullstack.yaml — Step 32 · everything the Spring services need to run the WHOLE bank
+# locally, plus the shipped SPA container. The four services (auth 8083, demand-account 8082,
+# notification 8084, gateway 8080) run on the HOST via ./mvnw spring-boot:run — see the Step-32 lesson /
+# Makefile. Only demand-account needs an env override (the 5433 port below):
+#   SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account
+#
+# Up:   docker compose -f deploy/compose.fullstack.yaml up -d --build
+# Down: docker compose -f deploy/compose.fullstack.yaml down -v      (-v drops the data volume too)
+services:
+
+  postgres:
+    image: postgres:17-alpine                # pinned (VERSIONS.md; digest recorded at Step 8)
+    container_name: bab-postgres
+    environment:
+      POSTGRES_DB: demand_account
+      POSTGRES_USER: bank
+      POSTGRES_PASSWORD: change-me-locally   # demo-only credential (never a real secret)
+    ports:
+      - "5433:5432"                          # host 5432 is often taken by a local PG (CAPABILITIES.md) → 5433
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bank -d demand_account"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - bab-pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7.4-alpine                  # pinned (VERSIONS.md; digest recorded at Step 21)
+    container_name: bab-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7     # pinned (VERSIONS.md; digest recorded at Step 20)
+    container_name: bab-redpanda
+    # Single PLAINTEXT listener advertising localhost:9092 — correct while every Kafka CLIENT is on the
+    # host. The moment a CONTAINER needs the broker too, this must become the internal/external dual-listener
+    # split from the Redpanda docs. --mode dev-container also enables auto topic creation, so
+    # `transfers.completed` appears on first produce.
+    command:
+      - redpanda
+      - start
+      - --mode
+      - dev-container
+      - --smp
+      - "1"
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://localhost:9092
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  spa:
+    build: ../frontend                       # multi-stage: node:22.20.0-alpine build → nginx:1.28.3-alpine
+    container_name: bab-spa
+    ports:
+      - "5175:80"                            # the gateway's catch-all targets http://localhost:5175
+    depends_on: []                           # static files only — no runtime dependencies
+
+volumes:
+  bab-pgdata:

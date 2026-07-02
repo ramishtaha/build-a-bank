@@ -35,6 +35,11 @@ public class UserService {
         users.put(username, new StoredUser(username, passwordEncoder.encode(rawPassword), roles));
     }
 
+    /** Look a user up by username — no password check (Step 32: the refresh flow re-loads roles). */
+    public Optional<StoredUser> find(String username) {
+        return Optional.ofNullable(users.get(username));
+    }
+
     /** Verify credentials with BCrypt; returns the user only if the password matches. */
     public Optional<StoredUser> authenticate(String username, String rawPassword) {
         StoredUser user = users.get(username);
