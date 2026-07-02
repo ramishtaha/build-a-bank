@@ -41,7 +41,7 @@
 
 ## 🔴 Not installed yet (install on demand in the step that first needs them)
 
-`minikube`, `trivy`, `gitleaks`, `semgrep`, `cosign`, `terraform`, `make` (likely absent on this Windows host). *(`kind` is now installed — see the Kubernetes section above.)*
+`minikube`, `trivy`, `gitleaks`, `semgrep`, `cosign`, `terraform`. *(`kind` is now installed — see the Kubernetes section above. `make` IS present — GNU Make 4.4.1, verified at Step 33; the raw-CLI-is-canonical rule stays for learners without it.)*
 
 - **DevSecOps scanners** (`trivy`, `gitleaks`, `semgrep`, `cosign`) arrive in **Phase H (Steps 39–45)** — each step
   installs/pins its scanner and pastes a real run. Many also run as Dockerized images (no host install needed).

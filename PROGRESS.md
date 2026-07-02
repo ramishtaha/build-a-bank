@@ -4,14 +4,14 @@
 > from **Next action**. A single session will not reach Step 67 — that is expected, not a failure.
 
 ## Where we are
-- **Phase:** F — Full-Stack Frontend ✅ **COMPLETE** (Steps 29–32) 🎖️ full-stack milestone. Phase E ✅ (25–28). Phase D ✅ (19–24). Phase C ✅ (13–18). Phase B ✅ (8–12).
-- **Step:** 32 of 67 — *Frontend pt.4 — hardening & ship (refresh rotation · code-splitting · SPA behind the gateway · 🎓 capstone)* — ✅ **COMPLETE & VERIFIED** (🔴 Full tier; Lesson DoD: PASS — 11 sub-steps · 🔮 11 · ❓ 7 · 🔬 2 · ▶️ 13).
-- **Last verified tag:** `step-32-end` (== `step-33-start`) — full-repo `./mvnw verify` → BUILD SUCCESS (14 modules; auth 17 tests, gateway 7, demand-account 48) + SPA: split build (login path 100.3 kB gzip, was 127.8) / lint (0 errors) / **29 Vitest** / hermetic E2E 2/2 / 🎓 **full-stack capstone E2E 2/2 (zero mocks, real gateway :8080)** / smoke.sh 6 gates PASSED.
-  Session hardening: in-memory access JWT (TTL 10 min) + rotating httpOnly refresh cookie with reuse detection (replay→family revoked; 3 s race grace→409) — localStorage debt RETIRED (risk C-10). SPA shipped: nginx container behind gateway `Path=/**` catch-all (order-regression-tested), one origin, credentialed-CORS wildcard guard. Capstone caught 2 real bugs (currency:null since ~Step 13 masked by MSW; proxied-CORS 403). §12.3 mutation both sides. ADR-0023.
-  Full detail → the `step-32-end` row in `docs/ai/VERIFICATION-LEDGER.md`.
+- **Phase:** G — DevOps Zero to Hero 🔵🟣 **IN PROGRESS** (Step 33 ✅ of 33–38). Phase F ✅ (29–32) 🎖️. Phase E ✅ (25–28). Phase D ✅ (19–24). Phase C ✅ (13–18). Phase B ✅ (8–12).
+- **Step:** 33 of 67 — *Containerize everything (multi-stage · distroless · non-root → Buildpacks/Jib + Compose)* — ✅ **COMPLETE & VERIFIED** (🟠 Standard tier; Lesson DoD: PASS — 12 sub-steps · 🔮 13 · ❓ 9 · 🔬 3 · ▶️ 14).
+- **Last verified tag:** `step-33-end` (== `step-34-start`) — full-repo `./mvnw verify` → BUILD SUCCESS (14 modules, 04:18; **zero Java changes** this step) + 🎓 **full-stack capstone 2/2 vs ZERO host services** + smoke.sh 6 gates PASSED.
+  The bank is now `make bank-up`: ONE `deploy/Dockerfile.service` (ARG MODULE/PORT; temurin-25 build w/ locked .m2 cache mount → jarmode layered extract → distroless java25 `:nonroot`, MaxRAMPercentage=75 baked) × 7 services + compose profile `bank` (11 containers, initdb 2nd DB `cif`, redpanda dual listeners internal 29092/external 9092, env-only rewiring — Step-15 `${services.*.uri}` placeholders did the gateway). Labs: cgroup heap 25→75%, OOM 137, JDK-25 AOT cache 3.76→2.61 s (not baked — ADR-0024). Buildpacks WORKS on Java 25 (684 MB, benched); **Jib 3.4.5 INCOMPATIBLE** (class file major 69 — VERSIONS watch-item). Hybrid Step-32 topology still works (default profile).
+  Full detail → the `step-33-end` row in `docs/ai/VERIFICATION-LEDGER.md`.
 
 ## Next action
-**Step 33 — Phase G opens (DevOps zero-to-hero)** 🔵🟣 — per the step-33 row of `COURSE.md` (grep `| 33 |`) and the Phase-G intro. Likely: containerize the JAVA services (the SPA's multi-stage `frontend/Dockerfile` from Step 32 is the template; `deploy/compose.fullstack.yaml` grows from infra-only toward full-compose) — read the COURSE row first, don't assume. `kind` v0.32.0 IS installed for the k8s steps (CAPABILITIES.md 🟢). Follow `docs/ai/CONTEXT-PLAYBOOK.md` (read-set: this file → `steps/step-32/capsule.md` → COURSE row 33 → CAPABILITIES/VERSIONS → LESSON-SPEC/PROJECT-MAP). Keep `step-33-end == step-34-start`. **Carry-forward security debt** (honor when relevant): R-001 BOLA, R-002 cif/notification/market-info/onboarding no app-auth, R-003 rate limiting (Step 37), R-005 key rotation (Phase H), R-006 scanning gates (Step 40) — `security/risk-register.md`; plus CONTRACT-DEBT: duplicate `POST /api/accounts` → 500 (map to 409 when touching demand-account).
+**Step 34 — Kubernetes** 🔵 — per the step-34 row of `COURSE.md` (grep `| 34 |`): manifests, config/secrets, Actuator probes, `securityContext` + RBAC basics, graceful shutdown, on a REAL local cluster (`kind` v0.32.0 installed — CAPABILITIES 🟢; also teach the cluster-less verify path per the Phase-G note). Lift the Step-33 images (`bab-<svc>:0.1.0-SNAPSHOT`) into the cluster; Boot 4 already exposes `/actuator/health/{liveness,readiness}` (verified at 33) — they become the probe targets; distroless "no exec" meets ephemeral debug containers. kind needs images loaded (`kind load docker-image`) or a local registry — decide in-step. Follow `docs/ai/CONTEXT-PLAYBOOK.md` (read-set: this file → `steps/step-33/capsule.md` → COURSE row 34 → CAPABILITIES/VERSIONS → LESSON-SPEC/PROJECT-MAP). Keep `step-34-end == step-35-start`. **Carry-forward security debt** (honor when relevant): R-001 BOLA, R-002 cif/notification/market-info/onboarding no app-auth, R-003 rate limiting (Step 37), R-005 key rotation (Phase H), R-006 scanning gates (Step 40) — `security/risk-register.md`; plus CONTRACT-DEBT: duplicate `POST /api/accounts` → 500 (map to 409 when touching demand-account).
 
 ## Lesson metrics
 Measured 2026-07-02 after full reconciliation (enrichment loops merged + ADHD layer + aids pass). 🔬 counts `🔬 **Break` break-its only; ▶️ counts run-and-see markers. Compare new steps against these — a dive below the neighborhood means decay.
@@ -50,13 +50,16 @@ Measured 2026-07-02 after full reconciliation (enrichment loops merged + ADHD la
 | 30 | 1426 | 9 | 9 | 4 | 0 | 9 |
 | 31 | 2143 | 9 | 6 | 5 | 3 | 9 |
 | 32 | 2645 | 11 | 11 | 7 | 2 | 13 |
+| 33 | 1981 | 12 | 13 | 9 | 3 | 14 |
 
 ## Known watch-items (carried forward)
 - **Spring AI** is RC on the Boot-4 line → re-pin to GA at Phase I (Step 46+), or use the Python FastAPI sidecar path.
-- ~~Frontend JWT storage~~ ✅ **RETIRED at Step 32** (in-memory + rotating httpOnly refresh cookie; risk register C-10).
-- **Auth session store is in-memory** (Step 32): an auth restart signs everyone out; horizontal scale needs a shared store (Redis) — revisit in Phase G/H.
-- **kind v0.32.0 IS installed** (CAPABILITIES 🟢): Phase G runs a REAL local cluster; only managed-cloud stays verify-adjacent.
-- **Gateway route order is load-bearing** (Step 32): the SPA catch-all must stay the LAST route; guarded by `serviceRoutesStillWinOverTheCatchAll`.
+- **Auth session store is in-memory** (Step 32): a `docker compose restart auth` signs everyone out; horizontal scale needs a shared store (Redis) — revisit in Phase G/H.
+- **Jib 3.4.5 (newest) INCOMPATIBLE with JDK 25** (Step 33: `class file major version 69` — same ASM lag as PITest 1.19.1). Hand-written Dockerfile is canonical (ADR-0024); re-probe Jib on new releases. Buildpacks verified working (benched).
+- **AOT cache not in fleet images** (Step 33): training runs need live infra (Flyway would fail `docker build`) — revisit in CI (Step 35+).
+- **kind v0.32.0 IS installed** (CAPABILITIES 🟢): Step 34 runs a REAL local cluster; only managed-cloud stays verify-adjacent. `make` IS present too (4.4.1 — CAPABILITIES updated at 33).
+- **Gateway route order is load-bearing** (Step 32): the SPA catch-all must stay LAST; guarded by `serviceRoutesStillWinOverTheCatchAll`. Corollary found at 33: `/actuator/gateway` doesn't exist on the MVC gateway → unknown paths return the SPA's HTML with 200 (step-15 claim → IMPROVEMENT-BACKLOG WO-15.A).
+- **First `--profile bank` up needs an empty pg volume** (initdb creates the `cif` DB) — `make bank-down` does the `down -v`.
 
 ## Pointers
 - Full verification history → `docs/ai/VERIFICATION-LEDGER.md`

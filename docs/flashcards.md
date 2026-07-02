@@ -250,3 +250,12 @@
 - **Q:** Spring Cloud Gateway MVC: how do you make a `Path=/**` SPA catch-all safe? — **A:** Routes match strictly by YAML LIST POSITION (first match wins; the `order` attribute is silently ignored — issue #3495). The catch-all goes LAST, with no StripPrefix, protected by a regression test that a `/bank/**` request still reaches the service stub and never the SPA. Actuator survives because its handler mapping runs at order −100, before route matching.
 
 🔁 revisit in ~3 steps (≈ Step 35, with Phase G's ingress/containerization)
+
+## Step 33 — Containerize everything (multi-stage, distroless, non-root, Compose profile "bank")
+- **Q:** Exit code 137 means…? — **A:** 128 + SIGKILL(9): the kernel OOM-killer ended the container after the process group crossed the cgroup `memory.max`. No stack trace ever — SIGKILL grants no last words; the witness is `docker inspect` → `OOMKilled=true`. (JVM heap OOM is the OTHER one — stack trace, in-process.)
+- **Q:** Default container heap on JDK 25, and the standard fix? — **A:** HotSpot probes cgroup v2 (`memory.max`) and takes 25% of the LIMIT (no limit ⇒ 25% of host RAM — the horror case). Single-JVM containers set `-XX:MaxRAMPercentage=75` via `JAVA_TOOL_OPTIONS`, leaving ~25% for metaspace/stacks/code cache/direct buffers.
+- **Q:** Why four COPYs from the extracted Boot jar instead of one fat-jar COPY? — **A:** `jarmode=tools extract --layers` splits by change-frequency (dependencies / loader / snapshot-deps / application). Layers are content-hashed: a code edit re-hashes only the ~180 kB `application/` layer — deps stay CACHED locally and never re-upload to a registry.
+- **Q:** What does distroless buy you (hint: not size)? — **A:** Removed executable surface: no shell, no package manager, no coreutils (our distroless-java25 ≈ alpine-JRE in MB — 360 vs 359). `docker exec … sh` fails by design; `:nonroot` bakes uid 65532. Cost: no exec-debugging, no shell healthchecks — k8s probes/ephemeral containers (Step 34) are the answer.
+- **Q:** Kafka in compose: why dual listeners? — **A:** Clients reconnect to the broker's ADVERTISED address, not the one they bootstrapped. One address can't serve two vantage points: containers need `redpanda:29092` (compose DNS), the host needs `localhost:9092`. Two listeners, each advertising a name its audience resolves. Port mappings alone can't fix advertisement.
+
+🔁 revisit in ~3 steps (≈ Step 36, when observability watches these same containers)

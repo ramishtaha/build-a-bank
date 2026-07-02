@@ -23,7 +23,8 @@ Purpose: let a lesson-generating AI session make correct callbacks ("remember St
 
 ## Conventions
 
-- Tag chain: `step-NN-start == step-(NN-1)-end`; every verified step tagged `step-NN-end`. Latest verified tag: `step-32-end` (== `step-33-start`). Phase F complete.
+- Tag chain: `step-NN-start == step-(NN-1)-end`; every verified step tagged `step-NN-end`. Latest verified tag: `step-33-end` (== `step-34-start`). Phase F complete; Phase G in progress.
+- **Containers (Step 33):** ONE `deploy/Dockerfile.service` (ARG MODULE/PORT; temurin-25-jdk-alpine build + locked `.m2` cache mount → jarmode layered extract → `gcr.io/distroless/java25-debian13:nonroot`, `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75`) builds all 7 service images `bab-<svc>:0.1.0-SNAPSHOT`. `deploy/compose.fullstack.yaml --profile bank` = 11 containers (whole bank, zero host services; `make bank-up`); default profile = Step-32 hybrid (infra+SPA). Postgres initdb adds DB `cif`; Redpanda dual listeners (containers `redpanda:29092`, host `localhost:9092`). Gateway rewired by env only (`SERVICES_*_URI`). Jib incompatible with JDK 25 (VERSIONS); Buildpacks works, benched (ADR-0024).
 - Package root: `com.buildabank.*` (Maven groupId `com.buildabank`; parent = Spring Boot 4.0.6 starter parent, Java 25, Spring Cloud 2025.1.1).
 - Tests use real infra via Testcontainers `@ServiceConnection` (Postgres per service, Redpanda for Kafka, `redis:7.4-alpine`); prod config is env-driven with localhost defaults.
 - Ports source of truth = each module's `src/main/resources/application.yml`. Gateway and hello both default to 8080 (not run together).

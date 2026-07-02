@@ -1,0 +1,55 @@
+# deploy/Dockerfile.service — Step 33: ONE parameterized, multi-stage Dockerfile for every Java
+# service (they differ only by Maven module + port). Hermetic (builds inside Docker), layered
+# (dependencies cached separately from your code), distroless + non-root at runtime.
+#
+#   docker build -f deploy/Dockerfile.service --build-arg MODULE=services/auth --build-arg PORT=8083 \
+#                -t bab-auth:0.1.0-SNAPSHOT .
+#
+# Build context = repo root (the Maven reactor needs every module pom). Versions pinned per VERSIONS.md.
+
+# ── Stage 1: build — full JDK + Maven wrapper, never ships ─────────────────
+FROM eclipse-temurin:25-jdk-alpine AS build
+WORKDIR /workspace
+
+# The reactor: parent pom + every module pom must be present, or ./mvnw can't resolve the graph.
+COPY mvnw pom.xml ./
+COPY .mvn/ .mvn/
+COPY libs/ libs/
+COPY services/ services/
+COPY gateway/ gateway/
+COPY playground/ playground/
+
+# --mount=type=cache keeps ~/.m2 on the BUILDER between builds — first build downloads the world
+# once; later builds (any module) reuse it. It is NOT an image layer: it never ships.
+# sharing=locked: `docker compose build` runs the 7 service builds CONCURRENTLY, and Maven's local
+# repository has no file locking — two mvnw processes writing ~/.m2 at once corrupt it. locked
+# serializes just the mount, letting everything else parallelize.
+ARG MODULE
+RUN --mount=type=cache,target=/root/.m2,sharing=locked \
+    ./mvnw -pl ${MODULE} -am package -DskipTests
+
+# ── Stage 2: extract — split the fat jar into Docker-cache-friendly layers ──
+FROM eclipse-temurin:25-jdk-alpine AS extract
+WORKDIR /extract
+ARG MODULE
+COPY --from=build /workspace/${MODULE}/target/*.jar app.jar
+# jarmode=tools (Boot 3.3+/4): the jar knows how to take itself apart. --layers splits by change
+# frequency (dependencies / loader / snapshots / application), --launcher keeps JarLauncher.
+RUN java -Djarmode=tools -jar app.jar extract --layers --launcher --destination extracted
+
+# ── Stage 3: run — distroless (no shell, no package manager), non-root ─────
+FROM gcr.io/distroless/java25-debian13:nonroot
+WORKDIR /app
+# Least → most volatile: a code-only change rebuilds ONLY the last (tiny) layer.
+COPY --from=extract /extract/extracted/dependencies/ ./
+COPY --from=extract /extract/extracted/spring-boot-loader/ ./
+COPY --from=extract /extract/extracted/snapshot-dependencies/ ./
+COPY --from=extract /extract/extracted/application/ ./
+# Container-aware heap: 75% of the container's memory LIMIT (not the host's RAM). JAVA_TOOL_OPTIONS
+# is read by every JVM at startup — compose can still override per service.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0"
+ARG PORT
+EXPOSE ${PORT}
+# Distroless has no shell — exec form only. JarLauncher rebuilds the fat-jar classpath from the
+# extracted layout (default classpath "." is WORKDIR /app, where the loader classes landed).
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

@@ -196,3 +196,16 @@
 | 28 | F1, F3 | ✔ WO-28.1 |
 | 29 | F2, F7, F8 | ✔ WO-29.1 |
 | 30 | F1, F2, F4 | ✔ WO-30.1 |
+
+---
+
+## Post-close addenda (found after 2026-07-02)
+
+### Step 15 — API gateway (stale claim, discovered at Step 33 on 2026-07-03)
+- **WO-15.A `/actuator/gateway` does not exist on the Server-WebMVC gateway flavor.** The step-15 lesson
+  (lines ~204/352/488/499/506) presents `/actuator/gateway/routes` as a working route-listing endpoint; at
+  step-33 verification the actuator discovery document (`GET /actuator`) shows only `health`/`info` handlers,
+  and `/actuator/gateway` falls through the Step-32 `/**` catch-all to the SPA (HTML 200). Verify whether the
+  endpoint EVER worked on the MVC variant (checkout `step-15-end`, boot the gateway, curl `/actuator` +
+  `/actuator/gateway/routes`, paste both) and correct the step-15 prose accordingly (keep the exposure line —
+  harmless — but state the MVC gap; the step-33 lesson 🩺 and capsule already document the behavior). **Scope: S**

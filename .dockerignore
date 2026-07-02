@@ -1,0 +1,20 @@
+# .dockerignore — Step 33. Applies when the build CONTEXT is the repo root (deploy/Dockerfile.service,
+# services/auth/Dockerfile stages 2+). Two jobs:
+#  1. Keep the context small + cache-friendly (docs/steps churn must not invalidate COPY layers).
+#  2. Keep HOST build artifacts out of the hermetic in-image build — a stale target/*.jar from your
+#     machine must never sneak into an image that claims it was built from source.
+.git
+**/target
+**/.flattened-pom.xml
+frontend
+steps
+docs
+adr
+security
+deploy
+Makefile
+*.md
+*.log
+.claude
+.idea
+**/.DS_Store

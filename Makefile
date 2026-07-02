@@ -191,5 +191,27 @@ fullstack-services: ## Step 32: print the exact commands to run the four service
 fullstack-down: ## Step 32: stop the compose stack (drops the data volume too)
 	docker compose -f deploy/compose.fullstack.yaml down -v
 
+# ── Step 33: the containerized bank (compose profile "bank") ────────────────
+# Raw commands (make is a convenience, never a requirement):
+#   docker compose -f deploy/compose.fullstack.yaml --profile bank up -d --build
+#   docker compose -f deploy/compose.fullstack.yaml --profile bank down -v
+
+bank-up: ## Step 33: the WHOLE bank in containers — 7 distroless Java images + SPA + infra, one origin :8080
+	docker compose -f deploy/compose.fullstack.yaml --profile bank up -d --build
+	@echo "Everything is a container now. Open http://localhost:8080 — capstone: cd frontend && npm run test:e2e:fullstack"
+
+bank-down: ## Step 33: stop the containerized bank (drops the data volume too)
+	docker compose -f deploy/compose.fullstack.yaml --profile bank down -v
+
+bank-ps: ## Step 33: list the bank's containers + health
+	docker compose -f deploy/compose.fullstack.yaml --profile bank ps
+
+bank-logs: ## Step 33: follow one service's logs, e.g. `make bank-logs S=gateway`
+	docker compose -f deploy/compose.fullstack.yaml --profile bank logs -f $(S)
+
+image-service: ## Step 33: build one service image by hand, e.g. `make image-service MODULE=services/auth PORT=8083`
+	docker build -f deploy/Dockerfile.service --build-arg MODULE=$(MODULE) --build-arg PORT=$(PORT) \
+		-t bab-$(notdir $(MODULE)):0.1.0-SNAPSHOT .
+
 clean: ## Remove all build output
 	$(MVNW) -B clean

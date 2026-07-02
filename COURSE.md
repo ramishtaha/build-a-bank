@@ -237,7 +237,7 @@ Tick the box as you finish each step (its `step-NN-end` tag is green and committ
 
 | ✓ | Step | Title | Badge | Focus | Effort |
 |---|---|---|---|---|---|
-| [ ] | 33 | Containerize everything — multi-stage, distroless, non-root → Buildpacks/Jib + Compose | 🔵 | Docker/Compose, JVM image tuning | ~20h |
+| [x] | 33 | Containerize everything — multi-stage, distroless, non-root → Buildpacks/Jib + Compose | 🔵 | Docker/Compose, JVM image tuning | ~20h |
 | [ ] | 34 | Kubernetes — manifests, config/secrets, Actuator probes, `securityContext` + RBAC basics, graceful shutdown | 🔵 | Kubernetes (`kind`) | ~20h |
 | [ ] | 35 | Helm + CI/CD (GitHub Actions, `./mvnw verify`) — first security gate (secret scan + SCA) | 🔵 | Helm, GitHub Actions | ~20h |
 | [ ] | 36 | Observability deep — custom health, custom Micrometer metrics, dashboards, logs, traces, correlation IDs + Kafka trace propagation, RED/USE | 🟣 | Prometheus/Grafana/Loki/OTel | ~20h |

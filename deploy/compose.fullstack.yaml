@@ -1,11 +1,17 @@
-# deploy/compose.fullstack.yaml — Step 32 · everything the Spring services need to run the WHOLE bank
-# locally, plus the shipped SPA container. The four services (auth 8083, demand-account 8082,
-# notification 8084, gateway 8080) run on the HOST via ./mvnw spring-boot:run — see the Step-32 lesson /
-# Makefile. Only demand-account needs an env override (the 5433 port below):
-#   SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/demand_account
+# deploy/compose.fullstack.yaml — Step 33 · the WHOLE bank in containers, one file, two topologies.
 #
-# Up:   docker compose -f deploy/compose.fullstack.yaml up -d --build
-# Down: docker compose -f deploy/compose.fullstack.yaml down -v      (-v drops the data volume too)
+#   DEFAULT profile (Step 32 hybrid): infra + SPA only — Java services run on the HOST via
+#     ./mvnw spring-boot:run (only demand-account needs SPRING_DATASOURCE_URL with port 5433).
+#       Up:   docker compose -f deploy/compose.fullstack.yaml up -d --build
+#
+#   --profile bank (Step 33): EVERYTHING in containers — 6 services + gateway built from
+#     deploy/Dockerfile.service (distroless, non-root), wired by service NAME on the compose network.
+#       Up:   docker compose -f deploy/compose.fullstack.yaml --profile bank up -d --build
+#       Down: docker compose -f deploy/compose.fullstack.yaml --profile bank down -v
+#
+# ⚠️ First `--profile bank` up after Step 32: run `down -v` once — the cif database is created by
+# deploy/initdb/, which Postgres only executes on an EMPTY data volume.
+
 services:
 
   postgres:
@@ -24,6 +30,9 @@ services:
       retries: 10
     volumes:
       - bab-pgdata:/var/lib/postgresql/data
+      # Step 33: second database (cif) for the containerized topology — database-per-service on one
+      # instance. Runs ONCE, on first boot of an empty volume (hence the down -v note above).
+      - ./initdb:/docker-entrypoint-initdb.d:ro
 
   redis:
     image: redis:7.4-alpine                  # pinned (VERSIONS.md; digest recorded at Step 21)
@@ -39,23 +48,24 @@ services:
   redpanda:
     image: redpandadata/redpanda:v24.2.7     # pinned (VERSIONS.md; digest recorded at Step 20)
     container_name: bab-redpanda
-    # Single PLAINTEXT listener advertising localhost:9092 — correct while every Kafka CLIENT is on the
-    # host. The moment a CONTAINER needs the broker too, this must become the internal/external dual-listener
-    # split from the Redpanda docs. --mode dev-container also enables auto topic creation, so
-    # `transfers.completed` appears on first produce.
+    # Step 33: DUAL listeners (the Step-32 single-listener comment said this day would come).
+    # A Kafka client bootstraps, then reconnects to whatever address the broker ADVERTISES — one
+    # advertised address can't be right for both host clients (localhost:9092) and container
+    # clients (redpanda:29092), so the broker listens twice and advertises each side its own name.
+    # Host tooling/hybrid keeps localhost:9092 unchanged; containers use redpanda:29092.
     command:
       - redpanda
       - start
       - --mode
-      - dev-container
+      - dev-container                        # dev defaults + auto topic creation (transfers.completed)
       - --smp
       - "1"
       - --kafka-addr
-      - PLAINTEXT://0.0.0.0:9092
+      - internal://0.0.0.0:29092,external://0.0.0.0:9092
       - --advertise-kafka-addr
-      - PLAINTEXT://localhost:9092
+      - internal://redpanda:29092,external://localhost:9092
     ports:
-      - "9092:9092"
+      - "9092:9092"                          # external listener only; 29092 stays on the compose network
     healthcheck:
       test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
       interval: 5s
@@ -66,8 +76,136 @@ services:
     build: ../frontend                       # multi-stage: node:22.20.0-alpine build → nginx:1.28.3-alpine
     container_name: bab-spa
     ports:
-      - "5175:80"                            # the gateway's catch-all targets http://localhost:5175
+      - "5175:80"                            # hybrid: the HOST gateway's catch-all targets http://localhost:5175
     depends_on: []                           # static files only — no runtime dependencies
+
+  # ── --profile bank: the containerized bank (Step 33) ──────────────────────
+  # All images build from ONE parameterized Dockerfile; context is the repo root (the Maven reactor).
+  # Config via env vars only (12-factor, Step 8) — same jar, different environment.
+
+  cif:
+    profiles: ["bank"]
+    build: &service-build
+      context: ..
+      dockerfile: deploy/Dockerfile.service
+      args: { MODULE: services/cif, PORT: "8081" }
+    image: bab-cif:0.1.0-SNAPSHOT
+    container_name: bab-cif
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cif   # service NAME, container port
+    ports:
+      - "8081:8081"                          # host-mapped for debugging; the gateway is the real front door
+    depends_on:
+      postgres: { condition: service_healthy }   # Flyway migrates at startup — the DB must be ready
+    mem_limit: 512m                          # the JVM sizes its heap from THIS (MaxRAMPercentage=75)
+
+  demand-account:
+    profiles: ["bank"]
+    build:
+      <<: *service-build
+      args: { MODULE: services/demand-account, PORT: "8082" }
+    image: bab-demand-account:0.1.0-SNAPSHOT
+    container_name: bab-demand-account
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/demand_account
+      AUTH_JWKS_URI: http://auth:8083/oauth2/jwks          # JWT validation fetches auth's public key (Step 17)
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092              # the INTERNAL listener (see redpanda above)
+      REDIS_HOST: redis
+      # Browsers send Origin on every cross-page POST; the gateway forwards it verbatim (Step 32
+      # discovery: curl won't reproduce the 403 a browser gets when this is missing).
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:8080
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    mem_limit: 512m
+
+  auth:
+    profiles: ["bank"]
+    build:
+      <<: *service-build
+      args: { MODULE: services/auth, PORT: "8083" }
+    image: bab-auth:0.1.0-SNAPSHOT
+    container_name: bab-auth
+    # No env needed: in-memory users + demo JWT defaults. ⚠️ Sessions live in this container's
+    # memory — `docker compose restart auth` signs everyone out (known watch-item since Step 32).
+    ports:
+      - "8083:8083"
+    mem_limit: 512m
+
+  notification:
+    profiles: ["bank"]
+    build:
+      <<: *service-build
+      args: { MODULE: services/notification, PORT: "8084" }
+    image: bab-notification:0.1.0-SNAPSHOT
+    container_name: bab-notification
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+    ports:
+      - "8084:8084"
+    depends_on:
+      redpanda: { condition: service_healthy }
+    mem_limit: 512m
+
+  market-info:
+    profiles: ["bank"]
+    build:
+      <<: *service-build
+      args: { MODULE: services/market-info, PORT: "8085" }
+    image: bab-market-info:0.1.0-SNAPSHOT
+    container_name: bab-market-info
+    environment:
+      REDIS_HOST: redis
+    ports:
+      - "8085:8085"
+    depends_on:
+      redis: { condition: service_healthy }
+    mem_limit: 512m
+
+  onboarding:
+    profiles: ["bank"]
+    build:
+      <<: *service-build
+      args: { MODULE: services/onboarding, PORT: "8086" }
+    image: bab-onboarding:0.1.0-SNAPSHOT
+    container_name: bab-onboarding
+    environment:
+      CIF_URL: http://cif:8081
+      ACCOUNT_URL: http://demand-account:8082
+    ports:
+      - "8086:8086"
+    depends_on:                              # clients are lazy (@HttpExchange, Step 23) — started is enough
+      cif: { condition: service_started }
+      demand-account: { condition: service_started }
+    mem_limit: 512m
+
+  gateway:
+    profiles: ["bank"]
+    build:
+      <<: *service-build
+      args: { MODULE: gateway, PORT: "8080" }
+    image: bab-gateway:0.1.0-SNAPSHOT
+    container_name: bab-gateway
+    environment:
+      # SystemEnvironmentPropertySource name mangling: services.cif.uri → SERVICES_CIF_URI
+      # (dots AND dashes become underscores). These fill the ${services.*.uri:…} placeholders
+      # in gateway/src/main/resources/application.yml — defaults stay localhost for host runs.
+      SERVICES_CIF_URI: http://cif:8081
+      SERVICES_DEMAND_ACCOUNT_URI: http://demand-account:8082
+      SERVICES_AUTH_URI: http://auth:8083
+      SERVICES_NOTIFICATION_URI: http://notification:8084
+      SERVICES_SPA_URI: http://spa:80
+    ports:
+      - "8080:8080"                          # THE front door — the only port a user needs
+    depends_on:
+      auth: { condition: service_started }
+      demand-account: { condition: service_started }
+      notification: { condition: service_started }
+      spa: { condition: service_started }
+    mem_limit: 512m
 
 volumes:
   bab-pgdata:

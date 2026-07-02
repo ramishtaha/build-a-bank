@@ -59,12 +59,23 @@
    auto-configured (needs `@AutoConfigureTestRestTemplate` + an explicit dependency). Practically removed for
    us; the course uses **`RestTestClient`** / **`MockMvcTester`** (Spring Framework 7) — hit for real in Step 1.
 
+4. **Jib** — **verified INCOMPATIBLE with JDK 25 at Step 33**: `jib-maven-plugin` **3.4.5** (newest on Maven
+   Central at pin date, checked via the search API) fails with `Unsupported class file major version 69` —
+   the same bundled-ASM-lags-the-JDK failure as PITest 1.19.1 (row above). The course containerizes via the
+   hand-written `deploy/Dockerfile.service` (ADR-0024); Buildpacks (`spring-boot:build-image`) verified
+   WORKING on Java 25 (Paketo/Liberica). Re-probe Jib when a release >3.4.5 appears.
+
 ## Infra image tags (pinned when introduced — never `latest`)
 - Postgres, Redis, Redpanda, Prometheus/Grafana/Loki/Tempo image **digests** are pinned in the step that adds them
   (Steps 8, 20, 22, 36). Recorded here as they land.
 - **SPA container base images (Step 32,** `frontend/Dockerfile`**):**
   `node:22.20.0-alpine` (digest `sha256:dbcedd8aeab47fbc0f4dd4bffa55b7c3c729a707875968d467aaaea42d6225af`; build stage — matches the Node pin above) ·
   `nginx:1.28.3-alpine` (digest `sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236`; reports nginx/1.28.3; serve stage).
+- **Java service base images (Step 33,** `deploy/Dockerfile.service`**):**
+  `eclipse-temurin:25-jdk-alpine` (digest `sha256:5ecfde8e5ecde5954ea3721155b345ef56c1d579b940c761318ad4c05959a151`; build + extract stages) ·
+  `eclipse-temurin:25-jre-alpine` (digest `sha256:28db6fdf60e38945e43d840c0333aeaec66c15943070104f7586fd3c9d1665b0`; lesson comparison stage only) ·
+  `gcr.io/distroless/java25-debian13:nonroot` (digest `sha256:dade01b669efd3bea3977f73cc196c56f1ee678a71ec8305f84ec15fd5a23c8d`; runtime — uid 65532, Temurin-25 JRE inside per `docker history`).
+  Buildpacks builder (taught, benched): Boot's default `paketobuildpacks/builder-noble-java-tiny:latest` — note the `:latest`; pin via `spring-boot.build-image.builder` if ever adopted (ADR-0024).
 
 ## Frontend (npm) — pinned by `frontend/package-lock.json` (Step 29, Phase F)
 The SPA is a separate Node/npm project (not a Maven module). `package.json` carries ranges; the **committed

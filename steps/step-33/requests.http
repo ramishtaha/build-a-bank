@@ -1,0 +1,71 @@
+# steps/step-33/requests.http — poke the CONTAINERIZED bank (everything behind the gateway, :8080).
+# Start it first:  make bank-up   (or: docker compose -f deploy/compose.fullstack.yaml --profile bank up -d --build)
+# curl equivalents are under each request. VS Code REST Client / IntelliJ HTTP Client compatible.
+
+### 1) Gateway health — the front door is a container now
+GET http://localhost:8080/actuator/health
+# curl -s http://localhost:8080/actuator/health
+
+### 2) The probe endpoints Kubernetes will use in Step 34 (Boot exposes these groups by default)
+GET http://localhost:8080/actuator/health/liveness
+# curl -s http://localhost:8080/actuator/health/liveness
+# (Heads-up: /actuator/gateway does NOT exist on the WebMVC gateway flavor — request it and the
+#  catch-all serves you the SPA's index.html instead. Details: lesson 🩺.)
+
+### 3) Login through gateway → auth container (note the httpOnly bab_refresh cookie in the response)
+# @name login
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{"username": "alice", "password": "password"}
+# curl -s -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' \
+#      -d '{"username":"alice","password":"password"}'
+
+### 4a) Open an account through the gateway (JWT from (3); BigDecimal money as a string)
+POST http://localhost:8080/bank/api/accounts
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{"accountNumber": "ACC-33-001", "currency": "EUR", "openingBalance": "250.00"}
+# TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' \
+#         -d '{"username":"alice","password":"password"}' | sed -E 's/.*"token":"([^"]+)".*/\1/')
+# curl -s -X POST http://localhost:8080/bank/api/accounts -H "Authorization: Bearer $TOKEN" \
+#      -H 'Content-Type: application/json' \
+#      -d '{"accountNumber":"ACC-33-001","currency":"EUR","openingBalance":"250.00"}'
+
+### 4b) Read it back (gateway strips /bank, demand-account container answers)
+GET http://localhost:8080/bank/api/accounts/ACC-33-001
+Authorization: Bearer {{login.response.body.token}}
+# curl -s http://localhost:8080/bank/api/accounts/ACC-33-001 -H "Authorization: Bearer $TOKEN"
+
+### 4c) A second account + a transfer — fires the outbox → Redpanda (internal listener) → notification path
+POST http://localhost:8080/bank/api/accounts
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{"accountNumber": "ACC-33-002", "currency": "EUR", "openingBalance": "100.00"}
+
+### 4d) The transfer itself (fields are from/to; money is a BigDecimal string; Idempotency-Key required)
+POST http://localhost:8080/bank/api/v1/transfers
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+Idempotency-Key: step33-req-{{$timestamp}}
+
+{"from": "ACC-33-001", "to": "ACC-33-002", "amount": "25.00"}
+# curl -s -X POST http://localhost:8080/bank/api/v1/transfers -H "Authorization: Bearer $TOKEN" \
+#      -H 'Content-Type: application/json' -H "Idempotency-Key: step33-req-$RANDOM" \
+#      -d '{"from":"ACC-33-001","to":"ACC-33-002","amount":"25.00"}'
+# Then watch it land: docker logs bab-notification --since 1m 2>&1 | grep notified
+
+### 5) The SPA itself — served by nginx, through the gateway catch-all
+GET http://localhost:8080/
+Accept: text/html
+# curl -s http://localhost:8080/ | head -5
+
+### 6) A service NOT behind the gateway — market-info, via its debug host-port mapping
+GET http://localhost:8085/api/market/rates/USD/EUR
+# curl -s http://localhost:8085/api/market/rates/USD/EUR
+
+### 7) Actuator health of an individual container (host-mapped debug port)
+GET http://localhost:8082/actuator/health
+# curl -s http://localhost:8082/actuator/health
